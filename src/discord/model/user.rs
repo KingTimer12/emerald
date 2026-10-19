@@ -14,6 +14,9 @@ pub struct User {
     /// Only present on the current user (READY, USER_UPDATE).
     #[serde(default)]
     pub email: Option<String>,
+    /// Bots and apps, tagged "APP" next to their name.
+    #[serde(default)]
+    pub bot: bool,
 }
 
 impl User {

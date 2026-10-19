@@ -4,6 +4,7 @@
 
 mod channel;
 mod guild;
+mod member_list;
 mod message;
 mod profile;
 mod session;
@@ -12,6 +13,7 @@ mod user;
 
 pub use channel::*;
 pub use guild::*;
+pub use member_list::*;
 pub use message::*;
 pub use profile::*;
 pub use session::*;

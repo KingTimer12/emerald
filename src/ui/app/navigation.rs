@@ -29,12 +29,13 @@ impl Emerald {
         }
         let guild = space.id;
         if self.spaces.subscribe(guild) {
-            self.net.post(Command::SubscribeGuild { guild });
+            self.net.post(Command::SubscribeGuild { guild, members: None });
         }
         match self.spaces.landing_channel() {
             Some(channel) => self.select_channel(channel, window, cx),
             None => {
                 self.selected_channel = None;
+                self.members = None;
                 cx.notify();
             }
         }
@@ -73,6 +74,7 @@ impl Emerald {
         if let Some(last) = self.newest_message(id) {
             self.ack(id, last, cx);
         }
+        self.sync_member_list();
         window.focus(&self.composer.input.focus_handle(cx));
         cx.notify();
     }

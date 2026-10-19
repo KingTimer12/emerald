@@ -43,6 +43,11 @@ impl Emerald {
             }
             NetEvent::Avatar { url, bytes } => self.images.store(url, bytes),
             NetEvent::MembersChunk(chunk) => self.on_members(chunk),
+            NetEvent::MemberList(update) => {
+                if let Some(list) = &mut self.members {
+                    list.apply(update);
+                }
+            }
             NetEvent::MessageAck(ack) => self.reads.acked(ack.channel_id, ack.message_id),
             NetEvent::ActionDone(action) => self.on_action_result(action, Ok(()), window, cx),
             NetEvent::ActionFailed { action, error } => {
@@ -129,14 +134,16 @@ impl Emerald {
         self.spaces.reset(std::iter::once(Space::dms(dms)).chain(guilds).collect());
         self.reads
             .load(read_states, self.spaces.iter().flat_map(Space::readable));
-        // A new session (not a resume) may have missed messages: drop cached
-        // history and refetch only what is on screen.
+        // A new session (not a resume) may have missed messages and holds
+        // no subscriptions: drop cached history and the member list, and
+        // refetch only what is on screen.
         self.history.clear();
+        self.members = None;
         let current = self.spaces.current();
         if !current.is_dms() {
             let guild = current.id;
             self.spaces.subscribe(guild);
-            self.net.post(Command::SubscribeGuild { guild });
+            self.net.post(Command::SubscribeGuild { guild, members: None });
         }
         if let Some(channel) = self.selected_channel.filter(|_| !self.friends_open) {
             self.select_channel(channel, window, cx);

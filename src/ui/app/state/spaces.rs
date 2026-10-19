@@ -78,13 +78,16 @@ impl GuildInfo {
     /// Display name and role color of a member, when known.
     pub fn member_style(&self, user: Snowflake) -> (Option<&str>, Option<u32>) {
         let Some(member) = self.members.get(&user) else { return (None, None) };
-        let color = self
-            .roles
+        (member.nick.as_deref(), self.role_color(&member.roles))
+    }
+
+    /// Color of the highest colored role among `roles`.
+    pub fn role_color(&self, roles: &[Snowflake]) -> Option<u32> {
+        self.roles
             .iter()
-            .filter(|role| role.color != 0 && member.roles.contains(&role.id))
+            .filter(|role| role.color != 0 && roles.contains(&role.id))
             .max_by_key(|role| role.position)
-            .map(|role| role.color);
-        (member.nick.as_deref(), color)
+            .map(|role| role.color)
     }
 
     pub fn role(&self, id: Snowflake) -> Option<&Role> {

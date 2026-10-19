@@ -58,8 +58,9 @@ pub fn spawn(
                         Command::RequestMembers { guild, users } => {
                             ops_tx.send(gateway::request_members(guild, &users)).ok();
                         }
-                        Command::SubscribeGuild { guild } => {
-                            ops_tx.send(gateway::subscribe_guild(guild)).ok();
+                        Command::SubscribeGuild { guild, members } => {
+                            let members = members.as_ref().map(|(c, r)| (*c, r.as_slice()));
+                            ops_tx.send(gateway::subscribe_guild(guild, members)).ok();
                         }
                         cmd => {
                             tokio::spawn(commands::handle(rest.clone(), cmd, event_tx.clone()));

@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use super::{NetEvent, Snapshot};
 use super::identity::{self, Identity};
 use super::model::{
-    Channel, Guild, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, Presence,
+    Channel, Guild, MemberListUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, Presence,
     Ready, ReadySupplemental, Relationship, RelationshipRemove, Snowflake, Status, TypingStart,
     User,
 };
@@ -379,6 +379,10 @@ fn dispatch(
             Some(chunk) => NetEvent::MembersChunk(chunk),
             None => return,
         },
+        "GUILD_MEMBER_LIST_UPDATE" => match parse::<MemberListUpdate>(kind, data) {
+            Some(update) => NetEvent::MemberList(update),
+            None => return,
+        },
         "MESSAGE_ACK" => match parse::<MessageAck>(kind, data) {
             Some(ack) => NetEvent::MessageAck(ack),
             None => return,
@@ -401,14 +405,16 @@ pub fn request_members(guild: Snowflake, users: &[Snowflake]) -> serde_json::Val
     })
 }
 
-pub fn subscribe_guild(guild: Snowflake) -> serde_json::Value {
+/// Op 37, as the web client sends on opening a guild: typing, activity and
+/// thread events, plus the member list rows of `channel` in `ranges`.
+pub fn subscribe_guild(guild: Snowflake, channel: Option<(Snowflake, &[[usize; 2]])>) -> serde_json::Value {
+    let mut subscription = json!({ "typing": true, "activities": true, "threads": true });
+    if let Some((channel, ranges)) = channel {
+        subscription["channels"] = json!({ channel.to_string(): ranges });
+    }
     json!({
         "op": 37,
-        "d": {
-            "subscriptions": {
-                guild.to_string(): { "typing": true, "activities": true, "threads": true },
-            },
-        },
+        "d": { "subscriptions": { guild.to_string(): subscription } },
     })
 }
 

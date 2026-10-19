@@ -303,6 +303,7 @@ mod tests {
             global_name: None,
             avatar: None,
             email: None,
+            bot: false,
         }
     }
 

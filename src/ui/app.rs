@@ -12,6 +12,7 @@ mod composer;
 mod events;
 mod friends;
 mod images;
+mod members;
 mod navigation;
 mod outbox;
 mod profile;
@@ -23,7 +24,7 @@ mod widgets;
 
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, Image, KeyBinding, ListAlignment, ListState,
-    SharedString, Subscription, Window, actions, div, prelude::*, px, relative, rgb,
+    SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, px, relative, rgb,
 };
 
 use super::text_input::{Submitted, TextInput};
@@ -37,7 +38,7 @@ use friends::Friends;
 use images::Images;
 pub use outbox::Outbox;
 use settings::SettingsView;
-use state::{History, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
+use state::{History, MemberList, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
 
 actions!(emerald_ui, [Dismiss]);
 
@@ -122,6 +123,11 @@ pub struct Emerald {
     select_new_guild: bool,
     /// The open channel's messages, mirrored from `history`.
     messages: ListState,
+    /// Member list of the open guild channel.
+    members: Option<MemberList>,
+    /// A member list subscription waits out a scroll burst.
+    members_resubscribe: bool,
+    members_scroll: UniformListScrollHandle,
     focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -190,6 +196,9 @@ impl Emerald {
             busy: HashSet::new(),
             select_new_guild: false,
             messages,
+            members: None,
+            members_resubscribe: false,
+            members_scroll: UniformListScrollHandle::new(),
             focus_handle: cx.focus_handle(),
             _subscriptions: subscriptions,
         }

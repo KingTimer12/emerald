@@ -20,6 +20,8 @@ pub struct Settings {
     pub status: Option<Status>,
     /// Profile panel beside 1:1 DMs.
     pub show_profile: bool,
+    /// Member list beside guild channels.
+    pub show_members: bool,
 }
 
 impl Default for Settings {
@@ -29,6 +31,7 @@ impl Default for Settings {
             compact: false,
             status: None,
             show_profile: true,
+            show_members: true,
         }
     }
 }

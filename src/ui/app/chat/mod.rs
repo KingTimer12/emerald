@@ -30,6 +30,7 @@ impl Emerald {
             .and_then(|id| space.topic(id))
             .map(|t| t.replace('\n', " ").into());
 
+        let has_topic = topic.is_some();
         let header = div()
             .h(px(48.))
             .flex_none()
@@ -87,33 +88,31 @@ impl Emerald {
                         .child("carregando…"),
                 )
             })
-            .when(user.is_some(), |d| {
-                let open = self.settings.show_profile;
-                d.child(div().flex_1()).child(
-                    div()
-                        .id("toggle-profile")
-                        .size(px(32.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_md()
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme::hover()))
-                        .tooltip(widgets::tooltip(if open {
-                            "Ocultar perfil do usuário"
-                        } else {
-                            "Mostrar perfil do usuário"
-                        }))
-                        .child(icons::icon(
-                            icons::PROFILE,
-                            24.,
-                            if open { theme::TEXT_STRONG } else { theme::INTERACTIVE },
-                        ))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.settings.show_profile = !this.settings.show_profile;
-                            this.save_settings(cx);
-                        })),
-                )
+            // Right-aligned toggle: the DM profile or the guild member list.
+            .when(!has_topic, |d| d.child(div().flex_1()))
+            .map(|d| match (user, self.selected_channel) {
+                (Some(_), _) => d.child(header_toggle(
+                    "toggle-profile",
+                    icons::PROFILE,
+                    self.settings.show_profile,
+                    ["Ocultar perfil do usuário", "Mostrar perfil do usuário"],
+                    cx.listener(|this, _, _, cx| {
+                        this.settings.show_profile = !this.settings.show_profile;
+                        this.save_settings(cx);
+                    }),
+                )),
+                (None, Some(_)) if !space.is_dms() => d.child(header_toggle(
+                    "toggle-members",
+                    icons::FRIENDS,
+                    self.settings.show_members,
+                    ["Ocultar lista de membros", "Mostrar lista de membros"],
+                    cx.listener(|this, _, _, cx| {
+                        this.settings.show_members = !this.settings.show_members;
+                        this.sync_member_list();
+                        this.save_settings(cx);
+                    }),
+                )),
+                _ => d,
             });
 
         let body = if self.selected_channel.is_none() {
@@ -189,7 +188,8 @@ impl Emerald {
                     .child(column)
                     .when_some(user.filter(|_| wide && self.settings.show_profile), |row, user| {
                         row.child(self.render_profile_panel(user, cx))
-                    }),
+                    })
+                    .when(wide && self.members.is_some(), |row| row.child(self.render_member_list(cx))),
             )
             .into_any_element()
     }
@@ -237,4 +237,27 @@ impl Emerald {
         let (name, color) = self.member_style(msg.author_id, &msg.author);
         (name, color.unwrap_or(theme::TEXT_STRONG))
     }
+}
+
+/// A 32px icon button in the chat header that shows or hides a side panel.
+fn header_toggle(
+    id: &'static str,
+    icon: &'static str,
+    open: bool,
+    [hide, show]: [&'static str; 2],
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .size(px(32.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::hover()))
+        .tooltip(widgets::tooltip(if open { hide } else { show }))
+        .child(icons::icon(icon, 24., if open { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+        .on_click(on_click)
 }

@@ -1,7 +1,7 @@
 //! The messages between the UI and the network thread.
 
 use super::model::{
-    Channel, Guild, Member, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
+    Channel, Guild, Member, MemberListUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
     Profile, Relationship, Snowflake, Status, TypingStart, User,
 };
 
@@ -41,6 +41,8 @@ pub enum NetEvent {
     },
     Ready(Box<Snapshot>),
     MembersChunk(MembersChunk),
+    /// Rows of a lazily loaded member list.
+    MemberList(MemberListUpdate),
     /// A channel was read up to `message_id`, here or on another device.
     MessageAck(MessageAck),
     /// Friend presences as `(user, status)`.
@@ -135,9 +137,11 @@ pub enum Command {
         users: Vec<Snowflake>,
     },
     /// Gateway op 37: what the web client sends on opening a guild, so the
-    /// gateway delivers its typing and thread events.
+    /// gateway delivers its typing and thread events, and with `members`
+    /// the member list rows of a channel in ranges of 100.
     SubscribeGuild {
         guild: Snowflake,
+        members: Option<(Snowflake, Vec<[usize; 2]>)>,
     },
     /// Marks `channel` read up to `message`.
     Ack {
