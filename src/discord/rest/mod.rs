@@ -1,13 +1,10 @@
-//! REST client with Discord's rate-limit contract:
-//! - per-bucket limits from `X-RateLimit-*` headers, requests to one bucket
-//!   are serialized so `remaining` is never overshot;
-//! - a conservative global cap below Discord's 50 req/s;
-//! - 429 handling via `retry_after` (bucket or global);
-//! - an invalid-request guard (401/403/429) far below the 10k/10min
-//!   Cloudflare ban threshold.
+//! REST client for the Discord API and CDN. Every call goes through
+//! [`RateLimiter`], and errors come back as the typed failures in [`error`].
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+mod error;
+mod ratelimit;
+
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
@@ -15,142 +12,99 @@ use reqwest::header::{
     ACCEPT, ACCEPT_LANGUAGE, AUTHORIZATION, HeaderMap, HeaderValue, ORIGIN, REFERER, USER_AGENT,
 };
 use reqwest::{Method, Response, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_json::json;
-use tokio::time::{Instant, sleep, sleep_until};
+use tokio::time::Instant;
 
 use base64::Engine;
+
+pub use error::{CaptchaRequired, Challenge, Forbidden, Solution, Unauthorized};
+use error::ErrorBody;
+use ratelimit::{RateLimiter, Route};
 
 use super::identity::{self, Identity};
 use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Profile, Snowflake, User};
 
-const GLOBAL_PER_SECOND: u32 = 25;
-const INVALID_WINDOW: Duration = Duration::from_secs(600);
-const INVALID_CAP: u32 = 500;
 const MAX_ATTEMPTS: u32 = 4;
-const MAX_BUCKETS: usize = 256;
 pub const HISTORY_PAGE: usize = 50;
-
-/// 403, with Discord's (localized) reason when the body has one.
-#[derive(Debug)]
-pub struct Forbidden(pub Option<String>);
-
-impl std::fmt::Display for Forbidden {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.as_deref().unwrap_or("sem permissão"))
-    }
-}
-
-impl std::error::Error for Forbidden {}
-
-/// 401: the token was revoked or expired; the session must sign in again.
-#[derive(Debug)]
-pub struct Unauthorized;
-
-impl std::fmt::Display for Unauthorized {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("401: token inválido ou expirado")
-    }
-}
-
-impl std::error::Error for Unauthorized {}
-
-/// hCaptcha challenge from a 400 response. The user solves it in a webview
-/// (`webview::solve_captcha`); nothing here solves it automatically.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Challenge {
-    pub sitekey: String,
-    pub rqdata: Option<String>,
-    pub rqtoken: Option<String>,
-    pub session_id: Option<String>,
-}
-
-/// A solved challenge, sent back as the `X-Captcha-*` headers on the retry.
-pub struct Solution {
-    pub key: String,
-    pub rqtoken: Option<String>,
-    pub session_id: Option<String>,
-}
-
-impl Solution {
-    pub fn new(key: String, challenge: &Challenge) -> Self {
-        Self {
-            key,
-            rqtoken: challenge.rqtoken.clone(),
-            session_id: challenge.session_id.clone(),
-        }
-    }
-}
-
-/// Discord asked for a captcha. Shown to the user only when they close the
-/// captcha window without solving it.
-#[derive(Debug)]
-pub struct CaptchaRequired(pub Challenge);
-
-impl std::fmt::Display for CaptchaRequired {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("A verificação (captcha) não foi concluída.")
-    }
-}
-
-impl std::error::Error for CaptchaRequired {}
-
-/// Error body Discord returns on 4xx. `message` is localized through
-/// `X-Discord-Locale`, so it is shown to the user as is.
-#[derive(Default, Deserialize)]
-struct ErrorBody {
-    #[serde(default)]
-    message: Option<String>,
-    #[serde(default)]
-    captcha_key: Option<serde::de::IgnoredAny>,
-    #[serde(default)]
-    captcha_sitekey: Option<String>,
-    #[serde(default)]
-    captcha_rqdata: Option<String>,
-    #[serde(default)]
-    captcha_rqtoken: Option<String>,
-    #[serde(default)]
-    captcha_session_id: Option<String>,
-}
-
-impl ErrorBody {
-    async fn read(response: Response) -> Self {
-        response.json().await.unwrap_or_default()
-    }
-}
-
-/// `X-Context-Properties`: base64 JSON telling Discord which UI surface
-/// triggered the request, as the web client sends on relationship and
-/// invite calls.
-fn context(properties: serde_json::Value) -> String {
-    base64::engine::general_purpose::STANDARD.encode(properties.to_string())
-}
 
 /// Template the web client uses for "Create My Own".
 const CREATE_GUILD_TEMPLATE: &str = "2TffvPucqHkN";
 /// Major parameter for routes that are not scoped to a channel or guild.
 const NO_MAJOR: Snowflake = Snowflake(0);
 
-#[derive(Default)]
-struct Bucket {
-    remaining: Option<u64>,
-    reset_at: Option<Instant>,
-}
-
-#[derive(Default)]
-struct State {
-    route_hash: HashMap<&'static str, String>,
-    buckets: HashMap<String, Arc<tokio::sync::Mutex<Bucket>>>,
-    global_until: Option<Instant>,
-    window_start: Option<Instant>,
-    window_count: u32,
-    invalid_start: Option<Instant>,
-    invalid_count: u32,
-}
-
 #[derive(Deserialize)]
 struct RateLimited {
     retry_after: f64,
+}
+
+/// One API request, built up step by step. The route template names its
+/// rate-limit bucket and `major` (channel or guild) scopes it.
+struct Call<'a> {
+    route: Route,
+    major: Snowflake,
+    path: String,
+    body: Option<serde_json::Value>,
+    context: Option<String>,
+    captcha: Option<&'a Solution>,
+}
+
+impl<'a> Call<'a> {
+    fn new(method: Method, route: &'static str, path: impl Into<String>) -> Self {
+        Self {
+            route: (method, route),
+            major: NO_MAJOR,
+            path: path.into(),
+            body: None,
+            context: None,
+            captcha: None,
+        }
+    }
+
+    fn get(route: &'static str, path: impl Into<String>) -> Self {
+        Self::new(Method::GET, route, path)
+    }
+
+    fn post(route: &'static str, path: impl Into<String>) -> Self {
+        Self::new(Method::POST, route, path)
+    }
+
+    fn put(route: &'static str, path: impl Into<String>) -> Self {
+        Self::new(Method::PUT, route, path)
+    }
+
+    fn patch(route: &'static str, path: impl Into<String>) -> Self {
+        Self::new(Method::PATCH, route, path)
+    }
+
+    fn delete(route: &'static str, path: impl Into<String>) -> Self {
+        Self::new(Method::DELETE, route, path)
+    }
+
+    /// Scopes the bucket to a channel or guild, as Discord does.
+    fn major(mut self, major: Snowflake) -> Self {
+        self.major = major;
+        self
+    }
+
+    fn json(mut self, body: serde_json::Value) -> Self {
+        self.body = Some(body);
+        self
+    }
+
+    /// `X-Context-Properties`: base64 JSON telling Discord which UI surface
+    /// triggered the request, as the web client sends on relationship and
+    /// invite calls.
+    fn context(mut self, properties: serde_json::Value) -> Self {
+        self.context = Some(base64::engine::general_purpose::STANDARD.encode(properties.to_string()));
+        self
+    }
+
+    fn captcha(mut self, captcha: Option<&'a Solution>) -> Self {
+        self.captcha = captcha;
+        self
+    }
 }
 
 pub struct Rest {
@@ -161,7 +115,7 @@ pub struct Rest {
     image_cache: Option<std::path::PathBuf>,
     identity: Arc<Identity>,
     api: String,
-    state: Mutex<State>,
+    limits: RateLimiter,
 }
 
 impl Rest {
@@ -200,7 +154,7 @@ impl Rest {
             image_cache: super::cache::dir(),
             api: format!("https://discord.com/api/v{}", identity::API_VERSION),
             identity,
-            state: Mutex::default(),
+            limits: RateLimiter::default(),
         })
     }
 
@@ -241,10 +195,9 @@ impl Rest {
         if let Some(before) = before {
             path.push_str(&format!("&before={before}"));
         }
-        let response = self
-            .request(Method::GET, "GET /channels/{id}/messages", channel, &path, None, None)
+        let mut messages: Vec<Message> = self
+            .fetch(Call::get("/channels/{id}/messages", path).major(channel))
             .await?;
-        let mut messages: Vec<Message> = response.json().await?;
         messages.reverse();
         Ok(messages)
     }
@@ -265,46 +218,32 @@ impl Rest {
             "tts": false,
             "flags": 0,
         });
-        let response = self
-            .request_with(
-                Method::POST,
-                "POST /channels/{id}/messages",
-                channel,
-                &format!("/channels/{channel}/messages"),
-                Some(&body),
-                None,
-                captcha,
-            )
-            .await?;
-        Ok(response.json().await?)
+        self.fetch(
+            Call::post("/channels/{id}/messages", format!("/channels/{channel}/messages"))
+                .major(channel)
+                .json(body)
+                .captcha(captcha),
+        )
+        .await
     }
 
     /// Read receipt, as the web client sends when a channel is on screen.
     pub async fn ack(&self, channel: Snowflake, message: Snowflake) -> Result<()> {
-        self.request(
-            Method::POST,
-            "POST /channels/{id}/messages/{id}/ack",
-            channel,
-            &format!("/channels/{channel}/messages/{message}/ack"),
-            Some(&json!({ "token": null })),
-            None,
+        self.run(
+            Call::post(
+                "/channels/{id}/messages/{id}/ack",
+                format!("/channels/{channel}/messages/{message}/ack"),
+            )
+            .major(channel)
+            .json(json!({ "token": null })),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     /// Shows "… is typing" to the other side for about ten seconds.
     pub async fn typing(&self, channel: Snowflake) -> Result<()> {
-        self.request(
-            Method::POST,
-            "POST /channels/{id}/typing",
-            channel,
-            &format!("/channels/{channel}/typing"),
-            None,
-            None,
-        )
-        .await?;
-        Ok(())
+        self.run(Call::post("/channels/{id}/typing", format!("/channels/{channel}/typing")).major(channel))
+            .await
     }
 
     /// The profile behind the DM side panel, with the same query the web
@@ -313,92 +252,61 @@ impl Rest {
         let path = format!(
             "/users/{user}/profile?with_mutual_guilds=false&with_mutual_friends=false&with_mutual_friends_count=false"
         );
-        let response = self
-            .request(Method::GET, "GET /users/{id}/profile", NO_MAJOR, &path, None, None)
-            .await?;
-        Ok(response.json().await?)
+        self.fetch(Call::get("/users/{id}/profile", path)).await
     }
 
     /// Revokes the token server-side, as the web client does on "Log Out".
     pub async fn logout(&self) -> Result<()> {
-        let body = json!({ "provider": null, "voip_provider": null });
-        self.request(Method::POST, "POST /auth/logout", NO_MAJOR, "/auth/logout", Some(&body), None)
-            .await?;
-        Ok(())
+        self.run(Call::post("/auth/logout", "/auth/logout").json(json!({ "provider": null, "voip_provider": null })))
+            .await
     }
 
     pub async fn send_friend_request(&self, username: &str, captcha: Option<&Solution>) -> Result<()> {
-        let body = json!({ "username": username, "discriminator": null });
-        self.request_with(
-            Method::POST,
-            "POST /users/@me/relationships",
-            NO_MAJOR,
-            "/users/@me/relationships",
-            Some(&body),
-            Some(&context(json!({ "location": "Add Friend" }))),
-            captcha,
+        self.run(
+            Call::post("/users/@me/relationships", "/users/@me/relationships")
+                .json(json!({ "username": username, "discriminator": null }))
+                .context(json!({ "location": "Add Friend" }))
+                .captcha(captcha),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn accept_friend(&self, user: Snowflake) -> Result<()> {
-        self.request(
-            Method::PUT,
-            "PUT /users/@me/relationships/{id}",
-            NO_MAJOR,
-            &format!("/users/@me/relationships/{user}"),
-            Some(&json!({})),
-            Some(&context(json!({ "location": "Friends" }))),
+        self.run(
+            Call::put("/users/@me/relationships/{id}", format!("/users/@me/relationships/{user}"))
+                .json(json!({}))
+                .context(json!({ "location": "Friends" })),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     /// Removes a friend, declines an incoming request or cancels an outgoing one.
     pub async fn remove_relationship(&self, user: Snowflake) -> Result<()> {
-        self.request(
-            Method::DELETE,
-            "DELETE /users/@me/relationships/{id}",
-            NO_MAJOR,
-            &format!("/users/@me/relationships/{user}"),
-            None,
-            Some(&context(json!({ "location": "Friends" }))),
+        self.run(
+            Call::delete("/users/@me/relationships/{id}", format!("/users/@me/relationships/{user}"))
+                .context(json!({ "location": "Friends" })),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn open_dm(&self, user: Snowflake, captcha: Option<&Solution>) -> Result<Channel> {
-        let body = json!({ "recipients": [user.to_string()] });
-        let response = self
-            .request_with(
-                Method::POST,
-                "POST /users/@me/channels",
-                NO_MAJOR,
-                "/users/@me/channels",
-                Some(&body),
-                Some(&context(json!({}))),
-                captcha,
-            )
-            .await?;
-        Ok(response.json().await?)
+        self.fetch(
+            Call::post("/users/@me/channels", "/users/@me/channels")
+                .json(json!({ "recipients": [user.to_string()] }))
+                .context(json!({}))
+                .captcha(captcha),
+        )
+        .await
     }
 
     /// Resolves the invite first, like the web client, so the join carries
     /// the guild and channel it came from.
     pub async fn join_guild(&self, code: &str, captcha: Option<&Solution>) -> Result<()> {
         let invite: Invite = self
-            .request(
-                Method::GET,
-                "GET /invites/{code}",
-                NO_MAJOR,
-                &format!("/invites/{code}?with_counts=true&with_expiration=true"),
-                None,
-                None,
-            )
-            .await?
-            .json()
+            .fetch(Call::get(
+                "/invites/{code}",
+                format!("/invites/{code}?with_counts=true&with_expiration=true"),
+            ))
             .await?;
         let properties = json!({
             "location": "Join Guild",
@@ -406,18 +314,13 @@ impl Rest {
             "location_channel_id": invite.channel.as_ref().map(|c| c.id.to_string()),
             "location_channel_type": invite.channel.as_ref().map(|c| c.kind),
         });
-        let body = json!({ "session_id": self.identity.session_id() });
-        self.request_with(
-            Method::POST,
-            "POST /invites/{code}",
-            NO_MAJOR,
-            &format!("/invites/{code}"),
-            Some(&body),
-            Some(&context(properties)),
-            captcha,
+        self.run(
+            Call::post("/invites/{code}", format!("/invites/{code}"))
+                .json(json!({ "session_id": self.identity.session_id() }))
+                .context(properties)
+                .captcha(captcha),
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn create_guild(&self, name: &str, captcha: Option<&Solution>) -> Result<()> {
@@ -428,80 +331,42 @@ impl Rest {
             "system_channel_id": null,
             "guild_template_code": CREATE_GUILD_TEMPLATE,
         });
-        self.request_with(
-            Method::POST,
-            "POST /guilds",
-            NO_MAJOR,
-            "/guilds",
-            Some(&body),
-            None,
-            captcha,
-        )
-        .await?;
-        Ok(())
+        self.run(Call::post("/guilds", "/guilds").json(body).captcha(captcha)).await
     }
 
     /// `None` clears the display name back to the username.
     pub async fn set_global_name(&self, name: Option<&str>) -> Result<User> {
-        let response = self
-            .request(
-                Method::PATCH,
-                "PATCH /users/@me",
-                NO_MAJOR,
-                "/users/@me",
-                Some(&json!({ "global_name": name })),
-                None,
-            )
-            .await?;
-        Ok(response.json().await?)
-    }
-
-    async fn request(
-        &self,
-        method: Method,
-        route: &'static str,
-        major: Snowflake,
-        path: &str,
-        body: Option<&serde_json::Value>,
-        context: Option<&str>,
-    ) -> Result<Response> {
-        self.request_with(method, route, major, path, body, context, None)
+        self.fetch(Call::patch("/users/@me", "/users/@me").json(json!({ "global_name": name })))
             .await
     }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn request_with(
-        &self,
-        method: Method,
-        route: &'static str,
-        major: Snowflake,
-        path: &str,
-        body: Option<&serde_json::Value>,
-        context: Option<&str>,
-        captcha: Option<&Solution>,
-    ) -> Result<Response> {
+    /// Sends `call` and decodes the JSON answer.
+    async fn fetch<T: DeserializeOwned>(&self, call: Call<'_>) -> Result<T> {
+        Ok(self.send(call).await?.json().await?)
+    }
+
+    /// Sends `call` for its effect, ignoring the body.
+    async fn run(&self, call: Call<'_>) -> Result<()> {
+        self.send(call).await.map(drop)
+    }
+
+    /// Sends `call` within the rate limits, retrying after 429s.
+    async fn send(&self, call: Call<'_>) -> Result<Response> {
+        let route = &call.route;
         for _ in 0..MAX_ATTEMPTS {
-            let bucket = self.bucket(route, major);
-            let mut bucket = bucket.lock().await;
-            if bucket.remaining == Some(0) {
-                if let Some(reset_at) = bucket.reset_at {
-                    sleep_until(reset_at).await;
-                }
-                bucket.remaining = None;
-            }
-            self.global_gate().await?;
+            let mut bucket = self.limits.acquire(route, call.major).await?;
 
             let mut request = self
                 .http
-                .request(method.clone(), format!("{}{path}", self.api))
+                .request(route.0.clone(), format!("{}{}", self.api, call.path))
                 .header(AUTHORIZATION, &*self.identity.token());
-            if let Some(body) = body {
+            if let Some(body) = &call.body {
                 request = request.header(ORIGIN, "https://discord.com").json(body);
             }
-            if let Some(context) = context {
+            if let Some(context) = &call.context {
                 request = request.header("x-context-properties", context);
             }
-            if let Some(captcha) = captcha {
+            if let Some(captcha) = call.captcha {
                 request = request.header("x-captcha-key", &captcha.key);
                 if let Some(rqtoken) = &captcha.rqtoken {
                     request = request.header("x-captcha-rqtoken", rqtoken);
@@ -511,7 +376,7 @@ impl Rest {
                 }
             }
             let response = request.send().await?;
-            self.observe_headers(route, &mut bucket, response.headers());
+            self.limits.observe(route, &mut bucket, response.headers());
 
             match response.status() {
                 StatusCode::TOO_MANY_REQUESTS => {
@@ -521,124 +386,27 @@ impl Rest {
                         .await
                         .map_or(1.0, |r| r.retry_after);
                     let until = Instant::now() + Duration::from_secs_f64(retry_after.max(0.0));
-                    log::warn!("429 on {route}, retry in {retry_after}s (global: {global})");
-                    let mut state = self.state.lock().unwrap();
-                    Self::note_invalid(&mut state);
+                    log::warn!("429 on {} {}, retry in {retry_after}s (global: {global})", route.0, route.1);
+                    self.limits.note_invalid();
                     if global {
-                        state.global_until = Some(until);
+                        self.limits.block_global(until);
                     } else {
-                        bucket.remaining = Some(0);
-                        bucket.reset_at = Some(until);
+                        bucket.block(until);
                     }
                 }
                 StatusCode::UNAUTHORIZED => {
-                    Self::note_invalid(&mut self.state.lock().unwrap());
+                    self.limits.note_invalid();
                     bail!(Unauthorized);
                 }
                 StatusCode::FORBIDDEN => {
-                    Self::note_invalid(&mut self.state.lock().unwrap());
-                    bail!(Forbidden(ErrorBody::read(response).await.message));
+                    self.limits.note_invalid();
+                    bail!(Forbidden(ErrorBody::read(response).await.message()));
                 }
                 status if status.is_success() => return Ok(response),
-                status => {
-                    let error = ErrorBody::read(response).await;
-                    if let (Some(_), Some(sitekey)) = (&error.captcha_key, error.captcha_sitekey) {
-                        bail!(CaptchaRequired(Challenge {
-                            sitekey,
-                            rqdata: error.captcha_rqdata,
-                            rqtoken: error.captcha_rqtoken,
-                            session_id: error.captcha_session_id,
-                        }));
-                    }
-                    if error.captcha_key.is_some() {
-                        bail!("O Discord recusou a verificação. Tente de novo.");
-                    }
-                    match error.message {
-                        Some(message) => bail!("{message}"),
-                        None => bail!("HTTP {status}"),
-                    }
-                }
+                status => return Err(ErrorBody::read(response).await.into_error(status)),
             }
         }
-        bail!("rate limit persistente em {route}")
-    }
-
-    fn bucket(&self, route: &'static str, major: Snowflake) -> Arc<tokio::sync::Mutex<Bucket>> {
-        let mut state = self.state.lock().unwrap();
-        let key = match state.route_hash.get(route) {
-            Some(hash) => format!("{hash}:{major}"),
-            None => format!("{route}:{major}"),
-        };
-        if state.buckets.len() > MAX_BUCKETS {
-            let now = Instant::now();
-            state.buckets.retain(|_, b| {
-                Arc::strong_count(b) > 1
-                    || b.try_lock()
-                        .map_or(true, |b| b.reset_at.is_some_and(|r| r > now))
-            });
-        }
-        state.buckets.entry(key).or_default().clone()
-    }
-
-    fn observe_headers(&self, route: &'static str, bucket: &mut Bucket, headers: &HeaderMap) {
-        let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
-        if let Some(remaining) = header("x-ratelimit-remaining").and_then(|v| v.parse().ok()) {
-            bucket.remaining = Some(remaining);
-        }
-        if let Some(after) = header("x-ratelimit-reset-after").and_then(|v| v.parse::<f64>().ok()) {
-            bucket.reset_at = Some(Instant::now() + Duration::from_secs_f64(after.max(0.0)));
-        }
-        if let Some(hash) = header("x-ratelimit-bucket") {
-            let mut state = self.state.lock().unwrap();
-            if state.route_hash.get(route).map(String::as_str) != Some(hash) {
-                state.route_hash.insert(route, hash.to_owned());
-            }
-        }
-    }
-
-    async fn global_gate(&self) -> Result<()> {
-        loop {
-            let wait = {
-                let mut state = self.state.lock().unwrap();
-                let now = Instant::now();
-                if state.invalid_count >= INVALID_CAP
-                    && state.invalid_start.is_some_and(|s| now - s < INVALID_WINDOW)
-                {
-                    bail!("muitas requisições inválidas; pausado para evitar bloqueio");
-                }
-                match state.global_until {
-                    Some(until) if until > now => Some(until - now),
-                    _ => {
-                        let start = *state.window_start.get_or_insert(now);
-                        if now - start >= Duration::from_secs(1) {
-                            state.window_start = Some(now);
-                            state.window_count = 0;
-                        }
-                        if state.window_count < GLOBAL_PER_SECOND {
-                            state.window_count += 1;
-                            None
-                        } else {
-                            Some(start + Duration::from_secs(1) - now)
-                        }
-                    }
-                }
-            };
-            match wait {
-                None => return Ok(()),
-                Some(wait) => sleep(wait).await,
-            }
-        }
-    }
-
-    fn note_invalid(state: &mut State) {
-        let now = Instant::now();
-        match state.invalid_start {
-            Some(start) if now - start < INVALID_WINDOW => state.invalid_count += 1,
-            _ => {
-                state.invalid_start = Some(now);
-                state.invalid_count = 1;
-            }
-        }
+        bail!("rate limit persistente em {} {}", route.0, route.1)
     }
 }
 

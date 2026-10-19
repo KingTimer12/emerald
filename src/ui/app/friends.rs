@@ -1,13 +1,44 @@
 //! Friends list: the DM home screen with Online / All / Pending tabs and the
 //! "Add Friend" form, worded like the pt-BR web client.
 
-use gpui::{AnyElement, Context, Focusable, FontWeight, SharedString, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Entity, Focusable, FontWeight, SharedString, div, prelude::*, px, rgb};
 
+use super::super::text_input::TextInput;
 use super::super::theme;
 use super::widgets::{self, ButtonKind};
-use super::Emerald;
+use super::{Emerald, Feedback};
 use crate::discord::model::{Snowflake, relationship_kind};
 use crate::discord::{Action, Command};
+
+/// State of the friends screen.
+pub(super) struct Friends {
+    pub tab: FriendsTab,
+    pub input: Entity<TextInput>,
+    pub feedback: Option<Feedback>,
+    /// Username of the request in flight, for the success message.
+    pub pending: Option<String>,
+    /// Friend whose "Remover" was clicked once and awaits confirmation.
+    pub confirm_remove: Option<Snowflake>,
+}
+
+impl Friends {
+    pub fn new(cx: &mut Context<Emerald>) -> Self {
+        Self {
+            tab: FriendsTab::Online,
+            input: cx.new(|cx| TextInput::new("Nome de usuário", cx).keep_on_submit()),
+            feedback: None,
+            pending: None,
+            confirm_remove: None,
+        }
+    }
+
+    /// The relationship with `user` ended.
+    pub fn forget(&mut self, user: Snowflake) {
+        if self.confirm_remove == Some(user) {
+            self.confirm_remove = None;
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FriendsTab {
@@ -26,37 +57,30 @@ struct Entry {
 }
 
 impl Emerald {
-    pub(super) fn incoming_requests(&self) -> usize {
-        self.relationships
-            .values()
-            .filter(|kind| **kind == relationship_kind::INCOMING)
-            .count()
-    }
-
     fn friend_entries(&self) -> Vec<Entry> {
         let mut entries: Vec<Entry> = self
-            .relationships
-            .iter()
-            .filter(|(id, kind)| match self.friends_tab {
+            .people
+            .relationships()
+            .filter(|(id, kind)| match self.friends.tab {
                 FriendsTab::Online => {
-                    **kind == relationship_kind::FRIEND && self.presences.contains_key(id)
+                    *kind == relationship_kind::FRIEND && self.people.status(*id).is_some()
                 }
-                FriendsTab::All => **kind == relationship_kind::FRIEND,
+                FriendsTab::All => *kind == relationship_kind::FRIEND,
                 FriendsTab::Pending => {
-                    matches!(**kind, relationship_kind::INCOMING | relationship_kind::OUTGOING)
+                    matches!(*kind, relationship_kind::INCOMING | relationship_kind::OUTGOING)
                 }
                 FriendsTab::Add => false,
             })
             .map(|(id, kind)| {
-                let user = self.users.get(id);
+                let user = self.people.user(id);
                 Entry {
-                    id: *id,
+                    id,
                     name: user
                         .map_or_else(|| id.to_string(), |u| u.display_name().to_owned())
                         .into(),
                     username: user.map(|u| u.username.clone()).unwrap_or_default().into(),
-                    kind: *kind,
-                    status: self.presences.get(id).cloned(),
+                    kind,
+                    status: self.people.status(id).cloned(),
                 }
             })
             .collect();
@@ -69,14 +93,14 @@ impl Emerald {
         if username.is_empty() || self.busy.contains(&Action::FriendRequest) {
             return;
         }
-        self.friend_feedback = None;
-        self.friend_pending = Some(username.clone());
+        self.friends.feedback = None;
+        self.friends.pending = Some(username.clone());
         self.run(Action::FriendRequest, Command::SendFriendRequest { username }, cx);
     }
 
     pub(super) fn render_friends(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tab = |id: &'static str, label: &'static str, tab: FriendsTab, cx: &mut Context<Self>| {
-            let selected = self.friends_tab == tab;
+            let selected = self.friends.tab == tab;
             div()
                 .id(id)
                 .flex()
@@ -94,13 +118,13 @@ impl Emerald {
                 })
                 .child(label)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.friends_tab = tab;
-                    this.confirm_remove = None;
+                    this.friends.tab = tab;
+                    this.friends.confirm_remove = None;
                     cx.notify();
                 }))
         };
-        let pending = self.incoming_requests();
-        let adding = self.friends_tab == FriendsTab::Add;
+        let pending = self.people.incoming_requests();
+        let adding = self.friends.tab == FriendsTab::Add;
 
         let header = div()
             .h(px(48.))
@@ -141,8 +165,8 @@ impl Emerald {
                     })
                     .child("Adicionar amigo")
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.friends_tab = FriendsTab::Add;
-                        window.focus(&this.friend_input.focus_handle(cx));
+                        this.friends.tab = FriendsTab::Add;
+                        window.focus(&this.friends.input.focus_handle(cx));
                         cx.notify();
                     })),
             );
@@ -168,7 +192,7 @@ impl Emerald {
 
     fn render_add_friend(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let busy = self.busy.contains(&Action::FriendRequest);
-        let empty = self.friend_input.read(cx).text().trim().is_empty();
+        let empty = self.friends.input.read(cx).text().trim().is_empty();
         div()
             .flex()
             .flex_col()
@@ -196,7 +220,7 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .gap_3()
-                    .child(div().flex_1().child(self.friend_input.clone()))
+                    .child(div().flex_1().child(self.friends.input.clone()))
                     .child(
                         widgets::button(
                             "send-friend-request",
@@ -205,17 +229,17 @@ impl Emerald {
                         )
                         .when(empty || busy, |b| b.opacity(0.5))
                         .on_click(cx.listener(|this, _, _, cx| {
-                            let username = this.friend_input.read(cx).text().to_owned();
+                            let username = this.friends.input.read(cx).text().to_owned();
                             this.send_friend_request(username, cx);
                         })),
                     ),
             )
-            .children(self.friend_feedback.as_ref().map(widgets::feedback))
+            .children(self.friends.feedback.as_ref().map(widgets::feedback))
     }
 
     fn render_friend_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let entries = self.friend_entries();
-        let (title, empty) = match self.friends_tab {
+        let (title, empty) = match self.friends.tab {
             FriendsTab::Online => (
                 "DISPONÍVEL",
                 "Não há ninguém disponível para brincar com o Wumpus.",
@@ -272,7 +296,7 @@ impl Emerald {
         let message = small(widgets::button(("message", id.0 as usize), "Mensagem", ButtonKind::Secondary))
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
-                this.open_dm_now(id, window, cx);
+                this.open_dm(id, window, cx);
             }));
 
         let actions = div().flex().flex_none().gap_2().child(message);
@@ -282,25 +306,25 @@ impl Emerald {
                     small(widgets::button(("accept", id.0 as usize), "Aceitar", ButtonKind::Positive))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.commands.send(Command::AcceptFriend { user: id }).ok();
+                            this.net.post(Command::AcceptFriend { user: id });
                         })),
                 )
                 .child(
                     small(widgets::button(("decline", id.0 as usize), "Recusar", ButtonKind::Secondary))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.commands.send(Command::RemoveRelationship { user: id }).ok();
+                            this.net.post(Command::RemoveRelationship { user: id });
                         })),
                 ),
             relationship_kind::OUTGOING => actions.child(
                 small(widgets::button(("cancel", id.0 as usize), "Cancelar", ButtonKind::Secondary))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        this.commands.send(Command::RemoveRelationship { user: id }).ok();
+                        this.net.post(Command::RemoveRelationship { user: id });
                     })),
             ),
             _ => {
-                let confirming = self.confirm_remove == Some(id);
+                let confirming = self.friends.confirm_remove == Some(id);
                 actions
                     .child(
                         // Removing a friend is a two-click action.
@@ -311,11 +335,11 @@ impl Emerald {
                         ))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            if this.confirm_remove == Some(id) {
-                                this.confirm_remove = None;
-                                this.commands.send(Command::RemoveRelationship { user: id }).ok();
+                            if this.friends.confirm_remove == Some(id) {
+                                this.friends.confirm_remove = None;
+                                this.net.post(Command::RemoveRelationship { user: id });
                             } else {
-                                this.confirm_remove = Some(id);
+                                this.friends.confirm_remove = Some(id);
                             }
                             cx.notify();
                         })),
@@ -380,22 +404,8 @@ impl Emerald {
             )
             .child(actions)
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_dm_now(id, window, cx);
+                this.open_dm(id, window, cx);
             }))
             .into_any_element()
-    }
-
-    /// Opens the DM with `user`, selecting it when it is already listed and
-    /// asking Discord for it otherwise.
-    fn open_dm_now(&mut self, user: Snowflake, window: &mut gpui::Window, cx: &mut Context<Self>) {
-        match self.dm_with(user) {
-            Some(channel) => {
-                self.selected_space = 0;
-                self.select_channel(channel, window, cx);
-            }
-            None => {
-                self.commands.send(Command::OpenDm { user, select: true }).ok();
-            }
-        }
     }
 }

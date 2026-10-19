@@ -37,8 +37,8 @@ impl Emerald {
             return;
         }
         let current = self
-            .me
-            .as_ref()
+            .people
+            .me()
             .and_then(|me| me.global_name.clone())
             .unwrap_or_default();
         let display_name = cx.new(|cx| {
@@ -79,7 +79,7 @@ impl Emerald {
 
     fn set_status(&mut self, status: Status, cx: &mut Context<Self>) {
         self.settings.status = Some(status);
-        self.commands.send(Command::SetStatus(status)).ok();
+        self.net.post(Command::SetStatus(status));
         self.save_settings(cx);
     }
 
@@ -200,7 +200,7 @@ impl Emerald {
     }
 
     fn render_account(&self, view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
-        let Some(me) = self.me.as_ref() else {
+        let Some(me) = self.people.me() else {
             return page_title("Minha conta").into_any_element();
         };
         let name: SharedString = me.display_name().to_owned().into();

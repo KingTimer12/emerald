@@ -1,0 +1,133 @@
+use serde::Deserialize;
+
+use super::snowflake::bits;
+use super::{Channel, Snowflake, User};
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Role {
+    pub id: Snowflake,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub color: u32,
+    #[serde(default)]
+    pub position: i32,
+    #[serde(default, deserialize_with = "bits")]
+    pub permissions: u64,
+}
+
+pub mod overwrite_kind {
+    pub const ROLE: u8 = 0;
+    pub const MEMBER: u8 = 1;
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Overwrite {
+    pub id: Snowflake,
+    #[serde(rename = "type")]
+    pub kind: u8,
+    #[serde(default, deserialize_with = "bits")]
+    pub allow: u64,
+    #[serde(default, deserialize_with = "bits")]
+    pub deny: u64,
+}
+
+/// The current user's (or a message author's) membership in a guild.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Member {
+    /// READY's `merged_members` carries `user_id`; chunks carry `user`.
+    #[serde(default)]
+    pub user_id: Option<Snowflake>,
+    #[serde(default)]
+    pub user: Option<User>,
+    #[serde(default)]
+    pub nick: Option<String>,
+    #[serde(default)]
+    pub roles: Vec<Snowflake>,
+}
+
+impl Member {
+    pub fn id(&self) -> Option<Snowflake> {
+        self.user_id.or(self.user.as_ref().map(|u| u.id))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MembersChunk {
+    pub guild_id: Snowflake,
+    #[serde(default)]
+    pub members: Vec<Member>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GuildProperties {
+    pub name: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub owner_id: Option<Snowflake>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Guild {
+    pub id: Snowflake,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub owner_id: Option<Snowflake>,
+    /// Newer user-gateway READY shapes nest name, icon and owner here.
+    #[serde(default)]
+    pub properties: Option<GuildProperties>,
+    #[serde(default)]
+    pub channels: Vec<Channel>,
+    #[serde(default)]
+    pub roles: Vec<Role>,
+    /// GUILD_CREATE may list the current member here.
+    #[serde(default)]
+    pub members: Vec<Member>,
+    #[serde(default)]
+    pub unavailable: bool,
+}
+
+impl Guild {
+    pub fn display_name(&self) -> &str {
+        self.name
+            .as_deref()
+            .or(self.properties.as_ref().map(|p| p.name.as_str()))
+            .unwrap_or("?")
+    }
+
+    pub fn icon_url(&self) -> Option<String> {
+        let hash = self
+            .icon
+            .as_deref()
+            .or(self.properties.as_ref().and_then(|p| p.icon.as_deref()))?;
+        Some(format!("https://cdn.discordapp.com/icons/{}/{hash}.png?size=96", self.id))
+    }
+
+    pub fn owner(&self) -> Option<Snowflake> {
+        self.owner_id.or(self.properties.as_ref().and_then(|p| p.owner_id))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InviteGuild {
+    pub id: Snowflake,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InviteChannel {
+    pub id: Snowflake,
+    #[serde(rename = "type")]
+    pub kind: u8,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Invite {
+    #[serde(default)]
+    pub guild: Option<InviteGuild>,
+    #[serde(default)]
+    pub channel: Option<InviteChannel>,
+}

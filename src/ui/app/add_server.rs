@@ -31,8 +31,8 @@ pub struct AddServer {
 impl Emerald {
     pub(super) fn open_add_server(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let owner = self
-            .me
-            .as_ref()
+            .people
+            .me()
             .map_or_else(String::new, |me| me.display_name().to_owned());
         let name = cx.new(|cx| {
             let mut input = TextInput::new("Nome do servidor", cx).keep_on_submit();

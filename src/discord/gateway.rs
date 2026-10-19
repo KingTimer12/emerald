@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
-use super::NetEvent;
+use super::{NetEvent, Snapshot};
 use super::identity::{self, Identity};
 use super::model::{
     Channel, Guild, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, Presence,
@@ -312,7 +312,7 @@ fn dispatch(
                 .filter(|state| state.read_state_type == 0)
                 .filter_map(|state| Some((state.id, state.last_message_id?)))
                 .collect();
-            NetEvent::Ready {
+            NetEvent::Ready(Box::new(Snapshot {
                 me: r.user,
                 guilds: r.guilds,
                 dms: r.private_channels,
@@ -320,7 +320,7 @@ fn dispatch(
                 relationships: r.relationships,
                 members,
                 read_states,
-            }
+            }))
         }
         "READY_SUPPLEMENTAL" => match parse::<ReadySupplemental>(kind, data) {
             Some(r) => NetEvent::Presences(friend_presences(r.merged_presences.friends)),

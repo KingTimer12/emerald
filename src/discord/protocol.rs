@@ -1,0 +1,158 @@
+//! The messages between the UI and the network thread.
+
+use super::model::{
+    Channel, Guild, Member, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
+    Profile, Relationship, Snowflake, Status, TypingStart, User,
+};
+
+/// A user-initiated REST action whose outcome the UI reports back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Action {
+    FriendRequest,
+    Relationship,
+    JoinGuild,
+    CreateGuild,
+    UpdateProfile,
+}
+
+/// The account as READY describes it, when a session starts.
+pub struct Snapshot {
+    pub me: User,
+    pub guilds: Vec<Guild>,
+    pub dms: Vec<Channel>,
+    pub users: Vec<User>,
+    pub relationships: Vec<Relationship>,
+    /// The current user's membership per guild.
+    pub members: Vec<(Snowflake, Member)>,
+    /// Last read message per channel.
+    pub read_states: Vec<(Snowflake, Snowflake)>,
+}
+
+/// Events flowing from the network thread to the UI.
+pub enum NetEvent {
+    Status(String),
+    Fatal(String),
+    /// The token was rejected (gateway 4004 / REST 401); sign in again.
+    AuthExpired,
+    /// Answer to `Command::LogOut`; `error` is set if the server-side
+    /// revocation failed (the local sign-out still happens).
+    LoggedOut {
+        error: Option<String>,
+    },
+    Ready(Box<Snapshot>),
+    MembersChunk(MembersChunk),
+    /// A channel was read up to `message_id`, here or on another device.
+    MessageAck(MessageAck),
+    /// Friend presences as `(user, status)`.
+    Presences(Vec<(Snowflake, String)>),
+    RelationshipAdd(Relationship),
+    RelationshipRemove(Snowflake),
+    UserUpdate(User),
+    /// A DM opened with `Command::OpenDm`; selected when `select` is set.
+    DmOpened {
+        channel: Channel,
+        select: bool,
+    },
+    /// Image bytes (avatar or sticker) for `url`; `None` if the download failed.
+    Avatar {
+        url: String,
+        bytes: Option<Vec<u8>>,
+    },
+    ActionDone(Action),
+    ActionFailed {
+        action: Action,
+        error: String,
+    },
+    GuildCreate(Guild),
+    GuildDelete(Snowflake),
+    ChannelCreate(Channel),
+    ChannelDelete(Channel),
+    MessageCreate(Message),
+    MessageUpdate(MessageUpdate),
+    MessageDelete(MessageDelete),
+    TypingStart(TypingStart),
+    Profile(Profile),
+    History {
+        channel: Snowflake,
+        before: Option<Snowflake>,
+        messages: Vec<Message>,
+    },
+    HistoryFailed {
+        channel: Snowflake,
+        forbidden: bool,
+        error: String,
+    },
+    /// The message with `nonce` was not sent; `content` lets the UI give
+    /// the text back to the user.
+    SendFailed {
+        channel: Snowflake,
+        nonce: String,
+        content: String,
+        error: String,
+    },
+}
+
+/// Requests flowing from the UI to the network thread.
+pub enum Command {
+    History {
+        channel: Snowflake,
+        before: Option<Snowflake>,
+    },
+    Send {
+        channel: Snowflake,
+        content: String,
+        nonce: String,
+    },
+    SendFriendRequest {
+        username: String,
+    },
+    AcceptFriend {
+        user: Snowflake,
+    },
+    /// Removes a friend, declines an incoming request or cancels an outgoing one.
+    RemoveRelationship {
+        user: Snowflake,
+    },
+    /// Opens (or reopens) the DM with `user`. Unselected opens run in the
+    /// background, so they never show a captcha and fail silently.
+    OpenDm {
+        user: Snowflake,
+        select: bool,
+    },
+    JoinGuild {
+        code: String,
+    },
+    CreateGuild {
+        name: String,
+    },
+    SetGlobalName {
+        name: Option<String>,
+    },
+    SetStatus(Status),
+    /// Gateway op 8: fetch these members' nicknames and roles.
+    RequestMembers {
+        guild: Snowflake,
+        users: Vec<Snowflake>,
+    },
+    /// Gateway op 37: what the web client sends on opening a guild, so the
+    /// gateway delivers its typing and thread events.
+    SubscribeGuild {
+        guild: Snowflake,
+    },
+    /// Marks `channel` read up to `message`.
+    Ack {
+        channel: Snowflake,
+        message: Snowflake,
+    },
+    Typing {
+        channel: Snowflake,
+    },
+    FetchProfile {
+        user: Snowflake,
+    },
+    /// Downloads an avatar or sticker image.
+    FetchAvatar {
+        url: String,
+    },
+    LogOut,
+}

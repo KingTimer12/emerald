@@ -1,0 +1,19 @@
+//! What the client knows, kept apart from how it is drawn. Each store owns
+//! one concern and is driven by plain method calls, so it can be tested
+//! without a window.
+
+pub mod expiry;
+pub mod history;
+pub mod msg;
+pub mod people;
+pub mod reads;
+pub mod spaces;
+pub mod typing;
+
+pub use expiry::TtlCache;
+pub use history::{History, Log, MessageView};
+pub use msg::{Msg, Reply};
+pub use people::People;
+pub use reads::ReadStates;
+pub use spaces::{ChannelRow, DMS, Row, Space, Spaces};
+pub use typing::Typing;

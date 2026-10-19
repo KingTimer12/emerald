@@ -25,8 +25,8 @@ struct Card {
 
 impl Emerald {
     fn card(&self, user: Snowflake) -> Card {
-        let known = self.users.get(&user);
-        let profile = self.profiles.get(&user).and_then(|(_, profile)| profile.as_ref());
+        let known = self.people.user(user);
+        let profile = self.profiles.get(&user);
         let details = profile.map(|p| &p.user_profile);
         Card {
             name: known.map_or_else(|| user.to_string(), |u| u.display_name().to_owned()).into(),
@@ -96,10 +96,7 @@ impl Emerald {
                 user,
                 self.user_avatar(user),
                 size,
-                Some((
-                    self.presences.get(&user).map_or("offline", |s| s.as_ref()),
-                    theme::BASE_LOWEST,
-                )),
+                Some((self.people.presence(user), theme::BASE_LOWEST)),
             ))
     }
 
