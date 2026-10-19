@@ -652,13 +652,15 @@ impl Emerald {
             div().text_size(px(size)).text_color(rgb(color)).child(text)
         };
         let title = embed.title.clone().map(|title| {
-            let link = embed.url.is_some();
+            // Embed URLs come from the sender; open only http(s).
+            let url = embed.url.as_deref().and_then(markdown::web_url).map(str::to_owned);
+            let link = url.is_some();
             let element = div()
                 .text_size(px(16.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(if link { theme::LINK } else { theme::TEXT_STRONG }))
                 .child(title);
-            match embed.url.clone() {
+            match url {
                 Some(url) => element
                     .id(("embed-title", message * 16 + n))
                     .cursor_pointer()

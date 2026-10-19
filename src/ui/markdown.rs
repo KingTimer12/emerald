@@ -50,6 +50,23 @@ fn bare_url(source: &str) -> Option<&str> {
     Some(&source[..source.find(char::is_whitespace).unwrap_or(source.len())])
 }
 
+/// `url` when it is a whole http(s) URL, the only links a message may open.
+pub fn web_url(url: &str) -> Option<&str> {
+    (bare_url(url) == Some(url)).then_some(url)
+}
+
+/// A masked link label that names a site, like `discord.com` or a URL. Such
+/// a label could point somewhere else, so the real URL is shown instead, as
+/// Discord refuses these labels.
+fn looks_like_url(label: &str) -> bool {
+    let label = label.trim();
+    bare_url(label).is_some()
+        || (!label.contains(char::is_whitespace)
+            && label.split('/').next().is_some_and(|host| {
+                host.contains('.') && host.split('.').all(|part| !part.is_empty())
+            }))
+}
+
 /// Paired markers, longest first so `**` wins over `*`.
 const MARKERS: [(&str, Style); 7] = [
     ("```", Style::Code),
@@ -119,8 +136,9 @@ fn inline(line: &str, name: &dyn Fn(Mention) -> String, rich: &mut Rich) {
             if let Some((label, after)) = rest[1..].split_once("](") {
                 if let Some(end) = after.find(')') {
                     let url = after[..end].trim_start_matches('<').trim_end_matches('>');
-                    if !label.contains('\n') && bare_url(url) == Some(url) {
-                        rich.link(label, url);
+                    if !label.contains('\n') && web_url(url).is_some() {
+                        let shown = if looks_like_url(label) { url } else { label };
+                        rich.link(shown, url);
                         rest = &after[end + 1..];
                         continue;
                     }
@@ -266,6 +284,15 @@ mod tests {
             .map(|(r, url)| (&rich.text[r.clone()], url.as_str()))
             .collect();
         assert_eq!(links, vec![("Terms", "https://a.io/t"), ("https://b.io", "https://b.io")]);
+    }
+
+    #[test]
+    fn masked_links_cannot_disguise_their_target() {
+        for source in ["[discord.com](https://evil.io)", "[https://discord.com](https://evil.io)"] {
+            assert_eq!(parse(source, &names).text, "https://evil.io");
+        }
+        assert_eq!(parse("[v1.2 notes](https://a.io)", &names).text, "v1.2 notes");
+        assert_eq!(web_url("javascript:alert(1)"), None);
     }
 
     #[test]
