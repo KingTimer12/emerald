@@ -249,6 +249,14 @@ impl Rest {
         Ok(())
     }
 
+    /// Revokes the token server-side, as the web client does on "Log Out".
+    pub async fn logout(&self) -> Result<()> {
+        let body = json!({ "provider": null, "voip_provider": null });
+        self.request(Method::POST, "POST /auth/logout", NO_MAJOR, "/auth/logout", Some(&body), None)
+            .await?;
+        Ok(())
+    }
+
     pub async fn send_friend_request(&self, username: &str, captcha: Option<&Solution>) -> Result<()> {
         let body = json!({ "username": username, "discriminator": null });
         self.request_with(

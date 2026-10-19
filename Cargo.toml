@@ -37,6 +37,7 @@ objc2-app-kit = { version = "0.3", features = [
 objc2-web-kit = { version = "0.3", features = [
     "WKWebView", "WKWebViewConfiguration", "WKUserContentController",
     "WKUserScript", "WKScriptMessageHandler", "WKScriptMessage", "WKWebsiteDataStore",
+    "WKFrameInfo", "WKSecurityOrigin",
 ] }
 
 [profile.release]

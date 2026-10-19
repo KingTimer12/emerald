@@ -323,7 +323,7 @@ impl Emerald {
             }
             NetEvent::Fatal(reason) => self.fatal = Some(reason.into()),
             // Intercepted in `main`, which restarts into the login flow.
-            NetEvent::AuthExpired => {}
+            NetEvent::AuthExpired | NetEvent::LoggedOut { .. } => {}
             NetEvent::Ready {
                 me,
                 guilds,
@@ -637,6 +637,17 @@ impl Emerald {
         if self.overlay.take().is_some() {
             window.focus(&self.input.focus_handle(cx));
             cx.notify();
+        }
+    }
+
+    /// Asks the network thread to revoke the token; `main` signs out locally
+    /// when the answer arrives. Without a network thread, signs out at once.
+    fn log_out(&mut self, cx: &mut Context<Self>) {
+        self.status = "Saindo…".into();
+        self.connected = false;
+        cx.notify();
+        if self.commands.send(Command::LogOut).is_err() {
+            crate::sign_out();
         }
     }
 
@@ -1261,6 +1272,7 @@ impl Render for Emerald {
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.close_overlay(window, cx)))
+            .on_action(cx.listener(|this, _: &crate::Logout, _, cx| this.log_out(cx)))
             .relative()
             .flex()
             .size_full()

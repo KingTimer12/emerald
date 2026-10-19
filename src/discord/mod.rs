@@ -26,6 +26,11 @@ pub enum NetEvent {
     Fatal(String),
     /// The token was rejected (gateway 4004 / REST 401); sign in again.
     AuthExpired,
+    /// Answer to `Command::LogOut`; `error` is set if the server-side
+    /// revocation failed (the local sign-out still happens).
+    LoggedOut {
+        error: Option<String>,
+    },
     Ready {
         me: User,
         guilds: Vec<Guild>,
@@ -108,6 +113,7 @@ pub enum Command {
     FetchAvatar {
         url: String,
     },
+    LogOut,
 }
 
 /// Runs all networking on one dedicated OS thread with a single-threaded
@@ -210,6 +216,13 @@ async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Send
                 NetEvent::ActionDone(Action::UpdateProfile)
             }
             Err(e) => failure(Action::UpdateProfile, e),
+        },
+        Command::LogOut => NetEvent::LoggedOut {
+            // A token the server already rejects needs no revocation.
+            error: match rest.logout().await {
+                Err(e) if !e.is::<rest::Unauthorized>() => Some(e.to_string()),
+                _ => None,
+            },
         },
         Command::FetchAvatar { url } => {
             let bytes = rest

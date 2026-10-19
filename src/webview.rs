@@ -92,6 +92,9 @@ const CAPTCHA_HTML: &str = r#"<!doctype html>
   <div id="captcha"></div>
 </body></html>"#;
 
+/// Only the main frame of this host may post results back.
+const TRUSTED_HOST: &str = "discord.com";
+
 /// What a window shows: a remote page, or local HTML under a base URL.
 enum Page<'a> {
     Url(&'a str),
@@ -124,6 +127,18 @@ define_class!(
     unsafe impl WKScriptMessageHandler for Delegate {
         #[unsafe(method(userContentController:didReceiveScriptMessage:))]
         fn did_receive(&self, _ucc: &WKUserContentController, message: &WKScriptMessage) {
+            // Every frame can reach `messageHandlers`; only trust the
+            // discord.com main frame, never iframes or off-site pages.
+            let frame = unsafe { message.frameInfo() };
+            let origin = unsafe { frame.securityOrigin() };
+            let trusted = unsafe {
+                frame.isMainFrame()
+                    && origin.protocol().to_string() == "https"
+                    && origin.host().to_string() == TRUSTED_HOST
+            };
+            if !trusted {
+                return;
+            }
             let body = unsafe { message.body() };
             if let Ok(s) = body.downcast::<NSString>() {
                 let message = s.to_string();

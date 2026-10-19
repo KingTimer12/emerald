@@ -13,7 +13,7 @@ actions!(emerald, [Quit, Logout]);
 /// Forgets the stored token and restarts this binary, which then finds no
 /// token and opens the login webview. `exec` replaces the process, so gpui,
 /// the network thread and the gateway session all go away with it.
-fn sign_out() -> ! {
+pub(crate) fn sign_out() -> ! {
     use std::os::unix::process::CommandExt;
 
     if let Some(path) = discord::identity::token_path() {
@@ -95,7 +95,6 @@ fn main() {
             KeyBinding::new("secondary-shift-l", Logout, None),
         ]);
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.on_action(|_: &Logout, _| sign_out());
 
         let bounds = Bounds::centered(None, size(px(1200.), px(780.)), cx);
         let window = cx
@@ -127,8 +126,15 @@ fn main() {
                 let alive = window.update(cx, |view, window, cx| {
                     let mut event = Some(event);
                     while let Some(next) = event.take().or_else(|| events.try_recv().ok()) {
-                        if matches!(next, discord::NetEvent::AuthExpired) {
-                            sign_out();
+                        match &next {
+                            discord::NetEvent::AuthExpired => sign_out(),
+                            discord::NetEvent::LoggedOut { error } => {
+                                if let Some(error) = error {
+                                    eprintln!("aviso: o token não foi revogado no Discord: {error}");
+                                }
+                                sign_out();
+                            }
+                            _ => {}
                         }
                         view.on_net(next, window, cx);
                     }
