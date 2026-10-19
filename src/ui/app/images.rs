@@ -2,7 +2,7 @@
 //! requested once and decoded when it arrives.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use gpui::{Image, ImageFormat, SharedString};
@@ -10,11 +10,17 @@ use gpui::{Image, ImageFormat, SharedString};
 use super::outbox::Outbox;
 use crate::discord::Command;
 
+/// Images kept decoded; scrolling a huge member list would otherwise grow
+/// the cache without bound. Evicted ones come back from the disk cache.
+const MAX_IMAGES: usize = 1500;
+
 #[derive(Default)]
 pub struct Images {
     /// `None` while downloading or after a failure, so each URL is requested
     /// once. Interior mutability lets render request what it is about to draw.
     slots: RefCell<HashMap<SharedString, Option<Arc<Image>>>>,
+    /// URLs in the order they were first requested, oldest first.
+    order: RefCell<VecDeque<SharedString>>,
 }
 
 impl Images {
@@ -24,8 +30,16 @@ impl Images {
         if let Some(slot) = slots.get(url) {
             return slot.clone();
         }
-        slots.insert(url.to_owned().into(), None);
-        outbox.post(Command::FetchAvatar { url: url.to_owned() });
+        let url: SharedString = url.to_owned().into();
+        let mut order = self.order.borrow_mut();
+        while order.len() >= MAX_IMAGES {
+            if let Some(oldest) = order.pop_front() {
+                slots.remove(&oldest);
+            }
+        }
+        order.push_back(url.clone());
+        slots.insert(url.clone(), None);
+        outbox.post(Command::FetchAvatar { url: url.to_string() });
         None
     }
 
@@ -36,7 +50,10 @@ impl Images {
             let format = image_format(&bytes)?;
             Some(Arc::new(Image::from_bytes(format, bytes)))
         });
-        self.slots.borrow_mut().insert(url.into(), image);
+        // Evicted while downloading: dropped rather than kept untracked.
+        if let Some(slot) = self.slots.borrow_mut().get_mut(url.as_str()) {
+            *slot = image;
+        }
     }
 }
 
@@ -66,6 +83,17 @@ mod tests {
         assert_eq!(outbox.borrow().len(), 1);
         images.store("https://cdn/a.png".into(), Some(b"\x89PNG....".to_vec()));
         assert!(images.get("https://cdn/a.png", &outbox).is_some());
+    }
+
+    #[test]
+    fn oldest_images_are_evicted() {
+        let images = Images::default();
+        let outbox = RefCell::new(Vec::new());
+        for n in 0..MAX_IMAGES + 1 {
+            images.get(&format!("https://cdn/{n}.png"), &outbox);
+        }
+        assert_eq!(images.slots.borrow().len(), MAX_IMAGES);
+        assert!(!images.slots.borrow().contains_key("https://cdn/0.png"));
     }
 
     #[test]
