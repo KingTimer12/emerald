@@ -1,0 +1,47 @@
+[package]
+name = "emerald"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# runtime_shaders: compila shaders Metal no runtime (dispensa Xcode completo)
+gpui = { version = "0.2.2", features = ["runtime_shaders"] }
+tokio = { version = "1", features = ["rt", "net", "time", "sync", "macros"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "gzip", "deflate", "brotli", "zstd"] }
+# Único CryptoProvider (ring) para reqwest e tungstenite.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+flate2 = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value", "preserve_order"] }
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+async-channel = "2"
+unicode-segmentation = "1"
+anyhow = "1"
+log = "0.4"
+env_logger = { version = "0.11", default-features = false }
+
+# Login webview oficial (WKWebView nativo). Versões casadas com as que o gpui
+# já resolve, para o Cargo deduplicar e não gerar tipos objc2 incompatíveis.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSString", "NSURL", "NSURLRequest", "NSDate", "NSRunLoop", "NSGeometry",
+    "NSObjCRuntime", "NSNotification",
+] }
+objc2-app-kit = { version = "0.3", features = [
+    "NSApplication", "NSWindow", "NSView", "NSResponder", "NSEvent",
+    "NSGraphics", "NSRunningApplication",
+] }
+objc2-web-kit = { version = "0.3", features = [
+    "WKWebView", "WKWebViewConfiguration", "WKUserContentController",
+    "WKUserScript", "WKScriptMessageHandler", "WKScriptMessage", "WKWebsiteDataStore",
+] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
