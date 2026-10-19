@@ -1,115 +1,116 @@
 # Emerald
 
-Cliente de Discord nativo para macOS, escrito em Rust com [gpui](https://www.gpui.rs/).
-A interface segue o visual do cliente web em pt-BR, e o app gasta uma fração da memória
-de um Electron: algo entre 60 e 100 MB e CPU perto de zero em repouso.
+A native Discord client for macOS, written in Rust with [gpui](https://www.gpui.rs/).
+The interface follows the look of the official web client (in Brazilian Portuguese),
+and the app uses a fraction of an Electron client's memory: roughly 60 to 100 MB, with
+CPU near zero when idle.
 
-> **Aviso.** Clientes de terceiros com conta de usuário violam os Termos de Serviço do
-> Discord e podem levar à suspensão da conta. O Emerald imita o cliente web oficial e
-> respeita os limites de requisição, mas o risco continua sendo seu. Use por conta própria.
+> **Warning.** Third-party clients on user accounts violate Discord's Terms of Service
+> and can get the account suspended. Emerald mimics the official web client and stays
+> within the rate limits, but the risk is yours. Use it at your own discretion.
 
-## O que já funciona
+## What works
 
-- **Login** pela página oficial do Discord, num WKWebView nativo, com suporte a captcha.
-  O token fica em `~/.config/emerald/token`; sair revoga o token no servidor.
-- **Amigos**: abas Disponível, Todos e Pendente, adicionar por nome de usuário, aceitar,
-  recusar e remover.
-- **Mensagens diretas**: lista ordenada por atividade, busca, histórico, envio com
-  confirmação otimista, "digitando…", painel de perfil (selos, bio, contas conectadas)
-  e o perfil completo.
-- **Servidores**: canais e categorias recolhíveis, permissões calculadas como no Discord
-  (canais ocultos, envio bloqueado sem permissão), apelidos e cores de cargo, respostas,
-  imagens, embeds, figurinhas e mensagens de sistema.
-- **Markdown do Discord**: negrito, itálico, sublinhado, tachado, código, títulos,
-  menções, links clicáveis. Links mascarados sempre mostram o domínio real.
-- **Lista de membros** carregada sob demanda: mesmo em servidores com milhões de
-  membros, só as páginas visíveis ficam na memória.
-- **Não lidos** sincronizados com os outros dispositivos e recibos de leitura agrupados.
-- **Configurações**: nome exibido, status, tamanho da fonte, modo compacto.
+- **Login** through Discord's own sign-in page in a native WKWebView, captcha included.
+  The token is kept in `~/.config/emerald/token`; logging out revokes it on the server.
+- **Friends**: Online, All and Pending tabs; add by username, accept, decline, remove.
+- **Direct messages**: list ordered by activity, search, history, sending with optimistic
+  confirmation, typing indicators, a profile panel (badges, bio, connected accounts)
+  and the full profile.
+- **Servers**: channels and collapsible categories, permissions computed the way Discord
+  does (hidden channels, sending blocked without permission), nicknames and role colors,
+  replies, images, embeds, stickers and system messages.
+- **Discord markdown**: bold, italics, underline, strikethrough, code, headings, mentions,
+  clickable links. Masked links always show their real host.
+- **Member list** loaded on demand: even in servers with millions of members, only the
+  visible pages are kept in memory.
+- **Unread state** synced with other devices, with read receipts batched.
+- **Settings**: display name, status, font size, compact mode.
 
-Ainda não há voz, threads, fóruns, reações, emoji como imagem nem edição de mensagens.
+Not there yet: voice, threads, forums, reactions, emoji images, editing messages.
 
-## Requisitos
+## Requirements
 
-- macOS (o login usa WebKit e AppKit).
-- Rust estável recente (edição 2024).
-- Não precisa do Xcode completo: os shaders Metal são compilados em tempo de execução
-  (`gpui` com `runtime_shaders`).
+- macOS (login relies on WebKit and AppKit).
+- A recent stable Rust toolchain (edition 2024).
+- No full Xcode install needed: Metal shaders are compiled at runtime
+  (`gpui` with `runtime_shaders`).
 
-## Rodando
+## Running
 
 ```sh
 cargo run --release
 ```
 
-Na primeira execução abre a janela de login do Discord. Para usar um token que você já tem:
+The first run opens Discord's login window. To use a token you already have:
 
 ```sh
 DISCORD_TOKEN=... cargo run --release
 ```
 
-Variáveis úteis:
+Useful environment variables:
 
-| Variável | Para quê |
+| Variable | Purpose |
 |---|---|
-| `DISCORD_TOKEN` | Usa este token em vez do salvo. |
-| `EMERALD_BUILD_NUMBER` | Substitui o `client_build_number` quando o do código envelhece. |
-| `RUST_LOG=emerald=debug` | Logs detalhados. |
+| `DISCORD_TOKEN` | Use this token instead of the stored one. |
+| `EMERALD_BUILD_NUMBER` | Override `client_build_number` when the one in the code goes stale. |
+| `RUST_LOG=emerald=debug` | Verbose logs. |
 
-Testes:
+Tests:
 
 ```sh
 cargo test
 ```
 
-## Arquivos
+## Files
 
-| Caminho | Conteúdo |
+| Path | Contents |
 |---|---|
-| `~/.config/emerald/token` | Token da conta. Nunca compartilhe. |
-| `~/.config/emerald/settings.json` | Preferências. |
-| `~/Library/Caches/emerald/cdn` | Cache de imagens do CDN, limitado a 200 MB. |
+| `~/.config/emerald/token` | Account token. Never share it. |
+| `~/.config/emerald/settings.json` | Preferences. |
+| `~/Library/Caches/emerald/cdn` | CDN image cache, capped at 200 MB. |
 
-## Arquitetura
+## Architecture
 
-Duas threads: a da interface (gpui) e uma de rede com um runtime tokio de uma thread só.
-Elas conversam por mensagens: a UI manda `Command`s, a rede devolve `NetEvent`s.
+Two threads: the UI thread (gpui) and a network thread running a single-threaded tokio
+runtime. They talk through messages: the UI sends `Command`s, the network answers with
+`NetEvent`s.
 
 ```
 src/
-├── main.rs              ponto de entrada, modos filho do webview, ciclo de login
-├── settings.rs          preferências em JSON
-├── webview.rs           WKWebView de login e captcha (processo filho)
-├── discord/             tudo que fala com o Discord, sem nada de interface
-│   ├── protocol.rs      Command, NetEvent, Snapshot: o contrato UI ↔ rede
-│   ├── commands.rs      executa cada Command na API REST
-│   ├── gateway.rs       WebSocket com zlib-stream, resume, heartbeat, ops 8 e 37
-│   ├── rest/            cliente HTTP: builder `Call`, RateLimiter, erros tipados
-│   ├── model/           payloads do Discord, só com os campos usados
-│   ├── permissions.rs   algoritmo de permissões por cargo e sobrescrita
-│   ├── identity.rs      cabeçalhos e super properties iguais aos do web
-│   └── cache.rs         cache de imagens em disco
+├── main.rs              entry point, webview child modes, login cycle
+├── settings.rs          JSON preferences
+├── webview.rs           login and captcha WKWebView (child process)
+├── discord/             everything that talks to Discord, no UI
+│   ├── protocol.rs      Command, NetEvent, Snapshot: the UI ↔ network contract
+│   ├── commands.rs      runs each Command against the REST API
+│   ├── gateway.rs       zlib-stream WebSocket, resume, heartbeat, ops 8 and 37
+│   ├── rest/            HTTP client: `Call` builder, RateLimiter, typed errors
+│   ├── model/           Discord payloads, only the fields in use
+│   ├── permissions.rs   role and overwrite permission algorithm
+│   ├── identity.rs      headers and super properties matching the web client
+│   └── cache.rs         on-disk image cache
 └── ui/
-    ├── markdown.rs      parser do markdown do Discord
-    ├── text_input.rs    campo de texto
+    ├── markdown.rs      Discord markdown parser
+    ├── text_input.rs    text field
     ├── theme.rs, icons.rs, time.rs
-    └── app/             a janela principal
-        ├── app.rs       `Emerald`: compõe os stores e desenha o layout
-        ├── state/       stores sem interface, testados isoladamente
-        ├── events.rs    distribui cada NetEvent aos stores
+    └── app/             the main window
+        ├── app.rs       `Emerald`: composes the stores and lays out the window
+        ├── state/       UI-free stores, tested in isolation
+        ├── events.rs    hands each NetEvent to the stores
         ├── navigation.rs, composer.rs
         └── sidebar.rs, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
 ```
 
-Algumas decisões:
+A few design choices:
 
-- **Stores sem interface.** `People`, `Spaces`, `History`, `ReadStates`, `Typing` e
-  `MemberList` guardam o estado e não sabem desenhar. A lista de mensagens na tela
-  acompanha o `History` pela trait `MessageView`, e a UI envia comandos pela trait
-  `Outbox`. Os dois lados têm implementações falsas nos testes.
-- **Comportamento de navegador.** Cabeçalhos, nonces, recibos de leitura, ops 8 e 37
-  e a paginação seguem o que o cliente web faz, para não destoar nem abusar da API.
-  O REST respeita os buckets de rate limit, um teto global abaixo do do Discord e uma
-  trava contra excesso de requisições inválidas.
-- **Memória limitada.** Histórico de até 8 canais com 300 mensagens cada, até 1500
-  imagens decodificadas e só as páginas visíveis da lista de membros.
+- **UI-free stores.** `People`, `Spaces`, `History`, `ReadStates`, `Typing` and
+  `MemberList` hold state and know nothing about drawing. The on-screen message list
+  follows `History` through the `MessageView` trait, and the UI sends commands through
+  the `Outbox` trait; tests use fakes for both.
+- **Browser-like behavior.** Headers, nonces, read receipts, ops 8 and 37 and pagination
+  follow what the web client does, so the client neither stands out nor abuses the API.
+  REST requests respect rate-limit buckets, a global cap below Discord's, and a guard
+  against too many invalid requests.
+- **Bounded memory.** History for up to 8 channels with 300 messages each, up to 1500
+  decoded images, and only the visible pages of the member list.
