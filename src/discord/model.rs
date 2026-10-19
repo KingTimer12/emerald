@@ -10,6 +10,16 @@ use serde::{Deserialize, Deserializer, Serialize};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Snowflake(pub u64);
 
+/// Discord epoch (2015-01-01T00:00:00Z) in Unix milliseconds.
+pub const DISCORD_EPOCH_MS: u64 = 1_420_070_400_000;
+
+impl Snowflake {
+    /// Creation time encoded in the id, in Unix seconds.
+    pub fn unix_secs(self) -> i64 {
+        (((self.0 >> 22) + DISCORD_EPOCH_MS) / 1000) as i64
+    }
+}
+
 impl fmt::Display for Snowflake {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -135,14 +145,28 @@ pub struct Attachment {
 pub struct Message {
     pub id: Snowflake,
     pub channel_id: Snowflake,
+    /// Absent on DM messages.
+    #[serde(default)]
+    pub guild_id: Option<Snowflake>,
     pub author: User,
     #[serde(default)]
     pub content: String,
-    pub timestamp: String,
     #[serde(default)]
     pub attachments: Vec<Attachment>,
     #[serde(default)]
     pub embeds: Vec<IgnoredAny>,
+    /// Echo of the nonce the sender chose; matches our pending copy.
+    #[serde(default, deserialize_with = "lenient_nonce")]
+    pub nonce: Option<String>,
+}
+
+/// Clients send nonces as strings or numbers; anything else is ignored.
+fn lenient_nonce<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    Ok(match serde_json::Value::deserialize(d)? {
+        serde_json::Value::String(s) => Some(s),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -282,6 +306,26 @@ impl Status {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snowflake_time() {
+        // Discord's docs example: 175928847299117063 is 2016-04-30T11:18:25.796Z.
+        assert_eq!(Snowflake(175928847299117063).unix_secs(), 1462015105);
+    }
+
+    #[test]
+    fn nonce_accepts_strings_and_numbers() {
+        let m = |nonce: &str| {
+            serde_json::from_str::<Message>(&format!(
+                r#"{{"id":"1","channel_id":"2","author":{{"id":"3","username":"a"}},"timestamp":"","nonce":{nonce}}}"#
+            ))
+            .unwrap()
+            .nonce
+        };
+        assert_eq!(m(r#""42""#).as_deref(), Some("42"));
+        assert_eq!(m("42").as_deref(), Some("42"));
+        assert_eq!(m("null"), None);
+    }
 
     #[test]
     fn avatar_url_uses_hash_or_default_index() {

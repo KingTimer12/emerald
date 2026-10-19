@@ -43,8 +43,11 @@ pub enum NetEvent {
     RelationshipAdd(Relationship),
     RelationshipRemove(Snowflake),
     UserUpdate(User),
-    /// A DM opened from the friends list; the UI selects it.
-    DmOpened(Channel),
+    /// A DM opened with `Command::OpenDm`; selected when `select` is set.
+    DmOpened {
+        channel: Channel,
+        select: bool,
+    },
     /// Avatar bytes for `url`; `None` if the download failed.
     Avatar {
         url: String,
@@ -72,7 +75,12 @@ pub enum NetEvent {
         forbidden: bool,
         error: String,
     },
+    /// The message with `nonce` was not sent; `content` lets the UI give
+    /// the text back to the user.
     SendFailed {
+        channel: Snowflake,
+        nonce: String,
+        content: String,
         error: String,
     },
 }
@@ -86,6 +94,7 @@ pub enum Command {
     Send {
         channel: Snowflake,
         content: String,
+        nonce: String,
     },
     SendFriendRequest {
         username: String,
@@ -97,8 +106,11 @@ pub enum Command {
     RemoveRelationship {
         user: Snowflake,
     },
+    /// Opens (or reopens) the DM with `user`. Unselected opens run in the
+    /// background, so they never show a captcha and fail silently.
     OpenDm {
         user: Snowflake,
+        select: bool,
     },
     JoinGuild {
         code: String,
@@ -181,10 +193,18 @@ async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Send
                 error: e.to_string(),
             },
         },
-        Command::Send { channel, content } => match rest.send_message(channel, &content).await {
-            Ok(()) => return,
+        Command::Send {
+            channel,
+            content,
+            nonce,
+        } => match with_captcha!(|captcha| rest.send_message(channel, &content, &nonce, captcha).await) {
+            // Usually the gateway echo arrives first; the UI drops the duplicate.
+            Ok(message) => NetEvent::MessageCreate(message),
             Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
             Err(e) => NetEvent::SendFailed {
+                channel,
+                nonce,
+                content,
                 error: e.to_string(),
             },
         },
@@ -198,9 +218,24 @@ async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Send
         Command::RemoveRelationship { user } => {
             outcome(Action::Relationship, rest.remove_relationship(user).await)
         }
-        Command::OpenDm { user } => match with_captcha!(|captcha| rest.open_dm(user, captcha).await) {
-            Ok(channel) => NetEvent::DmOpened(channel),
-            Err(e) => failure(Action::Relationship, e),
+        Command::OpenDm { user, select: true } => {
+            match with_captcha!(|captcha| rest.open_dm(user, captcha).await) {
+                Ok(channel) => NetEvent::DmOpened {
+                    channel,
+                    select: true,
+                },
+                Err(e) => failure(Action::Relationship, e),
+            }
+        }
+        Command::OpenDm { user, select: false } => match rest.open_dm(user, None).await {
+            Ok(channel) => NetEvent::DmOpened {
+                channel,
+                select: false,
+            },
+            Err(e) => {
+                log::warn!("background DM with {user}: {e:#}");
+                return;
+            }
         },
         Command::JoinGuild { code } => outcome(
             Action::JoinGuild,

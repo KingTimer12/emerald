@@ -268,8 +268,14 @@ impl Emerald {
             _ => widgets::status_label(entry.status.as_ref().map(|s| -> &str { s.as_ref() })).into(),
         };
         let small = |button: gpui::Stateful<gpui::Div>| button.h(px(32.)).px_3();
+        // Discord lets you message anyone you can reach, pending or not.
+        let message = small(widgets::button(("message", id.0 as usize), "Mensagem", ButtonKind::Secondary))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.open_dm_now(id, window, cx);
+            }));
 
-        let actions = div().flex().flex_none().gap_2();
+        let actions = div().flex().flex_none().gap_2().child(message);
         let actions = match entry.kind {
             relationship_kind::INCOMING => actions
                 .child(
@@ -296,13 +302,6 @@ impl Emerald {
             _ => {
                 let confirming = self.confirm_remove == Some(id);
                 actions
-                    .child(
-                        small(widgets::button(("message", id.0 as usize), "Mensagem", ButtonKind::Secondary))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.commands.send(Command::OpenDm { user: id }).ok();
-                            })),
-                    )
                     .child(
                         // Removing a friend is a two-click action.
                         small(widgets::button(
@@ -380,12 +379,23 @@ impl Emerald {
                     ),
             )
             .child(actions)
-            .when(entry.kind == relationship_kind::FRIEND, |row| {
-                row.on_click(cx.listener(move |this, _, _, cx| {
-                    this.commands.send(Command::OpenDm { user: id }).ok();
-                    cx.notify();
-                }))
-            })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.open_dm_now(id, window, cx);
+            }))
             .into_any_element()
+    }
+
+    /// Opens the DM with `user`, selecting it when it is already listed and
+    /// asking Discord for it otherwise.
+    fn open_dm_now(&mut self, user: Snowflake, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        match self.dm_with(user) {
+            Some(channel) => {
+                self.selected_space = 0;
+                self.select_channel(channel, window, cx);
+            }
+            None => {
+                self.commands.send(Command::OpenDm { user, select: true }).ok();
+            }
+        }
     }
 }

@@ -14,10 +14,13 @@ use gpui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
+use super::icons::{self, icon};
 use super::text_input::{Submitted, TextInput};
-use super::theme;
-use crate::discord::model::{Channel, Guild, Message, Snowflake, User, avatar_url, channel_kind};
-use crate::discord::rest::HISTORY_PAGE;
+use super::{theme, time};
+use crate::discord::model::{
+    Channel, Guild, Message, Snowflake, User, avatar_url, channel_kind, relationship_kind,
+};
+use crate::discord::rest::{self, HISTORY_PAGE};
 use crate::discord::{Action, Command, NetEvent};
 use crate::settings::Settings;
 use add_server::AddServer;
@@ -41,17 +44,42 @@ const DMS: Snowflake = Snowflake(0);
 const CONNECTED: &str = "Conectado";
 /// Height of the floating user panel plus its margins; lists pad by this.
 const PANEL_CLEARANCE: f32 = 72.;
+/// Messages from one author closer than this share a group, like Discord.
+const GROUP_WINDOW_SECS: i64 = 7 * 60;
 
 struct Msg {
     id: Snowflake,
     author_id: Snowflake,
     author: SharedString,
     avatar_url: SharedString,
+    secs: i64,
     time: SharedString,
+    short_time: SharedString,
     content: SharedString,
+    /// Set on our own sends until the server confirms them.
+    nonce: Option<String>,
+    /// Sent but not yet confirmed; drawn dimmed.
+    pending: bool,
 }
 
 impl Msg {
+    /// Our own message as typed, shown until the server echoes it.
+    fn pending(me: &User, content: String, nonce: String) -> Self {
+        let secs = time::now_secs();
+        Self {
+            id: Snowflake(0),
+            author_id: me.id,
+            author: me.display_name().to_owned().into(),
+            avatar_url: me.avatar_url().into(),
+            secs,
+            time: time::header(secs).into(),
+            short_time: time::short(secs).into(),
+            content: content.into(),
+            nonce: Some(nonce),
+            pending: true,
+        }
+    }
+
     fn new(message: Message) -> Self {
         let mut content = message.content;
         for attachment in &message.attachments {
@@ -64,19 +92,18 @@ impl Msg {
         if content.is_empty() && !message.embeds.is_empty() {
             content.push_str("[embed]");
         }
+        let secs = message.id.unix_secs();
         Self {
             id: message.id,
             author_id: message.author.id,
             author: message.author.display_name().to_owned().into(),
             avatar_url: message.author.avatar_url().into(),
-            // ISO-8601 in UTC: keep "YYYY-MM-DD HH:MM".
-            time: message
-                .timestamp
-                .get(..16)
-                .map(|t| t.replace('T', " "))
-                .unwrap_or_default()
-                .into(),
+            secs,
+            time: time::header(secs).into(),
+            short_time: time::short(secs).into(),
             content: content.into(),
+            nonce: message.nonce,
+            pending: false,
         }
     }
 }
@@ -96,6 +123,8 @@ enum Row {
         id: Snowflake,
         icon: &'static str,
         name: SharedString,
+        /// The other person in a 1:1 DM; drawn as their avatar.
+        user: Option<Snowflake>,
     },
 }
 
@@ -124,14 +153,17 @@ impl Space {
     fn rebuild(&mut self) {
         self.rows.clear();
         if self.id == DMS {
+            // Most recent activity first; a DM without messages counts from
+            // when it was opened, which its id encodes.
             self.channels
-                .sort_unstable_by_key(|c| std::cmp::Reverse(c.last_message_id));
+                .sort_unstable_by_key(|c| std::cmp::Reverse(c.last_message_id.unwrap_or(c.id)));
             self.rows.push(Row::Friends);
             self.rows.push(Row::Category("MENSAGENS DIRETAS".into()));
             self.rows.extend(self.channels.iter().map(|c| Row::Channel {
                 id: c.id,
                 icon: "@",
                 name: c.name.as_deref().unwrap_or("?").to_owned().into(),
+                user: dm_recipient(c),
             }));
             return;
         }
@@ -144,6 +176,7 @@ impl Space {
             id: c.id,
             icon: "#",
             name: c.name.as_deref().unwrap_or("?").to_owned().into(),
+            user: None,
         };
 
         let mut loose: Vec<_> = self
@@ -176,13 +209,14 @@ impl Space {
         }
     }
 
-    fn channel(&self, id: Snowflake) -> Option<(&'static str, SharedString)> {
+    fn channel(&self, id: Snowflake) -> Option<(&'static str, SharedString, Option<Snowflake>)> {
         self.rows.iter().find_map(|row| match row {
             Row::Channel {
                 id: row_id,
                 icon,
                 name,
-            } if *row_id == id => Some((*icon, name.clone())),
+                user,
+            } if *row_id == id => Some((*icon, name.clone(), *user)),
             _ => None,
         })
     }
@@ -243,14 +277,19 @@ pub struct Emerald {
     forbidden: HashSet<Snowflake>,
     messages: ListState,
     input: Entity<TextInput>,
+    /// Why the last message in the open channel was not sent.
+    send_error: Option<SharedString>,
+    /// Filters the DM list by name; enter opens the first match.
+    dm_search: Entity<TextInput>,
     focus_handle: FocusHandle,
-    _subscriptions: [Subscription; 2],
+    _subscriptions: [Subscription; 4],
 }
 
 impl Emerald {
     pub fn new(
         commands: UnboundedSender<Command>,
         settings: Settings,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let input = cx.new(|cx| TextInput::new("Selecione um canal", cx));
@@ -264,6 +303,18 @@ impl Emerald {
         let friend_subscription = cx.subscribe(&friend_input, |this, _, event: &Submitted, cx| {
             this.send_friend_request(event.0.clone(), cx)
         });
+
+        let dm_search = cx.new(|cx| {
+            TextInput::new("Encontre ou comece uma conversa", cx)
+                .keep_on_submit()
+                .compact()
+        });
+        let search_subscriptions = [
+            cx.observe(&dm_search, |_, _, cx| cx.notify()),
+            cx.subscribe_in(&dm_search, window, |this, _, _: &Submitted, window, cx| {
+                this.open_first_dm(window, cx)
+            }),
+        ];
 
         let messages = ListState::new(0, ListAlignment::Bottom, px(400.));
         let weak = cx.entity().downgrade();
@@ -297,7 +348,7 @@ impl Emerald {
             status: "Conectando…".into(),
             connected: false,
             fatal: None,
-            spaces: vec![dm_space(Vec::new(), &HashMap::new())],
+            spaces: vec![dm_space(Vec::new(), &mut HashMap::new())],
             selected_space: 0,
             selected_channel: None,
             logs: HashMap::new(),
@@ -306,8 +357,13 @@ impl Emerald {
             forbidden: HashSet::new(),
             messages,
             input,
+            send_error: None,
             focus_handle: cx.focus_handle(),
-            _subscriptions: [subscription, friend_subscription],
+            dm_search,
+            _subscriptions: {
+                let [observe, submit] = search_subscriptions;
+                [subscription, friend_subscription, observe, submit]
+            },
         }
     }
 
@@ -343,7 +399,7 @@ impl Emerald {
                 }
                 self.me = Some(me);
                 let previous = self.spaces.get(self.selected_space).map(|s| s.id);
-                self.spaces = std::iter::once(dm_space(dms, &self.users))
+                self.spaces = std::iter::once(dm_space(dms, &mut self.users))
                     .chain(guilds.into_iter().filter(|g| !g.unavailable).map(Space::guild))
                     .collect();
                 self.selected_space = previous
@@ -360,9 +416,22 @@ impl Emerald {
                 }
             }
             NetEvent::RelationshipAdd(relationship) => {
-                self.relationships.insert(relationship.id, relationship.kind);
+                let id = relationship.id;
+                let previous = self.relationships.insert(id, relationship.kind);
                 if let Some(user) = relationship.user {
                     self.users.insert(user.id, user);
+                }
+                // A new friend (either side accepted) gets a DM in the list
+                // right away, opened quietly in the background.
+                let befriended = relationship.kind == relationship_kind::FRIEND
+                    && previous != Some(relationship_kind::FRIEND);
+                if befriended && self.dm_with(id).is_none() {
+                    self.commands
+                        .send(Command::OpenDm {
+                            user: id,
+                            select: false,
+                        })
+                        .ok();
                 }
             }
             NetEvent::RelationshipRemove(user) => {
@@ -381,16 +450,14 @@ impl Emerald {
                 }
                 self.users.insert(user.id, user);
             }
-            NetEvent::DmOpened(mut channel) => {
-                channel.name = Some(dm_name(&channel, &self.users));
+            NetEvent::DmOpened { mut channel, select } => {
+                normalize_dm(&mut channel, &mut self.users);
                 let id = channel.id;
-                if let Some(space) = self.spaces.iter_mut().find(|s| s.id == DMS) {
-                    space.channels.retain(|c| c.id != id);
-                    space.channels.insert(0, channel);
-                    space.rebuild();
+                self.add_dm(channel);
+                if select {
+                    self.selected_space = 0;
+                    self.select_channel(id, window, cx);
                 }
-                self.selected_space = 0;
-                self.select_channel(id, window, cx);
             }
             NetEvent::Avatar { url, bytes } => {
                 let image = bytes.map(|bytes| Arc::new(Image::from_bytes(ImageFormat::Png, bytes)));
@@ -424,7 +491,7 @@ impl Emerald {
                 let space_id = match channel.guild_id {
                     Some(id) => id,
                     None => {
-                        channel.name = Some(dm_name(&channel, &self.users));
+                        normalize_dm(&mut channel, &mut self.users);
                         DMS
                     }
                 };
@@ -445,11 +512,28 @@ impl Emerald {
             NetEvent::MessageCreate(message) => {
                 let channel = message.channel_id;
                 let selected = self.selected_channel == Some(channel);
-                if !selected {
+                let mine = self.me.as_ref().is_some_and(|me| me.id == message.author.id);
+                if message.guild_id.is_none() {
+                    self.touch_dm(&message);
+                }
+                if !selected && !mine {
                     self.unread.insert(channel);
                 }
                 if let Some(log) = self.logs.get_mut(&channel) {
                     if log.messages.iter().any(|m| m.id == message.id) {
+                        return;
+                    }
+                    // Our own send coming back: confirm the pending copy in place.
+                    let pending = message.nonce.as_ref().filter(|_| mine).and_then(|nonce| {
+                        log.messages
+                            .iter()
+                            .position(|m| m.pending && m.nonce.as_ref() == Some(nonce))
+                    });
+                    if let Some(ix) = pending {
+                        log.messages[ix] = Msg::new(message);
+                        if selected {
+                            self.messages.splice(ix..ix + 1, 1);
+                        }
                         return;
                     }
                     let end = log.messages.len();
@@ -538,8 +622,33 @@ impl Emerald {
                 }
                 self.status = format!("Erro: {error}").into();
             }
-            NetEvent::SendFailed { error } => {
-                self.status = format!("Falha ao enviar: {error}").into();
+            NetEvent::SendFailed {
+                channel,
+                nonce,
+                content,
+                error,
+            } => {
+                if let Some(log) = self.logs.get_mut(&channel) {
+                    if let Some(ix) = log
+                        .messages
+                        .iter()
+                        .position(|m| m.pending && m.nonce.as_ref() == Some(&nonce))
+                    {
+                        log.messages.remove(ix);
+                        if self.selected_channel == Some(channel) {
+                            self.messages.splice(ix..ix + 1, 0);
+                        }
+                    }
+                }
+                if self.selected_channel == Some(channel) {
+                    self.send_error = Some(error.into());
+                    // Give the text back unless the user already typed more.
+                    self.input.update(cx, |input, cx| {
+                        if input.text().is_empty() {
+                            input.set_text(content, cx);
+                        }
+                    });
+                }
             }
         }
     }
@@ -564,6 +673,89 @@ impl Emerald {
             None => avatar_url(id, None),
         };
         self.avatar_image(&url)
+    }
+
+    /// The open 1:1 DM with `user`, if any.
+    fn dm_with(&self, user: Snowflake) -> Option<Snowflake> {
+        let space = self.spaces.iter().find(|s| s.id == DMS)?;
+        space
+            .channels
+            .iter()
+            .find(|c| c.kind == channel_kind::DM && dm_recipient(c) == Some(user))
+            .map(|c| c.id)
+    }
+
+    /// Rows of the DM sidebar matching the search, as indices into its rows.
+    /// While searching only matching conversations are listed.
+    fn visible_dm_rows(&self, space: &Space, cx: &App) -> Vec<usize> {
+        let query = self.dm_search.read(cx).text().trim().to_lowercase();
+        if query.is_empty() {
+            return (0..space.rows.len()).collect();
+        }
+        space
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| match row {
+                Row::Channel { name, .. } => name.to_lowercase().contains(&query),
+                _ => false,
+            })
+            .map(|(ix, _)| ix)
+            .collect()
+    }
+
+    /// Enter in the DM search: opens the first match and clears the search.
+    fn open_first_dm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(space) = self.spaces.iter().position(|s| s.id == DMS) else { return };
+        let first = self
+            .visible_dm_rows(&self.spaces[space], cx)
+            .into_iter()
+            .find_map(|ix| match self.spaces[space].rows[ix] {
+                Row::Channel { id, .. } => Some(id),
+                _ => None,
+            });
+        let Some(channel) = first else { return };
+        self.dm_search.update(cx, |input, cx| input.set_text("", cx));
+        self.selected_space = space;
+        self.select_channel(channel, window, cx);
+    }
+
+    /// Inserts or replaces a DM in the sidebar.
+    fn add_dm(&mut self, channel: Channel) {
+        if let Some(space) = self.spaces.iter_mut().find(|s| s.id == DMS) {
+            space.channels.retain(|c| c.id != channel.id);
+            space.channels.push(channel);
+            space.rebuild();
+        }
+    }
+
+    /// Moves the DM a message landed in to the top of the sidebar, adding
+    /// it first when the conversation was closed or never opened here.
+    fn touch_dm(&mut self, message: &Message) {
+        let Some(space) = self.spaces.iter_mut().find(|s| s.id == DMS) else { return };
+        if let Some(channel) = space.channels.iter_mut().find(|c| c.id == message.channel_id) {
+            channel.last_message_id = Some(message.id);
+            space.rebuild();
+            return;
+        }
+        let mine = self.me.as_ref().is_some_and(|me| me.id == message.author.id);
+        let mut channel = Channel {
+            id: message.channel_id,
+            kind: channel_kind::DM,
+            name: None,
+            position: 0,
+            parent_id: None,
+            guild_id: None,
+            last_message_id: Some(message.id),
+            // From someone else, the author is the other side of the DM.
+            recipient_ids: if mine { Vec::new() } else { vec![message.author.id] },
+            recipients: Vec::new(),
+        };
+        if !mine {
+            self.users.insert(message.author.id, message.author.clone());
+        }
+        normalize_dm(&mut channel, &mut self.users);
+        self.add_dm(channel);
     }
 
     fn on_action_result(
@@ -678,9 +870,10 @@ impl Emerald {
             }
         }
 
-        let (icon, name) = self.spaces[self.selected_space]
+        self.send_error = None;
+        let (icon, name, _) = self.spaces[self.selected_space]
             .channel(id)
-            .unwrap_or(("#", SharedString::default()));
+            .unwrap_or(("#", SharedString::default(), None));
         // Same wording as the pt-BR web client.
         let placeholder = if self.forbidden.contains(&id) {
             "Sem permissão para enviar mensagens neste canal".to_owned()
@@ -739,12 +932,33 @@ impl Emerald {
         if self.forbidden.contains(&channel) {
             return;
         }
+        let content = content.trim_end().to_owned();
+        if content.trim().is_empty() {
+            return;
+        }
         if content.chars().count() > MAX_MESSAGE_LEN {
-            self.status = format!("Mensagem acima de {MAX_MESSAGE_LEN} caracteres").into();
+            self.send_error =
+                Some(format!("Sua mensagem passou do limite de {MAX_MESSAGE_LEN} caracteres.").into());
+            self.input.update(cx, |input, cx| input.set_text(content, cx));
             cx.notify();
             return;
         }
-        self.commands.send(Command::Send { channel, content }).ok();
+        self.send_error = None;
+        let nonce = rest::nonce();
+        if let (Some(me), Some(log)) = (&self.me, self.logs.get_mut(&channel)) {
+            let end = log.messages.len();
+            log.messages
+                .push_back(Msg::pending(me, content.clone(), nonce.clone()));
+            self.messages.splice(end..end, 1);
+        }
+        self.commands
+            .send(Command::Send {
+                channel,
+                content,
+                nonce,
+            })
+            .ok();
+        cx.notify();
     }
 
     fn forget(&mut self, channel: Snowflake) {
@@ -858,32 +1072,54 @@ impl Emerald {
 
     fn render_channels(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let space = &self.spaces[self.selected_space];
+        let dms = space.id == DMS;
+        let header = div()
+            .h(px(48.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .border_b_1()
+            .border_color(theme::border());
+        let header = if dms {
+            // Search field in place of a title, like the web client.
+            header.px_2().child(self.dm_search.clone())
+        } else {
+            header
+                .px_4()
+                .text_color(rgb(theme::TEXT_STRONG))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(div().truncate().child(space.name.clone()))
+        };
+        let visible = if dms {
+            self.visible_dm_rows(space, cx)
+        } else {
+            (0..space.rows.len()).collect()
+        };
+        let searching = dms && visible.is_empty() && !self.dm_search.read(cx).text().trim().is_empty();
+
         div()
             .flex()
             .flex_col()
             .w(px(240.))
             .h_full()
             .flex_none()
-            .child(
-                div()
-                    .h(px(48.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .px_4()
-                    .border_b_1()
-                    .border_color(theme::border())
-                    .text_color(rgb(theme::TEXT_STRONG))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(div().truncate().child(space.name.clone())),
-            )
+            .child(header)
+            .when(searching, |sidebar| {
+                sidebar.child(
+                    div()
+                        .p_4()
+                        .text_size(px(14.))
+                        .text_color(theme::muted())
+                        .child("Nenhuma conversa encontrada."),
+                )
+            })
             .child(
                 uniform_list(
                     "channels",
-                    space.rows.len(),
-                    cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                    visible.len(),
+                    cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                         range
-                            .map(|ix| this.render_channel_row(ix, cx))
+                            .map(|ix| this.render_channel_row(visible[ix], cx))
                             .collect::<Vec<_>>()
                     }),
                 )
@@ -893,13 +1129,29 @@ impl Emerald {
             )
     }
 
+    /// One sidebar row. The outer box spans the list width so hover and
+    /// selection backgrounds fill the row, not just its text.
     fn render_channel_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
-        let row = div().id(ix).h(px(34.)).mx_2().px_2().flex().items_center();
+        // uniform_list needs one height per list: DM rows fit a 32px avatar.
+        let height = if self.spaces[self.selected_space].id == DMS { 42. } else { 34. };
+        div()
+            .w_full()
+            .h(px(height))
+            .px_2()
+            .py(px(1.))
+            .child(self.render_channel_row_body(ix, cx))
+            .into_any_element()
+    }
+
+    fn render_channel_row_body(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let row = div().id(ix).size_full().px_2().flex().items_center();
         match &self.spaces[self.selected_space].rows[ix] {
             Row::Friends => {
                 let selected = self.friends_open;
                 let pending = self.incoming_requests();
-                row.gap_3()
+                let color = if selected { theme::TEXT_STRONG } else { theme::CHANNELS_DEFAULT };
+                row.group("friends-row")
+                    .gap_3()
                     .rounded_lg()
                     .cursor_pointer()
                     .font_weight(FontWeight::MEDIUM)
@@ -908,6 +1160,17 @@ impl Emerald {
                     .when(!selected, |r| {
                         r.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
                     })
+                    // Icon in a 32px slot so it lines up with the DM avatars.
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(32.))
+                            .flex()
+                            .justify_center()
+                            .child(icon(icons::FRIENDS, 24., color).group_hover("friends-row", |s| {
+                                s.text_color(rgb(theme::TEXT_STRONG))
+                            })),
+                    )
                     .child(div().flex_1().child("Amigos"))
                     .when(pending > 0, |r| r.child(widgets::badge(pending)))
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -918,14 +1181,16 @@ impl Emerald {
             }
             Row::Category(title) => row
                 .items_end()
-                .pb(px(6.))
-                .text_xs()
+                .pb(px(4.))
+                .text_size(px(12.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgb(theme::CHANNELS_DEFAULT))
+                .hover(|s| s.text_color(rgb(theme::TEXT_DEFAULT)))
                 .child(div().truncate().child(title.clone()))
                 .into_any_element(),
-            Row::Channel { id, icon, name } => {
+            Row::Channel { id, icon, name, user } => {
                 let id = *id;
+                let user = *user;
                 let selected = self.selected_channel == Some(id) && !self.friends_open;
                 let unread = self.unread.contains(&id);
                 let forbidden = self.forbidden.contains(&id);
@@ -959,17 +1224,29 @@ impl Emerald {
                                 .bg(rgb(theme::TEXT_STRONG)),
                         )
                     })
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(px(20.))
-                            .flex()
-                            .justify_center()
-                            .text_size(px(20.))
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(rgb(icon_color))
-                            .child(*icon),
-                    )
+                    .map(|r| match user {
+                        Some(user) => r.gap_3().child(widgets::avatar(
+                            name,
+                            user,
+                            self.user_avatar(user),
+                            32.,
+                            Some((
+                                self.presences.get(&user).map_or("offline", |s| s.as_ref()),
+                                theme::BASE_LOWEST,
+                            )),
+                        )),
+                        None => r.child(
+                            div()
+                                .flex_none()
+                                .w(px(20.))
+                                .flex()
+                                .justify_center()
+                                .text_size(px(20.))
+                                .font_weight(FontWeight::NORMAL)
+                                .text_color(rgb(icon_color))
+                                .child(*icon),
+                        ),
+                    })
                     .child(div().flex_1().min_w(px(0.)).truncate().child(name.clone()))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.select_channel(id, window, cx)
@@ -1074,7 +1351,7 @@ impl Emerald {
             return div().into_any_element();
         };
         let body = div()
-            .text_color(theme::text())
+            .text_color(if msg.pending { theme::muted() } else { theme::text() })
             .child(msg.content.clone());
         let row = div()
             .id(("message", ix))
@@ -1092,7 +1369,7 @@ impl Emerald {
                         .flex_none()
                         .text_xs()
                         .text_color(theme::muted())
-                        .child(msg.time.clone()),
+                        .child(msg.short_time.clone()),
                 )
                 .child(
                     div()
@@ -1112,7 +1389,10 @@ impl Emerald {
                 .into_any_element();
         }
 
-        let grouped = ix > 0 && log.messages[ix - 1].author_id == msg.author_id;
+        let grouped = ix > 0 && {
+            let previous = &log.messages[ix - 1];
+            previous.author_id == msg.author_id && msg.secs - previous.secs < GROUP_WINDOW_SECS
+        };
         if grouped {
             return row
                 .pl(px(72.))
@@ -1175,14 +1455,13 @@ impl Emerald {
         if self.friends_open && self.spaces[self.selected_space].id == DMS {
             return self.render_friends(cx).into_any_element();
         }
-        let (icon, title) = self
+        let (icon, title, user) = self
             .selected_channel
             .and_then(|id| self.spaces[self.selected_space].channel(id))
-            .unwrap_or(("", SharedString::default()));
-        let loading = self
-            .selected_channel
-            .and_then(|id| self.logs.get(&id))
-            .is_some_and(|log| log.loading);
+            .unwrap_or(("", SharedString::default(), None));
+        let log = self.selected_channel.and_then(|id| self.logs.get(&id));
+        let loading = log.is_some_and(|log| log.loading);
+        let empty = log.is_some_and(|log| !log.loading && log.messages.is_empty());
 
         let body = if self.selected_channel.is_none() {
             div()
@@ -1192,6 +1471,30 @@ impl Emerald {
                 .justify_center()
                 .text_color(theme::muted())
                 .child("Escolha um canal")
+                .into_any_element()
+        } else if empty && icon == "@" {
+            // Fresh DM: Discord's "beginning of your history" intro.
+            div()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .justify_end()
+                .gap_2()
+                .px_4()
+                .pb_4()
+                .children(user.map(|user| {
+                    widgets::avatar(&title, user, self.user_avatar(user), 80., None)
+                }))
+                .child(
+                    div()
+                        .text_size(px(30.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(rgb(theme::TEXT_STRONG))
+                        .child(title.clone()),
+                )
+                .child(div().text_color(theme::muted()).child(format!(
+                    "Este é o começo do seu histórico de mensagens diretas com {title}."
+                )))
                 .into_any_element()
         } else {
             list(
@@ -1225,12 +1528,21 @@ impl Emerald {
                     .px_4()
                     .border_b_1()
                     .border_color(theme::border())
-                    .child(
-                        div()
-                            .text_size(px(22.))
-                            .text_color(rgb(theme::CHANNELS_DEFAULT))
-                            .child(icon),
-                    )
+                    .map(|header| match user {
+                        Some(user) => header.child(widgets::avatar(
+                            &title,
+                            user,
+                            self.user_avatar(user),
+                            24.,
+                            None,
+                        )),
+                        None => header.child(
+                            div()
+                                .text_size(px(22.))
+                                .text_color(rgb(theme::CHANNELS_DEFAULT))
+                                .child(icon),
+                        ),
+                    })
                     .child(
                         div()
                             .text_color(rgb(theme::TEXT_STRONG))
@@ -1247,7 +1559,22 @@ impl Emerald {
                     }),
             )
             .child(body)
-            .child(div().flex_none().px_4().pb_6().child(self.input.clone()))
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .px_4()
+                    .pb_6()
+                    .children(self.send_error.clone().map(|error| {
+                        div()
+                            .text_size(px(14.))
+                            .text_color(rgb(theme::FEEDBACK_CRITICAL))
+                            .child(error)
+                    }))
+                    .child(self.input.clone()),
+            )
             .into_any_element()
     }
 }
@@ -1300,12 +1627,10 @@ impl Render for Emerald {
     }
 }
 
-fn dm_space(mut channels: Vec<Channel>, users: &HashMap<Snowflake, User>) -> Space {
+fn dm_space(mut channels: Vec<Channel>, users: &mut HashMap<Snowflake, User>) -> Space {
     channels.retain(|c| matches!(c.kind, channel_kind::DM | channel_kind::GROUP_DM));
     for channel in &mut channels {
-        channel.name = Some(dm_name(channel, users));
-        channel.recipients = Vec::new();
-        channel.recipient_ids = Vec::new();
+        normalize_dm(channel, users);
     }
     let mut space = Space {
         id: DMS,
@@ -1316,6 +1641,30 @@ fn dm_space(mut channels: Vec<Channel>, users: &HashMap<Snowflake, User>) -> Spa
     };
     space.rebuild();
     space
+}
+
+/// Moves a DM's embedded recipients into `users`, keeping only their ids,
+/// and names the channel after them.
+fn normalize_dm(channel: &mut Channel, users: &mut HashMap<Snowflake, User>) {
+    if !channel.recipients.is_empty() {
+        channel.recipient_ids = channel.recipients.iter().map(|u| u.id).collect();
+        for user in channel.recipients.drain(..) {
+            users.insert(user.id, user);
+        }
+    }
+    channel.name = Some(dm_name(channel, users));
+}
+
+/// The other person in a 1:1 DM.
+fn dm_recipient(channel: &Channel) -> Option<Snowflake> {
+    match channel.kind {
+        channel_kind::DM => channel
+            .recipient_ids
+            .first()
+            .copied()
+            .or(channel.recipients.first().map(|u| u.id)),
+        _ => None,
+    }
 }
 
 fn dm_name(channel: &Channel, users: &HashMap<Snowflake, User>) -> String {

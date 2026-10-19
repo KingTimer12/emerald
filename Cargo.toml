@@ -22,6 +22,8 @@ unicode-segmentation = "1"
 anyhow = "1"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false }
+# localtime_r, for message timestamps in the user's timezone.
+libc = "0.2"
 
 # Login webview oficial (WKWebView nativo). Versões casadas com as que o gpui
 # já resolve, para o Cargo deduplicar e não gerar tipos objc2 incompatíveis.

@@ -22,7 +22,7 @@ use tokio::time::{Instant, sleep, sleep_until};
 use base64::Engine;
 
 use super::identity::{self, Identity};
-use super::model::{Channel, Invite, Message, Snowflake, User};
+use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Snowflake, User};
 
 const GLOBAL_PER_SECOND: u32 = 25;
 const INVALID_WINDOW: Duration = Duration::from_secs(600);
@@ -30,8 +30,6 @@ const INVALID_CAP: u32 = 500;
 const MAX_ATTEMPTS: u32 = 4;
 const MAX_BUCKETS: usize = 256;
 pub const HISTORY_PAGE: usize = 50;
-/// Discord epoch, used to build message nonces.
-const DISCORD_EPOCH_MS: u64 = 1_420_070_400_000;
 
 /// 403, with Discord's (localized) reason when the body has one.
 #[derive(Debug)]
@@ -235,18 +233,28 @@ impl Rest {
         Ok(messages)
     }
 
-    pub async fn send_message(&self, channel: Snowflake, content: &str) -> Result<()> {
-        let body = json!({ "content": content, "nonce": nonce().to_string(), "tts": false });
-        self.request(
-            Method::POST,
-            "POST /channels/{id}/messages",
-            channel,
-            &format!("/channels/{channel}/messages"),
-            Some(&body),
-            None,
-        )
-        .await?;
-        Ok(())
+    /// `nonce` comes back on the MESSAGE_CREATE echo, which is how the UI
+    /// swaps its pending copy for the real message.
+    pub async fn send_message(
+        &self,
+        channel: Snowflake,
+        content: &str,
+        nonce: &str,
+        captcha: Option<&Solution>,
+    ) -> Result<Message> {
+        let body = json!({ "content": content, "nonce": nonce, "tts": false, "flags": 0 });
+        let response = self
+            .request_with(
+                Method::POST,
+                "POST /channels/{id}/messages",
+                channel,
+                &format!("/channels/{channel}/messages"),
+                Some(&body),
+                None,
+                captcha,
+            )
+            .await?;
+        Ok(response.json().await?)
     }
 
     /// Revokes the token server-side, as the web client does on "Log Out".
@@ -572,11 +580,15 @@ impl Rest {
     }
 }
 
-fn nonce() -> u64 {
+/// Snowflake-shaped nonce, like the web client's. The low bits carry a
+/// counter so two sends in the same millisecond still differ.
+pub fn nonce() -> String {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64);
-    ms.saturating_sub(DISCORD_EPOCH_MS) << 22
+    let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) & 0x3f_ffff;
+    (ms.saturating_sub(DISCORD_EPOCH_MS) << 22 | count).to_string()
 }
 
 /// Extracts the invite code from what a user pastes: a bare code,

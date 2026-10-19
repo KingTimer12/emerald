@@ -87,7 +87,7 @@ fn main() {
     let settings = settings::Settings::load();
     let (events, commands) = discord::spawn(token, settings.status);
 
-    Application::new().run(move |cx: &mut App| {
+    Application::new().with_assets(ui::Icons).run(move |cx: &mut App| {
         ui::text_input::bind_keys(cx);
         ui::bind_keys(cx);
         cx.bind_keys([
@@ -107,7 +107,7 @@ fn main() {
                     }),
                     ..Default::default()
                 },
-                |_, cx| cx.new(|cx| ui::Emerald::new(commands, settings, cx)),
+                |window, cx| cx.new(|cx| ui::Emerald::new(commands, settings, window, cx)),
             )
             .expect("open window");
 

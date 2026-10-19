@@ -70,6 +70,8 @@ pub struct TextInput {
     /// Chat input clears on enter; form fields keep their text so a failed
     /// submit can be corrected.
     clear_on_submit: bool,
+    /// Small single-line field, like the sidebar search.
+    compact: bool,
 }
 
 impl EventEmitter<Submitted> for TextInput {}
@@ -87,11 +89,17 @@ impl TextInput {
             last_bounds: None,
             is_selecting: false,
             clear_on_submit: true,
+            compact: false,
         }
     }
 
     pub fn keep_on_submit(mut self) -> Self {
         self.clear_on_submit = false;
+        self
+    }
+
+    pub fn compact(mut self) -> Self {
+        self.compact = true;
         self
     }
 
@@ -672,14 +680,26 @@ impl Render for TextInput {
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .w_full()
-            .px_4()
-            .py(px(11.))
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
-            .line_height(px(22.))
-            .text_size(px(16.))
+            .map(|input| {
+                if self.compact {
+                    input
+                        .px(px(6.))
+                        .py(px(4.))
+                        .bg(rgb(theme::BASE_LOWER))
+                        .line_height(px(18.))
+                        .text_size(px(13.))
+                } else {
+                    input
+                        .px_4()
+                        .py(px(11.))
+                        .bg(rgb(theme::SURFACE_HIGH))
+                        .line_height(px(22.))
+                        .text_size(px(16.))
+                }
+            })
             .child(TextElement { input: cx.entity() })
     }
 }
