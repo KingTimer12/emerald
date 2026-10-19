@@ -55,16 +55,11 @@ pub fn web_url(url: &str) -> Option<&str> {
     (bare_url(url) == Some(url)).then_some(url)
 }
 
-/// A masked link label that names a site, like `discord.com` or a URL. Such
-/// a label could point somewhere else, so the real URL is shown instead, as
-/// Discord refuses these labels.
-fn looks_like_url(label: &str) -> bool {
-    let label = label.trim();
-    bare_url(label).is_some()
-        || (!label.contains(char::is_whitespace)
-            && label.split('/').next().is_some_and(|host| {
-                host.contains('.') && host.split('.').all(|part| !part.is_empty())
-            }))
+/// The host a URL opens, past any `user@` prefix, as the browser reads it.
+fn host(url: &str) -> &str {
+    let authority = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let authority = &authority[..authority.find(['/', '?', '#']).unwrap_or(authority.len())];
+    authority.rsplit('@').next().unwrap_or(authority)
 }
 
 /// Paired markers, longest first so `**` wins over `*`.
@@ -137,8 +132,9 @@ fn inline(line: &str, name: &dyn Fn(Mention) -> String, rich: &mut Rich) {
                 if let Some(end) = after.find(')') {
                     let url = after[..end].trim_start_matches('<').trim_end_matches('>');
                     if !label.contains('\n') && web_url(url).is_some() {
-                        let shown = if looks_like_url(label) { url } else { label };
-                        rich.link(shown, url);
+                        // A label can name any site, so the real host always
+                        // follows it; no label check survives look-alike text.
+                        rich.link(&format!("{label} ({})", host(url)), url);
                         rest = &after[end + 1..];
                         continue;
                     }
@@ -277,21 +273,20 @@ mod tests {
     #[test]
     fn masked_and_unpreviewed_links() {
         let rich = parse("[Terms](<https://a.io/t>) e <https://b.io> ok", &names);
-        assert_eq!(rich.text, "Terms e https://b.io ok");
+        assert_eq!(rich.text, "Terms (a.io) e https://b.io ok");
         let links: Vec<_> = rich
             .links
             .iter()
             .map(|(r, url)| (&rich.text[r.clone()], url.as_str()))
             .collect();
-        assert_eq!(links, vec![("Terms", "https://a.io/t"), ("https://b.io", "https://b.io")]);
+        assert_eq!(links, vec![("Terms (a.io)", "https://a.io/t"), ("https://b.io", "https://b.io")]);
     }
 
     #[test]
     fn masked_links_cannot_disguise_their_target() {
-        for source in ["[discord.com](https://evil.io)", "[https://discord.com](https://evil.io)"] {
-            assert_eq!(parse(source, &names).text, "https://evil.io");
-        }
-        assert_eq!(parse("[v1.2 notes](https://a.io)", &names).text, "v1.2 notes");
+        let shown = |source| parse(source, &names).text;
+        assert_eq!(shown("[discord.com](https://evil.io/x)"), "discord.com (evil.io)");
+        assert_eq!(shown("[discord\u{200b}.com](https://a@evil.io)"), "discord\u{200b}.com (evil.io)");
         assert_eq!(web_url("javascript:alert(1)"), None);
     }
 
