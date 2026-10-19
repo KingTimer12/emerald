@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use gpui::{Div, ElementId, FontWeight, Image, SharedString, Stateful, div, img, prelude::*, px, rgb};
+use gpui::{
+    AnyView, App, Context, Div, ElementId, FontWeight, Image, SharedString, Stateful, Window, div,
+    img, prelude::*, px, rgb,
+};
 
 use super::super::theme;
 use super::Feedback;
@@ -48,7 +51,8 @@ pub fn avatar(
         .unwrap_or_default()
         .into();
     let color = AVATAR_COLORS[(id.0 % AVATAR_COLORS.len() as u64) as usize];
-    let dot = (size * 0.4).max(10.);
+    // Discord's dot: 10px on small avatars, a quarter of large ones.
+    let dot = (size * 0.25).max(10.);
 
     div()
         .relative()
@@ -76,7 +80,14 @@ pub fn avatar(
                     .rounded_full()
                     .border_2()
                     .border_color(rgb(ring))
-                    .bg(rgb(status_color(status))),
+                    .bg(rgb(status_color(status)))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    // Offline is a hollow ring, as on Discord.
+                    .when(!matches!(status, "online" | "idle" | "dnd"), |ring_dot| {
+                        ring_dot.child(div().size(px(((dot - 4.) * 0.5).max(2.))).rounded_full().bg(rgb(ring)))
+                    }),
             )
         })
 }
@@ -203,4 +214,29 @@ pub fn toggle(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
                 .rounded_full()
                 .bg(rgb(theme::TEXT_STRONG)),
         )
+}
+
+/// Hover label, built through `.tooltip(widgets::tooltip("…"))`.
+pub struct Tooltip(SharedString);
+
+impl Render for Tooltip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_3()
+            .py(px(6.))
+            .rounded_lg()
+            .border_1()
+            .border_color(theme::border())
+            .bg(rgb(theme::SURFACE_HIGH))
+            .text_size(px(14.))
+            .line_height(px(18.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(rgb(theme::TEXT_DEFAULT))
+            .child(self.0.clone())
+    }
+}
+
+pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let text = text.into();
+    move |_, cx| cx.new(|_| Tooltip(text.clone())).into()
 }

@@ -22,7 +22,7 @@ use tokio::time::{Instant, sleep, sleep_until};
 use base64::Engine;
 
 use super::identity::{self, Identity};
-use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Snowflake, User};
+use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Profile, Snowflake, User};
 
 const GLOBAL_PER_SECOND: u32 = 25;
 const INVALID_WINDOW: Duration = Duration::from_secs(600);
@@ -157,6 +157,8 @@ pub struct Rest {
     http: reqwest::Client,
     /// Plain client for cdn.discordapp.com: no API headers, no auth.
     cdn: reqwest::Client,
+    /// Where downloaded CDN images are kept; `None` disables the cache.
+    image_cache: Option<std::path::PathBuf>,
     identity: Arc<Identity>,
     api: String,
     state: Mutex<State>,
@@ -195,15 +197,29 @@ impl Rest {
         Ok(Self {
             http,
             cdn,
+            image_cache: super::cache::dir(),
             api: format!("https://discord.com/api/v{}", identity::API_VERSION),
             identity,
             state: Mutex::default(),
         })
     }
 
-    /// Downloads an image from the CDN, refusing anything implausibly large
-    /// for an avatar.
+    /// Fetches a CDN image from the disk cache, or downloads and caches it.
+    /// Refuses anything implausibly large for an avatar or sticker.
     pub async fn cdn_image(&self, url: &str) -> Result<Vec<u8>> {
+        if let Some(dir) = &self.image_cache {
+            if let Some(bytes) = super::cache::get(dir, url).await {
+                return Ok(bytes);
+            }
+        }
+        let bytes = self.download(url).await?;
+        if let Some(dir) = &self.image_cache {
+            super::cache::put(dir, url, &bytes).await;
+        }
+        Ok(bytes)
+    }
+
+    async fn download(&self, url: &str) -> Result<Vec<u8>> {
         const MAX_BYTES: usize = 2 * 1024 * 1024;
         let response = self.cdn.get(url).send().await?.error_for_status()?;
         if response.content_length().is_some_and(|len| len as usize > MAX_BYTES) {
@@ -242,7 +258,13 @@ impl Rest {
         nonce: &str,
         captcha: Option<&Solution>,
     ) -> Result<Message> {
-        let body = json!({ "content": content, "nonce": nonce, "tts": false, "flags": 0 });
+        let body = json!({
+            "mobile_network_type": "unknown",
+            "content": content,
+            "nonce": nonce,
+            "tts": false,
+            "flags": 0,
+        });
         let response = self
             .request_with(
                 Method::POST,
@@ -253,6 +275,32 @@ impl Rest {
                 None,
                 captcha,
             )
+            .await?;
+        Ok(response.json().await?)
+    }
+
+    /// Shows "… is typing" to the other side for about ten seconds.
+    pub async fn typing(&self, channel: Snowflake) -> Result<()> {
+        self.request(
+            Method::POST,
+            "POST /channels/{id}/typing",
+            channel,
+            &format!("/channels/{channel}/typing"),
+            None,
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// The profile behind the DM side panel, with the same query the web
+    /// client sends for a DM.
+    pub async fn profile(&self, user: Snowflake) -> Result<Profile> {
+        let path = format!(
+            "/users/{user}/profile?with_mutual_guilds=false&with_mutual_friends=false&with_mutual_friends_count=false"
+        );
+        let response = self
+            .request(Method::GET, "GET /users/{id}/profile", NO_MAJOR, &path, None, None)
             .await?;
         Ok(response.json().await?)
     }

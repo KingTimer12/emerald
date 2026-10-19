@@ -22,7 +22,7 @@ use super::NetEvent;
 use super::identity::{self, Identity};
 use super::model::{
     Channel, Guild, Message, MessageDelete, MessageUpdate, Presence, Ready, ReadySupplemental,
-    Relationship, RelationshipRemove, Status, User,
+    Relationship, RelationshipRemove, Status, TypingStart, User,
 };
 
 /// The user's chosen presence; `None` lets Discord apply the account's saved
@@ -347,6 +347,10 @@ fn dispatch(
         },
         "MESSAGE_DELETE" => match parse::<MessageDelete>(kind, data) {
             Some(m) => NetEvent::MessageDelete(m),
+            None => return,
+        },
+        "TYPING_START" => match parse::<TypingStart>(kind, data) {
+            Some(t) => NetEvent::TypingStart(t),
             None => return,
         },
         _ => return,

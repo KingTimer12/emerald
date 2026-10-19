@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use gpui::{AssetSource, SharedString, Svg, prelude::*, px, rgb, svg};
 
 pub const FRIENDS: &str = "icons/friends.svg";
+pub const PROFILE: &str = "icons/profile.svg";
 
 pub struct Icons;
 
@@ -13,13 +14,14 @@ impl AssetSource for Icons {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         let bytes: &'static [u8] = match path {
             FRIENDS => include_bytes!("../../assets/icons/friends.svg"),
+            PROFILE => include_bytes!("../../assets/icons/profile.svg"),
             _ => return Ok(None),
         };
         Ok(Some(Cow::Borrowed(bytes)))
     }
 
     fn list(&self, _: &str) -> anyhow::Result<Vec<SharedString>> {
-        Ok(vec![FRIENDS.into()])
+        Ok(vec![FRIENDS.into(), PROFILE.into()])
     }
 }
 

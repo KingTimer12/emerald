@@ -1,16 +1,19 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 mod add_server;
+mod chat;
 mod friends;
+mod profile;
 mod settings;
 mod widgets;
 
 use gpui::{
     AnyElement, App, Context, Entity, FocusHandle, Focusable, FontWeight, Image, ImageFormat,
     KeyBinding, ListAlignment, ListOffset, ListState, SharedString, Subscription, Window, actions,
-    div, list, prelude::*, px, relative, rgb, uniform_list,
+    div, prelude::*, px, relative, rgb, uniform_list,
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -18,7 +21,8 @@ use super::icons::{self, icon};
 use super::text_input::{Submitted, TextInput};
 use super::{theme, time};
 use crate::discord::model::{
-    Channel, Guild, Message, Snowflake, User, avatar_url, channel_kind, relationship_kind,
+    Channel, Guild, Message, Profile, Snowflake, User, avatar_url, channel_kind,
+    relationship_kind,
 };
 use crate::discord::rest::{self, HISTORY_PAGE};
 use crate::discord::{Action, Command, NetEvent};
@@ -46,6 +50,17 @@ const CONNECTED: &str = "Conectado";
 const PANEL_CLEARANCE: f32 = 72.;
 /// Messages from one author closer than this share a group, like Discord.
 const GROUP_WINDOW_SECS: i64 = 7 * 60;
+/// Rows above the messages in the chat list: the channel intro once the
+/// whole history is loaded, an empty spacer before that.
+const TOP: usize = 1;
+/// The web client re-sends the typing signal about this often while typing.
+const TYPING_INTERVAL: Duration = Duration::from_secs(8);
+/// How long someone shows as typing after their last signal.
+const TYPING_TIMEOUT: Duration = Duration::from_secs(10);
+/// A cached profile is refetched when opened after this long.
+const PROFILE_TTL: Duration = Duration::from_secs(10 * 60);
+/// The profile panel only fits beside the chat in wide windows.
+const PROFILE_MIN_WINDOW: f32 = 1100.;
 
 struct Msg {
     id: Snowflake,
@@ -56,6 +71,10 @@ struct Msg {
     time: SharedString,
     short_time: SharedString,
     content: SharedString,
+    /// Local calendar day, for day separators.
+    day: i32,
+    /// Sticker names with their image URL (`None` for Lottie).
+    stickers: Vec<(SharedString, Option<SharedString>)>,
     /// Set on our own sends until the server confirms them.
     nonce: Option<String>,
     /// Sent but not yet confirmed; drawn dimmed.
@@ -75,6 +94,8 @@ impl Msg {
             time: time::header(secs).into(),
             short_time: time::short(secs).into(),
             content: content.into(),
+            day: time::day_key(secs),
+            stickers: Vec::new(),
             nonce: Some(nonce),
             pending: true,
         }
@@ -89,9 +110,14 @@ impl Msg {
             content.push_str("[anexo] ");
             content.push_str(&attachment.filename);
         }
-        if content.is_empty() && !message.embeds.is_empty() {
+        if content.is_empty() && !message.embeds.is_empty() && message.sticker_items.is_empty() {
             content.push_str("[embed]");
         }
+        let stickers = message
+            .sticker_items
+            .iter()
+            .map(|s| (s.name.clone().into(), s.url().map(Into::into)))
+            .collect();
         let secs = message.id.unix_secs();
         Self {
             id: message.id,
@@ -102,6 +128,8 @@ impl Msg {
             time: time::header(secs).into(),
             short_time: time::short(secs).into(),
             content: content.into(),
+            day: time::day_key(secs),
+            stickers,
             nonce: message.nonce,
             pending: false,
         }
@@ -230,6 +258,8 @@ impl Space {
 enum Overlay {
     AddServer(AddServer),
     Settings(SettingsView),
+    /// "Ver Perfil Completo" for this user.
+    Profile(Snowflake),
 }
 
 /// Result line under a form, green on success and red on failure.
@@ -281,8 +311,17 @@ pub struct Emerald {
     send_error: Option<SharedString>,
     /// Filters the DM list by name; enter opens the first match.
     dm_search: Entity<TextInput>,
+    /// DM profiles by user with when they were requested; `None` until the
+    /// first answer arrives.
+    profiles: HashMap<Snowflake, (Instant, Option<Profile>)>,
+    /// Who is typing where, with when their signal expires.
+    typing: HashMap<Snowflake, Vec<(Snowflake, Instant)>>,
+    /// Last typing signal we sent, to throttle it.
+    typing_sent: Option<(Snowflake, Instant)>,
+    /// Draft text when the input last changed, to tell edits from cursor moves.
+    draft: SharedString,
     focus_handle: FocusHandle,
-    _subscriptions: [Subscription; 4],
+    _subscriptions: Vec<Subscription>,
 }
 
 impl Emerald {
@@ -296,6 +335,7 @@ impl Emerald {
         let subscription = cx.subscribe(&input, |this, _, event: &Submitted, cx| {
             this.send(event.0.clone(), cx)
         });
+        let draft_subscription = cx.observe(&input, |this, _, cx| this.on_draft_changed(cx));
         let friend_input = cx.new(|cx| {
             TextInput::new("Nome de usuário", cx)
                 .keep_on_submit()
@@ -360,9 +400,14 @@ impl Emerald {
             send_error: None,
             focus_handle: cx.focus_handle(),
             dm_search,
+            profiles: HashMap::new(),
+            typing: HashMap::new(),
+            typing_sent: None,
+            draft: SharedString::default(),
             _subscriptions: {
-                let [observe, submit] = search_subscriptions;
-                [subscription, friend_subscription, observe, submit]
+                let mut subscriptions = vec![subscription, friend_subscription, draft_subscription];
+                subscriptions.extend(search_subscriptions);
+                subscriptions
             },
         }
     }
@@ -405,6 +450,13 @@ impl Emerald {
                 self.selected_space = previous
                     .and_then(|id| self.spaces.iter().position(|s| s.id == id))
                     .unwrap_or(if self.spaces.len() > 1 { 1 } else { 0 });
+                // A new session (not a resume) may have missed messages:
+                // drop cached history and refetch only what is on screen.
+                self.logs.clear();
+                self.recent.clear();
+                if let Some(channel) = self.selected_channel.filter(|_| !self.friends_open) {
+                    self.select_channel(channel, window, cx);
+                }
             }
             NetEvent::Presences(presences) => {
                 for (user, status) in presences {
@@ -460,7 +512,9 @@ impl Emerald {
                 }
             }
             NetEvent::Avatar { url, bytes } => {
-                let image = bytes.map(|bytes| Arc::new(Image::from_bytes(ImageFormat::Png, bytes)));
+                // Avatars are PNG; stickers may be GIF.
+                let format = if url.contains(".gif") { ImageFormat::Gif } else { ImageFormat::Png };
+                let image = bytes.map(|bytes| Arc::new(Image::from_bytes(format, bytes)));
                 self.avatars.borrow_mut().insert(url.into(), image);
             }
             NetEvent::ActionDone(action) => self.on_action_result(action, Ok(()), window, cx),
@@ -519,6 +573,10 @@ impl Emerald {
                 if !selected && !mine {
                     self.unread.insert(channel);
                 }
+                // A message ends its author's typing indicator.
+                if let Some(list) = self.typing.get_mut(&channel) {
+                    list.retain(|(user, _)| *user != message.author.id);
+                }
                 if let Some(log) = self.logs.get_mut(&channel) {
                     if log.messages.iter().any(|m| m.id == message.id) {
                         return;
@@ -532,7 +590,7 @@ impl Emerald {
                     if let Some(ix) = pending {
                         log.messages[ix] = Msg::new(message);
                         if selected {
-                            self.messages.splice(ix..ix + 1, 1);
+                            self.messages.splice(TOP + ix..TOP + ix + 1, 1);
                         }
                         return;
                     }
@@ -544,9 +602,11 @@ impl Emerald {
                         log.complete = false;
                     }
                     if selected {
-                        self.messages.splice(end..end, 1);
+                        self.messages.splice(TOP + end..TOP + end, 1);
                         if trimmed {
-                            self.messages.splice(0..1, 0);
+                            self.messages.splice(TOP..TOP + 1, 0);
+                            // No longer at the start: the intro goes away.
+                            self.messages.splice(0..TOP, TOP);
                         }
                     }
                 }
@@ -557,7 +617,7 @@ impl Emerald {
                 if let Some(ix) = log.messages.iter().position(|m| m.id == update.id) {
                     log.messages[ix].content = format!("{content} (editada)").into();
                     if self.selected_channel == Some(update.channel_id) {
-                        self.messages.splice(ix..ix + 1, 1);
+                        self.messages.splice(TOP + ix..TOP + ix + 1, 1);
                     }
                 }
             }
@@ -566,7 +626,7 @@ impl Emerald {
                 if let Some(ix) = log.messages.iter().position(|m| m.id == delete.id) {
                     log.messages.remove(ix);
                     if self.selected_channel == Some(delete.channel_id) {
-                        self.messages.splice(ix..ix + 1, 0);
+                        self.messages.splice(TOP + ix..TOP + ix + 1, 0);
                     }
                 }
             }
@@ -584,7 +644,7 @@ impl Emerald {
                     None => {
                         log.messages = messages.into_iter().map(Msg::new).collect();
                         if selected {
-                            self.messages.reset(log.messages.len());
+                            self.messages.reset(TOP + log.messages.len());
                         }
                     }
                     Some(_) => {
@@ -597,13 +657,19 @@ impl Emerald {
                         for message in messages.into_iter().skip(skip).rev() {
                             log.messages.push_front(Msg::new(message));
                         }
-                        if selected && added > 0 {
+                        if selected {
                             let top = self.messages.logical_scroll_top();
-                            self.messages.splice(0..0, added);
-                            self.messages.scroll_to(ListOffset {
-                                item_ix: top.item_ix + added,
-                                offset_in_item: top.offset_in_item,
-                            });
+                            self.messages.splice(TOP..TOP, added);
+                            if log.complete {
+                                // The top row turns into the channel intro.
+                                self.messages.splice(0..TOP, TOP);
+                            }
+                            if added > 0 {
+                                self.messages.scroll_to(ListOffset {
+                                    item_ix: top.item_ix + added,
+                                    offset_in_item: top.offset_in_item,
+                                });
+                            }
                         }
                     }
                 }
@@ -622,6 +688,36 @@ impl Emerald {
                 }
                 self.status = format!("Erro: {error}").into();
             }
+            NetEvent::TypingStart(typing) => {
+                if self.me.as_ref().is_some_and(|me| me.id == typing.user_id) {
+                    return;
+                }
+                let until = Instant::now() + TYPING_TIMEOUT;
+                let list = self.typing.entry(typing.channel_id).or_default();
+                list.retain(|(user, _)| *user != typing.user_id);
+                list.push((typing.user_id, until));
+                // Redraw when it expires so the indicator goes away on its own.
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(TYPING_TIMEOUT).await;
+                    this.update(cx, |this, cx| {
+                        let now = Instant::now();
+                        this.typing.retain(|_, list| {
+                            list.retain(|(_, until)| *until > now);
+                            !list.is_empty()
+                        });
+                        cx.notify();
+                    })
+                    .ok();
+                })
+                .detach();
+            }
+            NetEvent::Profile(profile) => {
+                let slot = self
+                    .profiles
+                    .entry(profile.user.id)
+                    .or_insert_with(|| (Instant::now(), None));
+                slot.1 = Some(profile);
+            }
             NetEvent::SendFailed {
                 channel,
                 nonce,
@@ -636,7 +732,7 @@ impl Emerald {
                     {
                         log.messages.remove(ix);
                         if self.selected_channel == Some(channel) {
-                            self.messages.splice(ix..ix + 1, 0);
+                            self.messages.splice(TOP + ix..TOP + ix + 1, 0);
                         }
                     }
                 }
@@ -758,6 +854,41 @@ impl Emerald {
         self.add_dm(channel);
     }
 
+    /// Sends the typing signal while the user edits a draft, at most every
+    /// `TYPING_INTERVAL` per channel.
+    fn on_draft_changed(&mut self, cx: &mut Context<Self>) {
+        let text = self.input.read(cx).text();
+        if text == self.draft.as_ref() {
+            return;
+        }
+        self.draft = text.to_owned().into();
+        let Some(channel) = self.selected_channel else { return };
+        if self.draft.trim().is_empty() || self.forbidden.contains(&channel) {
+            return;
+        }
+        let recent = self
+            .typing_sent
+            .is_some_and(|(sent_in, at)| sent_in == channel && at.elapsed() < TYPING_INTERVAL);
+        if !recent {
+            self.typing_sent = Some((channel, Instant::now()));
+            self.commands.send(Command::Typing { channel }).ok();
+        }
+    }
+
+    /// Requests the profile of `user` unless a recent copy is cached, like
+    /// the web client; a stale copy stays on screen until the answer.
+    fn profile(&mut self, user: Snowflake) {
+        let now = Instant::now();
+        match self.profiles.get_mut(&user) {
+            Some((requested, _)) if requested.elapsed() < PROFILE_TTL => return,
+            Some((requested, _)) => *requested = now,
+            None => {
+                self.profiles.insert(user, (now, None));
+            }
+        }
+        self.commands.send(Command::FetchProfile { user }).ok();
+    }
+
     fn on_action_result(
         &mut self,
         action: Action,
@@ -871,9 +1002,12 @@ impl Emerald {
         }
 
         self.send_error = None;
-        let (icon, name, _) = self.spaces[self.selected_space]
+        let (icon, name, user) = self.spaces[self.selected_space]
             .channel(id)
             .unwrap_or(("#", SharedString::default(), None));
+        if let Some(user) = user {
+            self.profile(user);
+        }
         // Same wording as the pt-BR web client.
         let placeholder = if self.forbidden.contains(&id) {
             "Sem permissão para enviar mensagens neste canal".to_owned()
@@ -886,9 +1020,9 @@ impl Emerald {
             .update(cx, |input, cx| input.set_placeholder(placeholder, cx));
 
         match self.logs.get(&id) {
-            Some(log) => self.messages.reset(log.messages.len()),
+            Some(log) => self.messages.reset(TOP + log.messages.len()),
             None => {
-                self.messages.reset(0);
+                self.messages.reset(TOP);
                 if !self.forbidden.contains(&id) {
                     self.logs.insert(
                         id,
@@ -944,12 +1078,13 @@ impl Emerald {
             return;
         }
         self.send_error = None;
+        self.typing_sent = None;
         let nonce = rest::nonce();
         if let (Some(me), Some(log)) = (&self.me, self.logs.get_mut(&channel)) {
             let end = log.messages.len();
             log.messages
                 .push_back(Msg::pending(me, content.clone(), nonce.clone()));
-            self.messages.splice(end..end, 1);
+            self.messages.splice(TOP + end..TOP + end, 1);
         }
         self.commands
             .send(Command::Send {
@@ -965,7 +1100,7 @@ impl Emerald {
         self.logs.remove(&channel);
         self.recent.retain(|c| *c != channel);
         if self.selected_channel == Some(channel) {
-            self.messages.reset(0);
+            self.messages.reset(TOP);
         }
     }
 
@@ -1342,241 +1477,6 @@ impl Emerald {
                     })),
             )
     }
-
-    fn render_message(&self, ix: usize) -> AnyElement {
-        let Some(log) = self.selected_channel.and_then(|c| self.logs.get(&c)) else {
-            return div().into_any_element();
-        };
-        let Some(msg) = log.messages.get(ix) else {
-            return div().into_any_element();
-        };
-        let body = div()
-            .text_color(if msg.pending { theme::muted() } else { theme::text() })
-            .child(msg.content.clone());
-        let row = div()
-            .id(("message", ix))
-            .hover(|s| s.bg(theme::hover()));
-
-        if self.settings.compact {
-            // Compact mode: one line per message, no avatars or group gaps.
-            return row
-                .flex()
-                .gap_2()
-                .px_4()
-                .py(px(1.))
-                .child(
-                    div()
-                        .flex_none()
-                        .text_xs()
-                        .text_color(theme::muted())
-                        .child(msg.short_time.clone()),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .gap_1()
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_color(rgb(theme::TEXT_STRONG))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(msg.author.clone()),
-                        )
-                        .child(body),
-                )
-                .into_any_element();
-        }
-
-        let grouped = ix > 0 && {
-            let previous = &log.messages[ix - 1];
-            previous.author_id == msg.author_id && msg.secs - previous.secs < GROUP_WINDOW_SECS
-        };
-        if grouped {
-            return row
-                .pl(px(72.))
-                .pr_4()
-                .py(px(2.))
-                .child(body)
-                .into_any_element();
-        }
-
-        // Group start: 17px gap above, outside the hover highlight.
-        div()
-            .pt(px(15.))
-            .child(
-                row.flex()
-                    .gap_4()
-                    .px_4()
-                    .py(px(2.))
-                    .child(
-                        div()
-                            .mt(px(2.))
-                            .child(widgets::avatar(
-                                &msg.author,
-                                msg.author_id,
-                                self.avatar_image(&msg.avatar_url),
-                                40.,
-                                None,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(6.))
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .text_color(rgb(theme::TEXT_STRONG))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .child(msg.author.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme::muted())
-                                            .child(msg.time.clone()),
-                                    ),
-                            )
-                            .child(body),
-                    ),
-            )
-            .into_any_element()
-    }
-
-    fn render_chat(&self, cx: &mut Context<Self>) -> AnyElement {
-        if self.friends_open && self.spaces[self.selected_space].id == DMS {
-            return self.render_friends(cx).into_any_element();
-        }
-        let (icon, title, user) = self
-            .selected_channel
-            .and_then(|id| self.spaces[self.selected_space].channel(id))
-            .unwrap_or(("", SharedString::default(), None));
-        let log = self.selected_channel.and_then(|id| self.logs.get(&id));
-        let loading = log.is_some_and(|log| log.loading);
-        let empty = log.is_some_and(|log| !log.loading && log.messages.is_empty());
-
-        let body = if self.selected_channel.is_none() {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(theme::muted())
-                .child("Escolha um canal")
-                .into_any_element()
-        } else if empty && icon == "@" {
-            // Fresh DM: Discord's "beginning of your history" intro.
-            div()
-                .flex_1()
-                .flex()
-                .flex_col()
-                .justify_end()
-                .gap_2()
-                .px_4()
-                .pb_4()
-                .children(user.map(|user| {
-                    widgets::avatar(&title, user, self.user_avatar(user), 80., None)
-                }))
-                .child(
-                    div()
-                        .text_size(px(30.))
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(theme::TEXT_STRONG))
-                        .child(title.clone()),
-                )
-                .child(div().text_color(theme::muted()).child(format!(
-                    "Este é o começo do seu histórico de mensagens diretas com {title}."
-                )))
-                .into_any_element()
-        } else {
-            list(
-                self.messages.clone(),
-                cx.processor(|this, ix, _, _| this.render_message(ix)),
-            )
-            .flex_1()
-            .pb_4()
-            // Discord's 1.375 line height, scaled with the chosen font size.
-            .text_size(px(self.settings.font_size))
-            .line_height(px((self.settings.font_size * 1.375).round()))
-            .into_any_element()
-        };
-
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_w(px(0.))
-            .h_full()
-            .bg(rgb(theme::BASE_LOWER))
-            .border_l_1()
-            .border_color(theme::border())
-            .child(
-                div()
-                    .h(px(48.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_4()
-                    .border_b_1()
-                    .border_color(theme::border())
-                    .map(|header| match user {
-                        Some(user) => header.child(widgets::avatar(
-                            &title,
-                            user,
-                            self.user_avatar(user),
-                            24.,
-                            None,
-                        )),
-                        None => header.child(
-                            div()
-                                .text_size(px(22.))
-                                .text_color(rgb(theme::CHANNELS_DEFAULT))
-                                .child(icon),
-                        ),
-                    })
-                    .child(
-                        div()
-                            .text_color(rgb(theme::TEXT_STRONG))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(title),
-                    )
-                    .when(loading, |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .text_color(theme::muted())
-                                .child("carregando…"),
-                        )
-                    }),
-            )
-            .child(body)
-            .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .px_4()
-                    .pb_6()
-                    .children(self.send_error.clone().map(|error| {
-                        div()
-                            .text_size(px(14.))
-                            .text_color(rgb(theme::FEEDBACK_CRITICAL))
-                            .child(error)
-                    }))
-                    .child(self.input.clone()),
-            )
-            .into_any_element()
-    }
 }
 
 impl Focusable for Emerald {
@@ -1586,13 +1486,15 @@ impl Focusable for Emerald {
 }
 
 impl Render for Emerald {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let wide = f32::from(window.viewport_size().width) >= PROFILE_MIN_WINDOW;
         // Visual-refresh frame: server list on the app background, then one
         // bordered panel with a rounded top-left corner holding sidebar and
         // chat, and the user panel floating over the bottom-left corner.
         let overlay = match &self.overlay {
             Some(Overlay::AddServer(modal)) => Some(self.render_add_server(modal, cx).into_any_element()),
             Some(Overlay::Settings(view)) => Some(self.render_settings(view, cx).into_any_element()),
+            Some(Overlay::Profile(user)) => Some(self.render_profile_modal(*user, cx).into_any_element()),
             None => None,
         };
         div()
@@ -1620,7 +1522,7 @@ impl Render for Emerald {
                     .border_t_1()
                     .border_color(theme::border())
                     .child(self.render_channels(cx))
-                    .child(self.render_chat(cx)),
+                    .child(self.render_chat(wide, cx)),
             )
             .child(self.render_user_panel(cx))
             .children(overlay)

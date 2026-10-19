@@ -18,6 +18,8 @@ pub struct Settings {
     pub compact: bool,
     /// `None` until the user picks one; the account's saved status applies.
     pub status: Option<Status>,
+    /// Profile panel beside 1:1 DMs.
+    pub show_profile: bool,
 }
 
 impl Default for Settings {
@@ -26,6 +28,7 @@ impl Default for Settings {
             font_size: 16.,
             compact: false,
             status: None,
+            show_profile: true,
         }
     }
 }

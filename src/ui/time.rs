@@ -55,3 +55,33 @@ pub fn header(secs: i64) -> String {
 pub fn short(secs: i64) -> String {
     local(secs).map_or_else(String::new, |at| format!("{:02}:{:02}", at.hour, at.minute))
 }
+
+const MONTHS: [&str; 12] = [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
+    "outubro", "novembro", "dezembro",
+];
+
+/// Identifies the local calendar day, for day separators.
+pub fn day_key(secs: i64) -> i32 {
+    local(secs).map_or(0, |at| at.year * 1000 + at.yday)
+}
+
+/// "19 de outubro de 2026", the day separator label.
+pub fn day_label(secs: i64) -> String {
+    local(secs).map_or_else(String::new, |at| {
+        format!("{} de {} de {}", at.day, MONTHS[(at.month - 1) as usize], at.year)
+    })
+}
+
+/// "12 de jul. de 2017", as "Membro desde" shows it. May stays whole.
+pub fn short_date(secs: i64) -> String {
+    local(secs).map_or_else(String::new, |at| {
+        let month = MONTHS[(at.month - 1) as usize];
+        let month = if month.chars().count() > 4 {
+            format!("{}.", month.chars().take(3).collect::<String>())
+        } else {
+            month.to_owned()
+        };
+        format!("{} de {month} de {}", at.day, at.year)
+    })
+}

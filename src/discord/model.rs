@@ -141,6 +141,33 @@ pub struct Attachment {
     pub filename: String,
 }
 
+pub mod sticker_format {
+    pub const PNG: u8 = 1;
+    pub const APNG: u8 = 2;
+    pub const GIF: u8 = 4;
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StickerItem {
+    pub id: Snowflake,
+    pub name: String,
+    pub format_type: u8,
+}
+
+impl StickerItem {
+    /// Image URL, or `None` for Lottie stickers, which are vector
+    /// animations this client cannot draw. APNG decodes as its first frame.
+    pub fn url(&self) -> Option<String> {
+        let ext = match self.format_type {
+            sticker_format::PNG | sticker_format::APNG => "png",
+            sticker_format::GIF => "gif",
+            // Lottie (3) and formats newer than this client.
+            _ => return None,
+        };
+        Some(format!("https://media.discordapp.net/stickers/{}.{ext}?size=160", self.id))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Message {
     pub id: Snowflake,
@@ -155,6 +182,8 @@ pub struct Message {
     pub attachments: Vec<Attachment>,
     #[serde(default)]
     pub embeds: Vec<IgnoredAny>,
+    #[serde(default)]
+    pub sticker_items: Vec<StickerItem>,
     /// Echo of the nonce the sender chose; matches our pending copy.
     #[serde(default, deserialize_with = "lenient_nonce")]
     pub nonce: Option<String>,
@@ -175,6 +204,64 @@ pub struct MessageUpdate {
     pub channel_id: Snowflake,
     #[serde(default)]
     pub content: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TypingStart {
+    pub channel_id: Snowflake,
+    pub user_id: Snowflake,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct UserProfileDetails {
+    #[serde(default)]
+    pub bio: Option<String>,
+    #[serde(default)]
+    pub pronouns: Option<String>,
+}
+
+/// `GET /users/{id}/profile`, as the DM profile panel uses it.
+#[derive(Debug, Deserialize)]
+pub struct Profile {
+    pub user: ProfileUser,
+    #[serde(default)]
+    pub user_profile: UserProfileDetails,
+    #[serde(default)]
+    pub badges: Vec<Badge>,
+    #[serde(default)]
+    pub connected_accounts: Vec<ConnectedAccount>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Badge {
+    /// Hover text, already localized.
+    pub description: String,
+    /// Icon hash under `badge-icons/`.
+    pub icon: String,
+}
+
+impl Badge {
+    pub fn icon_url(&self) -> String {
+        format!("https://cdn.discordapp.com/badge-icons/{}.png", self.icon)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectedAccount {
+    /// Service, e.g. `github` or `steam`.
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProfileUser {
+    pub id: Snowflake,
+    /// Banner fill when there is no banner image, as `#rrggbb`.
+    #[serde(default)]
+    pub banner_color: Option<String>,
+    #[serde(default)]
+    pub accent_color: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,6 +393,20 @@ impl Status {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sticker_urls_skip_lottie() {
+        let sticker = |format_type| StickerItem {
+            id: Snowflake(7),
+            name: "wave".into(),
+            format_type,
+        };
+        assert_eq!(
+            sticker(sticker_format::GIF).url().as_deref(),
+            Some("https://media.discordapp.net/stickers/7.gif?size=160")
+        );
+        assert_eq!(sticker(3).url(), None);
+    }
 
     #[test]
     fn snowflake_time() {

@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod gateway;
 pub mod identity;
 pub mod model;
@@ -6,7 +7,8 @@ pub mod rest;
 use std::sync::Arc;
 
 use model::{
-    Channel, Guild, Message, MessageDelete, MessageUpdate, Relationship, Snowflake, Status, User,
+    Channel, Guild, Message, MessageDelete, MessageUpdate, Profile, Relationship, Snowflake, Status,
+    TypingStart, User,
 };
 use tokio::sync::{mpsc, watch};
 
@@ -48,7 +50,7 @@ pub enum NetEvent {
         channel: Channel,
         select: bool,
     },
-    /// Avatar bytes for `url`; `None` if the download failed.
+    /// Image bytes (avatar or sticker) for `url`; `None` if the download failed.
     Avatar {
         url: String,
         bytes: Option<Vec<u8>>,
@@ -65,6 +67,8 @@ pub enum NetEvent {
     MessageCreate(Message),
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
+    TypingStart(TypingStart),
+    Profile(Profile),
     History {
         channel: Snowflake,
         before: Option<Snowflake>,
@@ -122,6 +126,13 @@ pub enum Command {
         name: Option<String>,
     },
     SetStatus(Status),
+    Typing {
+        channel: Snowflake,
+    },
+    FetchProfile {
+        user: Snowflake,
+    },
+    /// Downloads an avatar or sticker image.
     FetchAvatar {
         url: String,
     },
@@ -161,6 +172,9 @@ pub fn spawn(
                     }
                 };
                 tokio::spawn(gateway::run(identity, event_tx.clone(), presence_rx));
+                if let Some(dir) = cache::dir() {
+                    tokio::task::spawn_blocking(move || cache::prune(&dir));
+                }
                 while let Some(cmd) = cmd_rx.recv().await {
                     match cmd {
                         Command::SetStatus(status) => {
@@ -258,6 +272,19 @@ async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Send
                 Err(e) if !e.is::<rest::Unauthorized>() => Some(e.to_string()),
                 _ => None,
             },
+        },
+        Command::Typing { channel } => {
+            if let Err(e) = rest.typing(channel).await {
+                log::debug!("typing in {channel}: {e:#}");
+            }
+            return;
+        }
+        Command::FetchProfile { user } => match rest.profile(user).await {
+            Ok(profile) => NetEvent::Profile(profile),
+            Err(e) => {
+                log::warn!("profile of {user}: {e:#}");
+                return;
+            }
         },
         Command::FetchAvatar { url } => {
             let bytes = rest
