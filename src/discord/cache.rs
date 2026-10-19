@@ -24,10 +24,19 @@ pub fn dir() -> Option<PathBuf> {
 }
 
 /// File name for `url`: 64-bit FNV-1a, stable across builds and platforms.
+/// Attachment URLs carry a signature (`ex`, `is`, `hm`) that changes on
+/// every fetch of the message; it is left out so one image keeps one entry.
 fn key(url: &str) -> String {
-    let hash = url.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-        (hash ^ byte as u64).wrapping_mul(0x0100_0000_01b3)
-    });
+    let (base, query) = url.split_once('?').unwrap_or((url, ""));
+    let kept = query
+        .split('&')
+        .filter(|param| !["ex=", "is=", "hm="].iter().any(|signed| param.starts_with(signed)));
+    let hash = std::iter::once(base)
+        .chain(kept)
+        .flat_map(|part| part.bytes().chain(std::iter::once(b'&')))
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ byte as u64).wrapping_mul(0x0100_0000_01b3)
+        });
     format!("{hash:016x}")
 }
 
@@ -83,7 +92,16 @@ mod tests {
 
     #[test]
     fn keys_are_stable_and_distinct() {
-        assert_eq!(key(""), "cbf29ce484222325");
+        assert_eq!(key("https://a/1.png"), key("https://a/1.png"));
         assert_ne!(key("https://a/1.png"), key("https://a/2.png"));
+        assert_ne!(key("https://a/1.png?size=64"), key("https://a/1.png?size=128"));
+    }
+
+    #[test]
+    fn keys_ignore_attachment_signatures() {
+        assert_eq!(
+            key("https://m/a/1.png?ex=1&is=2&hm=3&width=400"),
+            key("https://m/a/1.png?ex=9&is=8&hm=7&width=400")
+        );
     }
 }

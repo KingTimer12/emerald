@@ -2,13 +2,14 @@ pub mod cache;
 pub mod gateway;
 pub mod identity;
 pub mod model;
+pub mod permissions;
 pub mod rest;
 
 use std::sync::Arc;
 
 use model::{
-    Channel, Guild, Message, MessageDelete, MessageUpdate, Profile, Relationship, Snowflake, Status,
-    TypingStart, User,
+    Channel, Guild, Member, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
+    Profile, Relationship, Snowflake, Status, TypingStart, User,
 };
 use tokio::sync::{mpsc, watch};
 
@@ -39,7 +40,14 @@ pub enum NetEvent {
         dms: Vec<Channel>,
         users: Vec<User>,
         relationships: Vec<Relationship>,
+        /// The current user's membership per guild.
+        members: Vec<(Snowflake, Member)>,
+        /// Last read message per channel.
+        read_states: Vec<(Snowflake, Snowflake)>,
     },
+    MembersChunk(MembersChunk),
+    /// A channel was read up to `message_id`, here or on another device.
+    MessageAck(MessageAck),
     /// Friend presences as `(user, status)`.
     Presences(Vec<(Snowflake, String)>),
     RelationshipAdd(Relationship),
@@ -126,6 +134,21 @@ pub enum Command {
         name: Option<String>,
     },
     SetStatus(Status),
+    /// Gateway op 8: fetch these members' nicknames and roles.
+    RequestMembers {
+        guild: Snowflake,
+        users: Vec<Snowflake>,
+    },
+    /// Gateway op 37: what the web client sends on opening a guild, so the
+    /// gateway delivers its typing and thread events.
+    SubscribeGuild {
+        guild: Snowflake,
+    },
+    /// Marks `channel` read up to `message`.
+    Ack {
+        channel: Snowflake,
+        message: Snowflake,
+    },
     Typing {
         channel: Snowflake,
     },
@@ -152,6 +175,7 @@ pub fn spawn(
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<Command>();
     let identity = Arc::new(identity::Identity::new(token));
     let (presence_tx, presence_rx) = watch::channel(status);
+    let (ops_tx, ops_rx) = mpsc::unbounded_channel::<serde_json::Value>();
 
     std::thread::Builder::new()
         .name("emerald-net".into())
@@ -171,7 +195,7 @@ pub fn spawn(
                         return;
                     }
                 };
-                tokio::spawn(gateway::run(identity, event_tx.clone(), presence_rx));
+                tokio::spawn(gateway::run(identity, event_tx.clone(), presence_rx, ops_rx));
                 if let Some(dir) = cache::dir() {
                     tokio::task::spawn_blocking(move || cache::prune(&dir));
                 }
@@ -179,6 +203,12 @@ pub fn spawn(
                     match cmd {
                         Command::SetStatus(status) => {
                             presence_tx.send_replace(Some(status));
+                        }
+                        Command::RequestMembers { guild, users } => {
+                            ops_tx.send(gateway::request_members(guild, &users)).ok();
+                        }
+                        Command::SubscribeGuild { guild } => {
+                            ops_tx.send(gateway::subscribe_guild(guild)).ok();
                         }
                         cmd => {
                             tokio::spawn(handle(rest.clone(), cmd, event_tx.clone()));
@@ -294,8 +324,16 @@ async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Send
                 .ok();
             NetEvent::Avatar { url, bytes }
         }
-        // Routed to the gateway's presence channel before spawning.
-        Command::SetStatus(_) => return,
+        Command::Ack { channel, message } => {
+            if let Err(e) = rest.ack(channel, message).await {
+                log::debug!("ack {channel}/{message}: {e:#}");
+            }
+            return;
+        }
+        // Routed to the gateway before spawning.
+        Command::SetStatus(_) | Command::RequestMembers { .. } | Command::SubscribeGuild { .. } => {
+            return;
+        }
     };
     events.try_send(event).ok();
 }

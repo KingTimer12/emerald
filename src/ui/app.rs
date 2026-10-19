@@ -12,8 +12,8 @@ mod widgets;
 
 use gpui::{
     AnyElement, App, Context, Entity, FocusHandle, Focusable, FontWeight, Image, ImageFormat,
-    KeyBinding, ListAlignment, ListOffset, ListState, SharedString, Subscription, Window, actions,
-    div, prelude::*, px, relative, rgb, uniform_list,
+    KeyBinding, ListAlignment, ListOffset, ListState, SharedString, Subscription, Transformation,
+    Window, actions, div, img, prelude::*, px, radians, relative, rgb, uniform_list,
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -21,9 +21,10 @@ use super::icons::{self, icon};
 use super::text_input::{Submitted, TextInput};
 use super::{theme, time};
 use crate::discord::model::{
-    Channel, Guild, Message, Profile, Snowflake, User, avatar_url, channel_kind,
-    relationship_kind,
+    Attachment, Channel, Embed, Guild, Member, Message, Profile, Role, Snowflake, User, avatar_url,
+    channel_kind, message_kind, relationship_kind,
 };
+use crate::discord::permissions::{self, GuildAccess};
 use crate::discord::rest::{self, HISTORY_PAGE};
 use crate::discord::{Action, Command, NetEvent};
 use crate::settings::Settings;
@@ -59,6 +60,8 @@ const TYPING_INTERVAL: Duration = Duration::from_secs(8);
 const TYPING_TIMEOUT: Duration = Duration::from_secs(10);
 /// A cached profile is refetched when opened after this long.
 const PROFILE_TTL: Duration = Duration::from_secs(10 * 60);
+/// Read receipts wait this long so a burst of messages sends one.
+const ACK_DELAY: Duration = Duration::from_millis(1500);
 /// The profile panel only fits beside the chat in wide windows.
 const PROFILE_MIN_WINDOW: f32 = 1100.;
 
@@ -75,6 +78,16 @@ struct Msg {
     day: i32,
     /// Sticker names with their image URL (`None` for Lottie).
     stickers: Vec<(SharedString, Option<SharedString>)>,
+    /// `message_kind`; system kinds render as one muted line.
+    kind: u8,
+    /// Names of the users mentioned, for `<@id>` in the content.
+    mentions: Vec<(Snowflake, SharedString)>,
+    reply: Option<Reply>,
+    /// Image attachments as (thumbnail URL, width, height) in display pixels.
+    images: Vec<(SharedString, f32, f32)>,
+    /// Other attachments, by file name.
+    files: Vec<SharedString>,
+    embeds: Vec<Embed>,
     /// Set on our own sends until the server confirms them.
     nonce: Option<String>,
     /// Sent but not yet confirmed; drawn dimmed.
@@ -96,29 +109,56 @@ impl Msg {
             content: content.into(),
             day: time::day_key(secs),
             stickers: Vec::new(),
+            kind: message_kind::DEFAULT,
+            mentions: Vec::new(),
+            reply: None,
+            images: Vec::new(),
+            files: Vec::new(),
+            embeds: Vec::new(),
             nonce: Some(nonce),
             pending: true,
         }
     }
 
     fn new(message: Message) -> Self {
-        let mut content = message.content;
+        let mut images = Vec::new();
+        let mut files = Vec::new();
         for attachment in &message.attachments {
-            if !content.is_empty() {
-                content.push('\n');
+            match image_attachment(attachment) {
+                Some(image) => images.push(image),
+                None => files.push(attachment.filename.clone().into()),
             }
-            content.push_str("[anexo] ");
-            content.push_str(&attachment.filename);
         }
-        if content.is_empty() && !message.embeds.is_empty() && message.sticker_items.is_empty() {
-            content.push_str("[embed]");
-        }
+        let reply = match message.referenced_message {
+            Some(original) => Some(Reply {
+                author_id: original.author.id,
+                author: original.author.display_name().to_owned().into(),
+                avatar_url: original.author.avatar_url().into(),
+                // One line, like Discord's reply preview.
+                content: Some(
+                    original
+                        .content
+                        .lines()
+                        .next()
+                        .map_or_else(|| "Clique para ver o anexo".to_owned(), str::to_owned)
+                        .into(),
+                ),
+            }),
+            None if message.kind == message_kind::REPLY => Some(Reply {
+                author_id: Snowflake(0),
+                author: SharedString::default(),
+                avatar_url: SharedString::default(),
+                content: None,
+            }),
+            None => None,
+        };
         let stickers = message
             .sticker_items
             .iter()
             .map(|s| (s.name.clone().into(), s.url().map(Into::into)))
             .collect();
         let secs = message.id.unix_secs();
+        let content = message.content;
         Self {
             id: message.id,
             author_id: message.author.id,
@@ -130,10 +170,55 @@ impl Msg {
             content: content.into(),
             day: time::day_key(secs),
             stickers,
+            kind: message.kind,
+            mentions: message
+                .mentions
+                .iter()
+                .map(|u| (u.id, u.display_name().to_owned().into()))
+                .collect(),
+            reply,
+            images,
+            files,
+            embeds: message.embeds,
             nonce: message.nonce,
             pending: false,
         }
     }
+}
+
+/// The message a reply points at; `content` is `None` once it is deleted.
+struct Reply {
+    author_id: Snowflake,
+    author: SharedString,
+    avatar_url: SharedString,
+    content: Option<SharedString>,
+}
+
+/// Largest size an attached image is shown at, as in the web client.
+const IMAGE_MAX: (f32, f32) = (400., 300.);
+
+/// Thumbnail URL and display size for an image attachment. The media proxy
+/// resizes it, so only the shown pixels are downloaded.
+fn image_attachment(attachment: &Attachment) -> Option<(SharedString, f32, f32)> {
+    let image = attachment
+        .content_type
+        .as_deref()
+        .is_some_and(|t| t.starts_with("image/"));
+    let (Some(proxy), Some(width), Some(height)) =
+        (attachment.proxy_url.as_deref(), attachment.width, attachment.height)
+    else {
+        return None;
+    };
+    if !image || width == 0 || height == 0 {
+        return None;
+    }
+    let scale = (IMAGE_MAX.0 / width as f32).min(IMAGE_MAX.1 / height as f32).min(1.);
+    let (w, h) = ((width as f32 * scale).round(), (height as f32 * scale).round());
+    // 2x for Retina, capped by the original size.
+    let (fetch_w, fetch_h) = ((w * 2.).min(width as f32) as u32, (h * 2.).min(height as f32) as u32);
+    let separator = if proxy.contains('?') { '&' } else { '?' };
+    let url = format!("{proxy}{separator}width={fetch_w}&height={fetch_h}");
+    Some((url.into(), w, h))
 }
 
 #[derive(Default)]
@@ -146,31 +231,99 @@ struct Log {
 enum Row {
     /// Entry point of the friends list, first row of the DM sidebar.
     Friends,
-    Category(SharedString),
+    /// Section title; guild categories carry their id so they can collapse.
+    Category {
+        id: Option<Snowflake>,
+        title: SharedString,
+    },
     Channel {
         id: Snowflake,
+        kind: u8,
         icon: &'static str,
         name: SharedString,
+        parent: Option<Snowflake>,
         /// The other person in a 1:1 DM; drawn as their avatar.
         user: Option<Snowflake>,
     },
+}
+
+/// Guild data needed for permissions, names and role colors.
+struct GuildInfo {
+    /// The current user, whose permissions are computed.
+    me: Snowflake,
+    owner: Option<Snowflake>,
+    roles: Vec<Role>,
+    /// The current user's roles here.
+    my_roles: Vec<Snowflake>,
+    /// Nicknames and roles of message authors seen so far.
+    members: HashMap<Snowflake, Member>,
+    /// Authors already asked for with op 8, so each is requested once.
+    requested: HashSet<Snowflake>,
+    /// The current user's permissions per channel.
+    permissions: HashMap<Snowflake, u64>,
+}
+
+impl GuildInfo {
+    /// Display name and role color of a member, when known.
+    fn member_style(&self, user: Snowflake) -> (Option<&str>, Option<u32>) {
+        let Some(member) = self.members.get(&user) else { return (None, None) };
+        let color = self
+            .roles
+            .iter()
+            .filter(|role| role.color != 0 && member.roles.contains(&role.id))
+            .max_by_key(|role| role.position)
+            .map(|role| role.color);
+        (member.nick.as_deref(), color)
+    }
+}
+
+/// Text channels the chat can open; voice, stage and forum are listed only.
+fn openable(kind: u8) -> bool {
+    matches!(
+        kind,
+        channel_kind::GUILD_TEXT | channel_kind::ANNOUNCEMENT | channel_kind::DM | channel_kind::GROUP_DM
+    )
+}
+
+fn channel_icon(kind: u8) -> &'static str {
+    match kind {
+        channel_kind::VOICE => icons::VOICE,
+        channel_kind::ANNOUNCEMENT => icons::ANNOUNCEMENT,
+        channel_kind::STAGE => icons::STAGE,
+        channel_kind::FORUM | channel_kind::MEDIA => icons::FORUM,
+        channel_kind::GROUP_DM => icons::FRIENDS,
+        _ => icons::TEXT,
+    }
 }
 
 struct Space {
     id: Snowflake,
     name: SharedString,
     initials: SharedString,
+    icon_url: Option<SharedString>,
     channels: Vec<Channel>,
     rows: Vec<Row>,
+    /// `None` for the DM space.
+    guild: Option<GuildInfo>,
 }
 
 impl Space {
-    fn guild(guild: Guild) -> Self {
+    fn guild(guild: Guild, me: Snowflake, my_roles: Vec<Snowflake>) -> Self {
         let name = guild.display_name().to_owned();
         let mut space = Self {
             id: guild.id,
             initials: initials(&name).into(),
+            icon_url: guild.icon_url().map(Into::into),
             name: name.into(),
+            guild: Some(GuildInfo {
+                me,
+                owner: guild.owner(),
+                roles: guild.roles,
+                my_roles,
+                members: HashMap::new(),
+                requested: HashSet::new(),
+                permissions: HashMap::new(),
+            }),
             channels: guild.channels,
             rows: Vec::new(),
         };
@@ -178,41 +331,84 @@ impl Space {
         space
     }
 
+    /// The current user's permissions in `channel`; everything in DMs.
+    fn permissions(&self, channel: Snowflake) -> u64 {
+        match &self.guild {
+            Some(guild) => guild.permissions.get(&channel).copied().unwrap_or(0),
+            None => u64::MAX,
+        }
+    }
+
     fn rebuild(&mut self) {
         self.rows.clear();
-        if self.id == DMS {
+        let Some(guild) = &mut self.guild else {
             // Most recent activity first; a DM without messages counts from
             // when it was opened, which its id encodes.
             self.channels
                 .sort_unstable_by_key(|c| std::cmp::Reverse(c.last_message_id.unwrap_or(c.id)));
             self.rows.push(Row::Friends);
-            self.rows.push(Row::Category("MENSAGENS DIRETAS".into()));
+            self.rows.push(Row::Category {
+                id: None,
+                title: "MENSAGENS DIRETAS".into(),
+            });
             self.rows.extend(self.channels.iter().map(|c| Row::Channel {
                 id: c.id,
-                icon: "@",
+                kind: c.kind,
+                icon: channel_icon(c.kind),
                 name: c.name.as_deref().unwrap_or("?").to_owned().into(),
+                parent: None,
                 user: dm_recipient(c),
             }));
             return;
-        }
-
-        let readable = |c: &&Channel| {
-            matches!(c.kind, channel_kind::GUILD_TEXT | channel_kind::ANNOUNCEMENT)
         };
-        let order = |a: &&Channel, b: &&Channel| (a.position, a.id).cmp(&(b.position, b.id));
+
+        let access = GuildAccess {
+            guild_id: self.id,
+            owner: guild.owner,
+            roles: &guild.roles,
+            me: guild.me,
+            my_roles: &guild.my_roles,
+        };
+        guild.permissions = self
+            .channels
+            .iter()
+            .map(|c| (c.id, access.channel(&c.permission_overwrites)))
+            .collect();
+        let permissions = &guild.permissions;
+        let visible = |c: &&Channel| {
+            c.kind != channel_kind::CATEGORY
+                && permissions.get(&c.id).is_some_and(|p| p & permissions::VIEW_CHANNEL != 0)
+                && matches!(
+                    c.kind,
+                    channel_kind::GUILD_TEXT
+                        | channel_kind::VOICE
+                        | channel_kind::ANNOUNCEMENT
+                        | channel_kind::STAGE
+                        | channel_kind::FORUM
+                        | channel_kind::MEDIA
+                )
+        };
+        // Discord lists text-like channels before voice-like ones, then by
+        // position.
+        let order = |c: &&Channel| {
+            let voice = matches!(c.kind, channel_kind::VOICE | channel_kind::STAGE);
+            (voice, c.position, c.id)
+        };
         let row = |c: &Channel| Row::Channel {
             id: c.id,
-            icon: "#",
+            kind: c.kind,
+            icon: channel_icon(c.kind),
             name: c.name.as_deref().unwrap_or("?").to_owned().into(),
+            parent: c.parent_id,
             user: None,
         };
 
         let mut loose: Vec<_> = self
             .channels
             .iter()
-            .filter(|c| readable(c) && c.parent_id.is_none())
+            .filter(|c| visible(c) && c.parent_id.is_none())
             .collect();
-        loose.sort_unstable_by(order);
+        loose.sort_unstable_by_key(order);
         self.rows.extend(loose.into_iter().map(row));
 
         let mut categories: Vec<_> = self
@@ -220,19 +416,23 @@ impl Space {
             .iter()
             .filter(|c| c.kind == channel_kind::CATEGORY)
             .collect();
-        categories.sort_unstable_by(order);
+        categories.sort_unstable_by_key(|c| (c.position, c.id));
         for category in categories {
             let mut children: Vec<_> = self
                 .channels
                 .iter()
-                .filter(|c| readable(c) && c.parent_id == Some(category.id))
+                .filter(|c| visible(c) && c.parent_id == Some(category.id))
                 .collect();
+            // Categories with nothing the user can see are hidden, as on Discord.
             if children.is_empty() {
                 continue;
             }
-            children.sort_unstable_by(order);
+            children.sort_unstable_by_key(order);
             let title = category.name.as_deref().unwrap_or_default().to_uppercase();
-            self.rows.push(Row::Category(title.into()));
+            self.rows.push(Row::Category {
+                id: Some(category.id),
+                title: title.into(),
+            });
             self.rows.extend(children.into_iter().map(row));
         }
     }
@@ -244,9 +444,18 @@ impl Space {
                 icon,
                 name,
                 user,
+                ..
             } if *row_id == id => Some((*icon, name.clone(), *user)),
             _ => None,
         })
+    }
+
+    fn topic(&self, id: Snowflake) -> Option<&str> {
+        self.channels
+            .iter()
+            .find(|c| c.id == id)
+            .and_then(|c| c.topic.as_deref())
+            .filter(|t| !t.is_empty())
     }
 
     fn has_unread(&self, unread: &HashSet<Snowflake>) -> bool {
@@ -320,6 +529,16 @@ pub struct Emerald {
     typing_sent: Option<(Snowflake, Instant)>,
     /// Draft text when the input last changed, to tell edits from cursor moves.
     draft: SharedString,
+    /// Last read message per channel.
+    read_states: HashMap<Snowflake, Snowflake>,
+    /// Collapsed guild categories.
+    collapsed: HashSet<Snowflake>,
+    /// Guilds already subscribed to with op 37 this session.
+    subscribed: HashSet<Snowflake>,
+    /// Channels with a read receipt scheduled, to coalesce acks.
+    ack_scheduled: HashSet<Snowflake>,
+    /// Last channel opened per guild.
+    last_channel: HashMap<Snowflake, Snowflake>,
     focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -404,6 +623,11 @@ impl Emerald {
             typing: HashMap::new(),
             typing_sent: None,
             draft: SharedString::default(),
+            read_states: HashMap::new(),
+            collapsed: HashSet::new(),
+            subscribed: HashSet::new(),
+            ack_scheduled: HashSet::new(),
+            last_channel: HashMap::new(),
             _subscriptions: {
                 let mut subscriptions = vec![subscription, friend_subscription, draft_subscription];
                 subscriptions.extend(search_subscriptions);
@@ -431,6 +655,8 @@ impl Emerald {
                 dms,
                 users,
                 relationships,
+                members,
+                read_states,
             } => {
                 self.connected = true;
                 self.status = CONNECTED.into();
@@ -442,18 +668,45 @@ impl Emerald {
                         self.users.insert(user.id, user);
                     }
                 }
+                let me_id = me.id;
                 self.me = Some(me);
                 let previous = self.spaces.get(self.selected_space).map(|s| s.id);
+                let mut my_roles: HashMap<Snowflake, Vec<Snowflake>> =
+                    members.into_iter().map(|(guild, member)| (guild, member.roles)).collect();
                 self.spaces = std::iter::once(dm_space(dms, &mut self.users))
-                    .chain(guilds.into_iter().filter(|g| !g.unavailable).map(Space::guild))
+                    .chain(guilds.into_iter().filter(|g| !g.unavailable).map(|guild| {
+                        let roles = my_roles.remove(&guild.id).unwrap_or_default();
+                        Space::guild(guild, me_id, roles)
+                    }))
                     .collect();
+                // Unread: channels whose newest message is past what was read.
+                self.read_states = read_states.into_iter().collect();
+                self.unread.clear();
+                for space in &self.spaces {
+                    for channel in &space.channels {
+                        let readable = openable(channel.kind)
+                            && space.permissions(channel.id) & permissions::VIEW_CHANNEL != 0;
+                        let newer = match (channel.last_message_id, self.read_states.get(&channel.id)) {
+                            (Some(last), Some(read)) => last > *read,
+                            _ => false,
+                        };
+                        if readable && newer {
+                            self.unread.insert(channel.id);
+                        }
+                    }
+                }
                 self.selected_space = previous
                     .and_then(|id| self.spaces.iter().position(|s| s.id == id))
-                    .unwrap_or(if self.spaces.len() > 1 { 1 } else { 0 });
+                    .unwrap_or(0);
                 // A new session (not a resume) may have missed messages:
                 // drop cached history and refetch only what is on screen.
                 self.logs.clear();
                 self.recent.clear();
+                self.subscribed.clear();
+                if let Some(space) = self.spaces.get(self.selected_space).filter(|s| s.guild.is_some()) {
+                    self.subscribed.insert(space.id);
+                    self.commands.send(Command::SubscribeGuild { guild: space.id }).ok();
+                }
                 if let Some(channel) = self.selected_channel.filter(|_| !self.friends_open) {
                     self.select_channel(channel, window, cx);
                 }
@@ -512,23 +765,64 @@ impl Emerald {
                 }
             }
             NetEvent::Avatar { url, bytes } => {
-                // Avatars are PNG; stickers may be GIF.
-                let format = if url.contains(".gif") { ImageFormat::Gif } else { ImageFormat::Png };
-                let image = bytes.map(|bytes| Arc::new(Image::from_bytes(format, bytes)));
+                let image = bytes.and_then(|bytes| {
+                    let format = image_format(&bytes)?;
+                    Some(Arc::new(Image::from_bytes(format, bytes)))
+                });
                 self.avatars.borrow_mut().insert(url.into(), image);
+            }
+            NetEvent::MembersChunk(chunk) => {
+                if let Some(guild) = self
+                    .spaces
+                    .iter_mut()
+                    .find(|s| s.id == chunk.guild_id)
+                    .and_then(|s| s.guild.as_mut())
+                {
+                    for member in chunk.members {
+                        if let Some(user) = &member.user {
+                            self.users.entry(user.id).or_insert_with(|| user.clone());
+                        }
+                        if let Some(id) = member.id() {
+                            guild.members.insert(id, member);
+                        }
+                    }
+                }
+            }
+            NetEvent::MessageAck(ack) => {
+                self.read_states.insert(ack.channel_id, ack.message_id);
+                self.unread.remove(&ack.channel_id);
             }
             NetEvent::ActionDone(action) => self.on_action_result(action, Ok(()), window, cx),
             NetEvent::ActionFailed { action, error } => {
                 self.on_action_result(action, Err(error), window, cx)
             }
             NetEvent::GuildCreate(guild) => {
-                let space = Space::guild(guild);
-                match self.spaces.iter_mut().find(|s| s.id == space.id) {
-                    Some(existing) => *existing = space,
+                let me = self.my_id();
+                let existing = self.spaces.iter().position(|s| s.id == guild.id);
+                // The current member comes with the guild, or from before.
+                let my_roles = guild
+                    .members
+                    .iter()
+                    .find(|m| m.id() == Some(me))
+                    .map(|m| m.roles.clone())
+                    .or_else(|| {
+                        existing.and_then(|ix| self.spaces[ix].guild.as_ref().map(|g| g.my_roles.clone()))
+                    })
+                    .unwrap_or_default();
+                let mut space = Space::guild(guild, me, my_roles);
+                match existing.map(|ix| &mut self.spaces[ix]) {
+                    Some(existing) => {
+                        // Keep the authors already resolved.
+                        if let (Some(old), Some(new)) = (existing.guild.take(), space.guild.as_mut()) {
+                            new.members = old.members;
+                            new.requested = old.requested;
+                        }
+                        *existing = space;
+                    }
                     None => {
                         self.spaces.push(space);
                         if std::mem::take(&mut self.select_new_guild) {
-                            self.select_space(self.spaces.len() - 1, cx);
+                            self.select_space(self.spaces.len() - 1, window, cx);
                         }
                     }
                 }
@@ -567,8 +861,30 @@ impl Emerald {
                 let channel = message.channel_id;
                 let selected = self.selected_channel == Some(channel);
                 let mine = self.me.as_ref().is_some_and(|me| me.id == message.author.id);
-                if message.guild_id.is_none() {
-                    self.touch_dm(&message);
+                match message.guild_id {
+                    None => self.touch_dm(&message),
+                    Some(guild_id) => {
+                        if let (Some(member), Some(guild)) = (
+                            message.member.clone(),
+                            self.spaces
+                                .iter_mut()
+                                .find(|s| s.id == guild_id)
+                                .and_then(|s| s.guild.as_mut()),
+                        ) {
+                            guild.members.insert(message.author.id, member);
+                        }
+                        if let Some(c) = self
+                            .spaces
+                            .iter_mut()
+                            .find(|s| s.id == guild_id)
+                            .and_then(|s| s.channels.iter_mut().find(|c| c.id == channel))
+                        {
+                            c.last_message_id = Some(message.id);
+                        }
+                    }
+                }
+                if selected && !mine {
+                    self.ack(channel, message.id, cx);
                 }
                 if !selected && !mine {
                     self.unread.insert(channel);
@@ -673,6 +989,7 @@ impl Emerald {
                         }
                     }
                 }
+                self.request_authors(channel);
             }
             NetEvent::HistoryFailed {
                 channel,
@@ -800,6 +1117,29 @@ impl Emerald {
             .collect()
     }
 
+    /// Guild rows minus channels in collapsed categories; the selected and
+    /// unread ones stay, as on Discord.
+    fn visible_guild_rows(&self, space: &Space) -> Vec<usize> {
+        space
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| match row {
+                Row::Channel {
+                    id,
+                    parent: Some(parent),
+                    ..
+                } => {
+                    !self.collapsed.contains(parent)
+                        || self.selected_channel == Some(*id)
+                        || self.unread.contains(id)
+                }
+                _ => true,
+            })
+            .map(|(ix, _)| ix)
+            .collect()
+    }
+
     /// Enter in the DM search: opens the first match and clears the search.
     fn open_first_dm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(space) = self.spaces.iter().position(|s| s.id == DMS) else { return };
@@ -846,6 +1186,8 @@ impl Emerald {
             // From someone else, the author is the other side of the DM.
             recipient_ids: if mine { Vec::new() } else { vec![message.author.id] },
             recipients: Vec::new(),
+            permission_overwrites: Vec::new(),
+            topic: None,
         };
         if !mine {
             self.users.insert(message.author.id, message.author.clone());
@@ -981,17 +1323,48 @@ impl Emerald {
         cx.notify();
     }
 
-    fn select_space(&mut self, ix: usize, cx: &mut Context<Self>) {
+    fn my_id(&self) -> Snowflake {
+        self.me.as_ref().map_or(Snowflake(0), |me| me.id)
+    }
+
+    /// Opens a space: DMs show the friends list; a guild reopens its last
+    /// channel, else its first one the user can read, like the web client.
+    fn select_space(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_space = ix;
-        if self.spaces[ix].id == DMS {
+        let space = &self.spaces[ix];
+        if space.id == DMS {
             self.friends_open = true;
+            cx.notify();
+            return;
         }
-        cx.notify();
+        if self.subscribed.insert(space.id) {
+            self.commands.send(Command::SubscribeGuild { guild: space.id }).ok();
+        }
+        let remembered = self
+            .last_channel
+            .get(&space.id)
+            .copied()
+            .filter(|id| space.channel(*id).is_some());
+        let first = || {
+            space.rows.iter().find_map(|row| match row {
+                Row::Channel { id, kind, .. } if openable(*kind) => Some(*id),
+                _ => None,
+            })
+        };
+        match remembered.or_else(first) {
+            Some(channel) => self.select_channel(channel, window, cx),
+            None => {
+                self.selected_channel = None;
+                cx.notify();
+            }
+        }
     }
 
     fn select_channel(&mut self, id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
         self.friends_open = false;
         self.selected_channel = Some(id);
+        let space = &self.spaces[self.selected_space];
+        self.last_channel.insert(space.id, id);
         self.unread.remove(&id);
         self.recent.retain(|c| *c != id);
         self.recent.push_back(id);
@@ -1002,16 +1375,18 @@ impl Emerald {
         }
 
         self.send_error = None;
-        let (icon, name, user) = self.spaces[self.selected_space]
+        let dms = space.id == DMS;
+        let permissions = space.permissions(id);
+        let (_, name, user) = space
             .channel(id)
-            .unwrap_or(("#", SharedString::default(), None));
+            .unwrap_or((icons::TEXT, SharedString::default(), None));
         if let Some(user) = user {
             self.profile(user);
         }
         // Same wording as the pt-BR web client.
-        let placeholder = if self.forbidden.contains(&id) {
-            "Sem permissão para enviar mensagens neste canal".to_owned()
-        } else if icon == "@" {
+        let placeholder = if !self.can_send(id) {
+            "Você não tem permissão para enviar mensagens neste canal.".to_owned()
+        } else if dms {
             format!("Conversar com @{name}")
         } else {
             format!("Conversar em #{name}")
@@ -1019,18 +1394,22 @@ impl Emerald {
         self.input
             .update(cx, |input, cx| input.set_placeholder(placeholder, cx));
 
+        let history = permissions & permissions::READ_MESSAGE_HISTORY != 0;
         match self.logs.get(&id) {
             Some(log) => self.messages.reset(TOP + log.messages.len()),
             None => {
                 self.messages.reset(TOP);
-                if !self.forbidden.contains(&id) {
-                    self.logs.insert(
-                        id,
-                        Log {
-                            loading: true,
-                            ..Log::default()
-                        },
-                    );
+                // Without history permission only new messages show up.
+                let fetch = history && !self.forbidden.contains(&id);
+                self.logs.insert(
+                    id,
+                    Log {
+                        loading: fetch,
+                        complete: !fetch,
+                        ..Log::default()
+                    },
+                );
+                if fetch {
                     self.commands
                         .send(Command::History {
                             channel: id,
@@ -1040,8 +1419,99 @@ impl Emerald {
                 }
             }
         }
+        if let Some(last) = self.newest_message(id) {
+            self.ack(id, last, cx);
+        }
         window.focus(&self.input.focus_handle(cx));
         cx.notify();
+    }
+
+    fn can_send(&self, channel: Snowflake) -> bool {
+        !self.forbidden.contains(&channel)
+            && self.spaces[self.selected_space].permissions(channel) & permissions::SEND_MESSAGES != 0
+    }
+
+    /// Newest known message in `channel`: the loaded log, else the channel's
+    /// `last_message_id`.
+    fn newest_message(&self, channel: Snowflake) -> Option<Snowflake> {
+        let logged = self
+            .logs
+            .get(&channel)
+            .and_then(|log| log.messages.iter().rev().find(|m| !m.pending))
+            .map(|m| m.id);
+        let listed = self
+            .spaces
+            .iter()
+            .find_map(|s| s.channels.iter().find(|c| c.id == channel))
+            .and_then(|c| c.last_message_id);
+        logged.max(listed)
+    }
+
+    /// Sends a read receipt for `message` unless it is already read. Bursts
+    /// in a busy channel collapse into one receipt for the newest message.
+    fn ack(&mut self, channel: Snowflake, message: Snowflake, cx: &mut Context<Self>) {
+        if self.read_states.get(&channel).is_some_and(|read| *read >= message) {
+            return;
+        }
+        if !self.ack_scheduled.insert(channel) {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(ACK_DELAY).await;
+            this.update(cx, |this, _| {
+                this.ack_scheduled.remove(&channel);
+                // Only while the channel is still on screen.
+                if this.selected_channel != Some(channel) {
+                    return;
+                }
+                let Some(newest) = this.newest_message(channel) else { return };
+                if this.read_states.get(&channel).is_some_and(|read| *read >= newest) {
+                    return;
+                }
+                this.read_states.insert(channel, newest);
+                this.commands
+                    .send(Command::Ack {
+                        channel,
+                        message: newest,
+                    })
+                    .ok();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Asks the gateway for the members behind these messages' authors, so
+    /// names and role colors match the guild, as the web client does.
+    fn request_authors(&mut self, channel: Snowflake) {
+        let Some(log) = self.logs.get(&channel) else { return };
+        let Some(space) = self
+            .spaces
+            .iter_mut()
+            .find(|s| s.guild.is_some() && s.channels.iter().any(|c| c.id == channel))
+        else {
+            return;
+        };
+        let guild_id = space.id;
+        let Some(guild) = space.guild.as_mut() else { return };
+        let mut missing: Vec<Snowflake> = log
+            .messages
+            .iter()
+            .map(|m| m.author_id)
+            .filter(|id| !guild.members.contains_key(id))
+            .collect();
+        missing.sort_unstable();
+        missing.dedup();
+        missing.retain(|id| guild.requested.insert(*id));
+        // The web client asks for at most 100 users per op 8.
+        for users in missing.chunks(100) {
+            self.commands
+                .send(Command::RequestMembers {
+                    guild: guild_id,
+                    users: users.to_vec(),
+                })
+                .ok();
+        }
     }
 
     fn load_older(&mut self, cx: &mut Context<Self>) {
@@ -1063,7 +1533,7 @@ impl Emerald {
 
     fn send(&mut self, content: String, cx: &mut Context<Self>) {
         let Some(channel) = self.selected_channel else { return };
-        if self.forbidden.contains(&channel) {
+        if !self.can_send(channel) {
             return;
         }
         let content = content.trim_end().to_owned();
@@ -1176,6 +1646,7 @@ impl Emerald {
                 pill.group_hover(group.clone(), |s| s.top(px(10.)).h(px(20.)))
             });
         let initials_size = if space.initials.chars().count() > 2 { 12. } else { 14. };
+        let image = space.icon_url.as_ref().and_then(|url| self.avatar_image(url));
 
         div()
             .group(group.clone())
@@ -1194,14 +1665,19 @@ impl Emerald {
                     .items_center()
                     .justify_center()
                     .rounded(px(12.))
+                    .overflow_hidden()
                     .bg(rgb(if selected { theme::BRAND } else { theme::BASE_LOW }))
                     .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
                     .text_size(px(initials_size))
                     .font_weight(FontWeight::MEDIUM)
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(theme::BRAND)).text_color(rgb(theme::TEXT_STRONG)))
-                    .child(space.initials.clone())
-                    .on_click(cx.listener(move |this, _, _, cx| this.select_space(ix, cx))),
+                    .tooltip(widgets::tooltip(space.name.clone()))
+                    .map(|icon| match image {
+                        Some(image) => icon.child(img(image).size_full()),
+                        None => icon.child(space.initials.clone()),
+                    })
+                    .on_click(cx.listener(move |this, _, window, cx| this.select_space(ix, window, cx))),
             )
     }
 
@@ -1221,14 +1697,16 @@ impl Emerald {
         } else {
             header
                 .px_4()
+                .gap_1()
                 .text_color(rgb(theme::TEXT_STRONG))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(div().truncate().child(space.name.clone()))
+                .child(div().flex_1().min_w(px(0.)).truncate().child(space.name.clone()))
+                .child(icon(icons::CHEVRON, 18., theme::INTERACTIVE))
         };
         let visible = if dms {
             self.visible_dm_rows(space, cx)
         } else {
-            (0..space.rows.len()).collect()
+            self.visible_guild_rows(space)
         };
         let searching = dms && visible.is_empty() && !self.dm_search.read(cx).text().trim().is_empty();
 
@@ -1314,18 +1792,54 @@ impl Emerald {
                     }))
                     .into_any_element()
             }
-            Row::Category(title) => row
-                .items_end()
-                .pb(px(4.))
-                .text_size(px(12.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(theme::CHANNELS_DEFAULT))
-                .hover(|s| s.text_color(rgb(theme::TEXT_DEFAULT)))
-                .child(div().truncate().child(title.clone()))
-                .into_any_element(),
-            Row::Channel { id, icon, name, user } => {
+            Row::Category { id, title } => {
+                let category = *id;
+                let collapsed = category.is_some_and(|c| self.collapsed.contains(&c));
+                let group: SharedString = format!("category-{ix}").into();
+                row.group(group.clone())
+                    .items_end()
+                    .gap_1()
+                    .pb(px(4.))
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(theme::CHANNELS_DEFAULT))
+                    .hover(|s| s.text_color(rgb(theme::TEXT_DEFAULT)))
+                    .child(div().truncate().child(title.clone()))
+                    .when_some(category, |row, category| {
+                        // Chevron after the name, pointing right when collapsed.
+                        row.cursor_pointer()
+                            .child(
+                                div().pb(px(1.)).child(
+                                    icon(icons::CHEVRON, 12., theme::CHANNELS_DEFAULT)
+                                        .group_hover(group, |s| s.text_color(rgb(theme::TEXT_DEFAULT)))
+                                        .when(collapsed, |chevron| {
+                                            chevron.with_transformation(Transformation::rotate(radians(
+                                                -std::f32::consts::FRAC_PI_2,
+                                            )))
+                                        }),
+                                ),
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.collapsed.remove(&category) {
+                                    this.collapsed.insert(category);
+                                }
+                                cx.notify();
+                            }))
+                    })
+                    .into_any_element()
+            }
+            Row::Channel {
+                id,
+                kind,
+                icon: glyph,
+                name,
+                user,
+                ..
+            } => {
                 let id = *id;
                 let user = *user;
+                let glyph = *glyph;
+                let opens = openable(*kind);
                 let selected = self.selected_channel == Some(id) && !self.friends_open;
                 let unread = self.unread.contains(&id);
                 let forbidden = self.forbidden.contains(&id);
@@ -1370,22 +1884,20 @@ impl Emerald {
                                 theme::BASE_LOWEST,
                             )),
                         )),
-                        None => r.child(
-                            div()
-                                .flex_none()
-                                .w(px(20.))
-                                .flex()
-                                .justify_center()
-                                .text_size(px(20.))
-                                .font_weight(FontWeight::NORMAL)
-                                .text_color(rgb(icon_color))
-                                .child(*icon),
-                        ),
+                        None => r.child(icon(glyph, 20., icon_color)),
                     })
                     .child(div().flex_1().min_w(px(0.)).truncate().child(name.clone()))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_channel(id, window, cx)
-                    }))
+                    .map(|r| {
+                        if opens {
+                            r.on_click(cx.listener(move |this, _, window, cx| {
+                                this.select_channel(id, window, cx)
+                            }))
+                        } else {
+                            // Voice, stage and forum channels are listed only.
+                            r.cursor_default()
+                                .tooltip(widgets::tooltip("Ainda não suportado no Emerald"))
+                        }
+                    })
                     .into_any_element()
             }
         }
@@ -1538,8 +2050,10 @@ fn dm_space(mut channels: Vec<Channel>, users: &mut HashMap<Snowflake, User>) ->
         id: DMS,
         name: "Mensagens diretas".into(),
         initials: "DM".into(),
+        icon_url: None,
         channels,
         rows: Vec::new(),
+        guild: None,
     };
     space.rebuild();
     space
@@ -1592,4 +2106,15 @@ fn initials(name: &str) -> String {
         .take(3)
         .collect();
     if initials.is_empty() { "?".into() } else { initials }
+}
+
+/// Image format from the file's magic bytes; CDN URLs do not always say.
+fn image_format(bytes: &[u8]) -> Option<ImageFormat> {
+    match bytes {
+        [0x89, b'P', b'N', b'G', ..] => Some(ImageFormat::Png),
+        [0xff, 0xd8, 0xff, ..] => Some(ImageFormat::Jpeg),
+        [b'G', b'I', b'F', b'8', ..] => Some(ImageFormat::Gif),
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some(ImageFormat::Webp),
+        _ => None,
+    }
 }

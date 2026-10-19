@@ -88,3 +88,14 @@ pub fn text() -> Hsla {
 pub fn muted() -> Hsla {
     rgb(TEXT_MUTED).into()
 }
+
+/// Mention pill: `--mention-foreground` on the brand color at 30%.
+pub const MENTION_TEXT: u32 = 0xc9cdfb;
+pub fn mention_bg() -> Rgba {
+    rgba(0x5865f24d)
+}
+
+/// Inline code and spoiler background.
+pub fn code_bg() -> Rgba {
+    rgba(0x1e1f2299)
+}

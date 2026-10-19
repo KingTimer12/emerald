@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use serde_json::value::RawValue;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep, timeout};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -21,9 +21,13 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use super::NetEvent;
 use super::identity::{self, Identity};
 use super::model::{
-    Channel, Guild, Message, MessageDelete, MessageUpdate, Presence, Ready, ReadySupplemental,
-    Relationship, RelationshipRemove, Status, TypingStart, User,
+    Channel, Guild, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, Presence,
+    Ready, ReadySupplemental, Relationship, RelationshipRemove, Snowflake, Status, TypingStart,
+    User,
 };
+
+/// Raw gateway payloads from the UI (op 8, op 37), sent once a session is up.
+pub type OpsRx = mpsc::UnboundedReceiver<serde_json::Value>;
 
 /// The user's chosen presence; `None` lets Discord apply the account's saved
 /// status, which is what the web client's `"unknown"` means.
@@ -67,6 +71,7 @@ pub async fn run(
     identity: Arc<Identity>,
     events: async_channel::Sender<NetEvent>,
     mut presence: PresenceRx,
+    mut ops: OpsRx,
 ) {
     let mut session: Option<Session> = None;
     let mut seq: Option<u64> = None;
@@ -89,6 +94,7 @@ pub async fn run(
             &events,
             &mut ready,
             &mut presence,
+            &mut ops,
         )
         .await
             .unwrap_or_else(|e| {
@@ -135,6 +141,7 @@ async fn connect(
     events: &async_channel::Sender<NetEvent>,
     ready: &mut bool,
     presence: &mut PresenceRx,
+    ops: &mut OpsRx,
 ) -> Result<Outcome> {
     // Same query order and upgrade headers as the web client.
     let mut request = format!(
@@ -205,6 +212,9 @@ async fn connect(
         tokio::select! {
             // The sender lives as long as the network thread, so `changed`
             // only errors on shutdown.
+            Some(op) = ops.recv(), if *ready => {
+                tx.send(WsMessage::Text(op.to_string().into())).await?;
+            }
             Ok(()) = presence.changed() => {
                 let Some(status) = *presence.borrow_and_update() else { continue };
                 tx.send(WsMessage::Text(presence_update(status.as_str()).to_string().into())).await?;
@@ -289,12 +299,27 @@ fn dispatch(
                 resume_url: r.resume_gateway_url,
             });
             *ready = true;
+            let members = r
+                .guilds
+                .iter()
+                .zip(r.merged_members)
+                .filter_map(|(guild, mut members)| Some((guild.id, members.pop()?)))
+                .collect();
+            let read_states = r
+                .read_state
+                .entries
+                .into_iter()
+                .filter(|state| state.read_state_type == 0)
+                .filter_map(|state| Some((state.id, state.last_message_id?)))
+                .collect();
             NetEvent::Ready {
                 me: r.user,
                 guilds: r.guilds,
                 dms: r.private_channels,
                 users: r.users,
                 relationships: r.relationships,
+                members,
+                read_states,
             }
         }
         "READY_SUPPLEMENTAL" => match parse::<ReadySupplemental>(kind, data) {
@@ -329,7 +354,8 @@ fn dispatch(
             Some(g) if !g.unavailable => NetEvent::GuildDelete(g.id),
             _ => return,
         },
-        "CHANNEL_CREATE" => match parse::<Channel>(kind, data) {
+        // An update replaces the channel, which a create also does.
+        "CHANNEL_CREATE" | "CHANNEL_UPDATE" => match parse::<Channel>(kind, data) {
             Some(c) => NetEvent::ChannelCreate(c),
             None => return,
         },
@@ -349,6 +375,14 @@ fn dispatch(
             Some(m) => NetEvent::MessageDelete(m),
             None => return,
         },
+        "GUILD_MEMBERS_CHUNK" => match parse::<MembersChunk>(kind, data) {
+            Some(chunk) => NetEvent::MembersChunk(chunk),
+            None => return,
+        },
+        "MESSAGE_ACK" => match parse::<MessageAck>(kind, data) {
+            Some(ack) => NetEvent::MessageAck(ack),
+            None => return,
+        },
         "TYPING_START" => match parse::<TypingStart>(kind, data) {
             Some(t) => NetEvent::TypingStart(t),
             None => return,
@@ -356,6 +390,26 @@ fn dispatch(
         _ => return,
     };
     events.try_send(event).ok();
+}
+
+/// Op 8 for specific users, the shape the web client uses for message authors.
+pub fn request_members(guild: Snowflake, users: &[Snowflake]) -> serde_json::Value {
+    let users: Vec<String> = users.iter().map(Snowflake::to_string).collect();
+    json!({
+        "op": 8,
+        "d": { "guild_id": [guild.to_string()], "user_ids": users, "presences": false },
+    })
+}
+
+pub fn subscribe_guild(guild: Snowflake) -> serde_json::Value {
+    json!({
+        "op": 37,
+        "d": {
+            "subscriptions": {
+                guild.to_string(): { "typing": true, "activities": true, "threads": true },
+            },
+        },
+    })
 }
 
 fn presence_update(status: &str) -> serde_json::Value {

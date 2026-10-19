@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use serde::de::{self, IgnoredAny, Visitor};
+use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -48,9 +48,87 @@ impl<'de> Deserialize<'de> for Snowflake {
 pub mod channel_kind {
     pub const GUILD_TEXT: u8 = 0;
     pub const DM: u8 = 1;
+    pub const VOICE: u8 = 2;
     pub const GROUP_DM: u8 = 3;
     pub const CATEGORY: u8 = 4;
     pub const ANNOUNCEMENT: u8 = 5;
+    pub const STAGE: u8 = 13;
+    pub const FORUM: u8 = 15;
+    pub const MEDIA: u8 = 16;
+}
+
+/// Permission bitfields arrive as decimal strings.
+fn bits<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+    struct V;
+    impl Visitor<'_> for V {
+        type Value = u64;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a permission bitfield")
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<u64, E> {
+            v.parse().map_err(E::custom)
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<u64, E> {
+            Ok(v)
+        }
+    }
+    d.deserialize_any(V)
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Role {
+    pub id: Snowflake,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub color: u32,
+    #[serde(default)]
+    pub position: i32,
+    #[serde(default, deserialize_with = "bits")]
+    pub permissions: u64,
+}
+
+pub mod overwrite_kind {
+    pub const ROLE: u8 = 0;
+    pub const MEMBER: u8 = 1;
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Overwrite {
+    pub id: Snowflake,
+    #[serde(rename = "type")]
+    pub kind: u8,
+    #[serde(default, deserialize_with = "bits")]
+    pub allow: u64,
+    #[serde(default, deserialize_with = "bits")]
+    pub deny: u64,
+}
+
+/// The current user's (or a message author's) membership in a guild.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Member {
+    /// READY's `merged_members` carries `user_id`; chunks carry `user`.
+    #[serde(default)]
+    pub user_id: Option<Snowflake>,
+    #[serde(default)]
+    pub user: Option<User>,
+    #[serde(default)]
+    pub nick: Option<String>,
+    #[serde(default)]
+    pub roles: Vec<Snowflake>,
+}
+
+impl Member {
+    pub fn id(&self) -> Option<Snowflake> {
+        self.user_id.or(self.user.as_ref().map(|u| u.id))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MembersChunk {
+    pub guild_id: Snowflake,
+    #[serde(default)]
+    pub members: Vec<Member>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -106,11 +184,19 @@ pub struct Channel {
     pub recipient_ids: Vec<Snowflake>,
     #[serde(default)]
     pub recipients: Vec<User>,
+    #[serde(default)]
+    pub permission_overwrites: Vec<Overwrite>,
+    #[serde(default)]
+    pub topic: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GuildProperties {
     pub name: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub owner_id: Option<Snowflake>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -118,11 +204,20 @@ pub struct Guild {
     pub id: Snowflake,
     #[serde(default)]
     pub name: Option<String>,
-    /// Newer user-gateway READY shapes nest the name here.
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub owner_id: Option<Snowflake>,
+    /// Newer user-gateway READY shapes nest name, icon and owner here.
     #[serde(default)]
     pub properties: Option<GuildProperties>,
     #[serde(default)]
     pub channels: Vec<Channel>,
+    #[serde(default)]
+    pub roles: Vec<Role>,
+    /// GUILD_CREATE may list the current member here.
+    #[serde(default)]
+    pub members: Vec<Member>,
     #[serde(default)]
     pub unavailable: bool,
 }
@@ -134,11 +229,70 @@ impl Guild {
             .or(self.properties.as_ref().map(|p| p.name.as_str()))
             .unwrap_or("?")
     }
+
+    pub fn icon_url(&self) -> Option<String> {
+        let hash = self
+            .icon
+            .as_deref()
+            .or(self.properties.as_ref().and_then(|p| p.icon.as_deref()))?;
+        Some(format!("https://cdn.discordapp.com/icons/{}/{hash}.png?size=96", self.id))
+    }
+
+    pub fn owner(&self) -> Option<Snowflake> {
+        self.owner_id.or(self.properties.as_ref().and_then(|p| p.owner_id))
+    }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Attachment {
     pub filename: String,
+    #[serde(default)]
+    pub proxy_url: Option<String>,
+    #[serde(default)]
+    pub content_type: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct EmbedAuthor {
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct EmbedFooter {
+    #[serde(default)]
+    pub text: Option<String>,
+}
+
+/// Rich embed, reduced to its text parts.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct Embed {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub color: Option<u32>,
+    #[serde(default)]
+    pub author: Option<EmbedAuthor>,
+    #[serde(default)]
+    pub footer: Option<EmbedFooter>,
+    #[serde(default)]
+    pub provider: Option<EmbedAuthor>,
+}
+
+pub mod message_kind {
+    pub const DEFAULT: u8 = 0;
+    pub const PIN: u8 = 6;
+    pub const MEMBER_JOIN: u8 = 7;
+    pub const BOOST: u8 = 8;
+    pub const REPLY: u8 = 19;
 }
 
 pub mod sticker_format {
@@ -172,16 +326,27 @@ impl StickerItem {
 pub struct Message {
     pub id: Snowflake,
     pub channel_id: Snowflake,
+    /// `message_kind`: 0 default, 19 reply, others system messages.
+    #[serde(rename = "type", default)]
+    pub kind: u8,
     /// Absent on DM messages.
     #[serde(default)]
     pub guild_id: Option<Snowflake>,
     pub author: User,
+    /// The author's guild membership; gateway guild messages only.
+    #[serde(default)]
+    pub member: Option<Member>,
     #[serde(default)]
     pub content: String,
     #[serde(default)]
+    pub mentions: Vec<User>,
+    #[serde(default)]
     pub attachments: Vec<Attachment>,
     #[serde(default)]
-    pub embeds: Vec<IgnoredAny>,
+    pub embeds: Vec<Embed>,
+    /// The message this one replies to; `None` inside or when deleted.
+    #[serde(default)]
+    pub referenced_message: Option<Box<Message>>,
     #[serde(default)]
     pub sticker_items: Vec<StickerItem>,
     /// Echo of the nonce the sender chose; matches our pending copy.
@@ -265,6 +430,12 @@ pub struct ProfileUser {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct MessageAck {
+    pub channel_id: Snowflake,
+    pub message_id: Snowflake,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct MessageDelete {
     pub id: Snowflake,
     pub channel_id: Snowflake,
@@ -283,8 +454,30 @@ pub struct Ready {
     pub users: Vec<User>,
     #[serde(default)]
     pub relationships: Vec<Relationship>,
+    /// The current user's member object per guild, in `guilds` order.
+    #[serde(default)]
+    pub merged_members: Vec<Vec<Member>>,
+    #[serde(default)]
+    pub read_state: ReadStates,
     #[serde(default)]
     pub auth_token: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ReadStates {
+    #[serde(default)]
+    pub entries: Vec<ReadState>,
+}
+
+/// Last message the user has read in a channel.
+#[derive(Debug, Deserialize)]
+pub struct ReadState {
+    pub id: Snowflake,
+    #[serde(default)]
+    pub last_message_id: Option<Snowflake>,
+    /// Non-channel read states (e.g. guild events) use other types.
+    #[serde(default)]
+    pub read_state_type: u8,
 }
 
 #[derive(Debug, Default, Deserialize)]

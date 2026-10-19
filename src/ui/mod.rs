@@ -1,5 +1,6 @@
 mod app;
 mod icons;
+mod markdown;
 pub mod text_input;
 mod theme;
 mod time;

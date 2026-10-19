@@ -279,6 +279,20 @@ impl Rest {
         Ok(response.json().await?)
     }
 
+    /// Read receipt, as the web client sends when a channel is on screen.
+    pub async fn ack(&self, channel: Snowflake, message: Snowflake) -> Result<()> {
+        self.request(
+            Method::POST,
+            "POST /channels/{id}/messages/{id}/ack",
+            channel,
+            &format!("/channels/{channel}/messages/{message}/ack"),
+            Some(&json!({ "token": null })),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Shows "… is typing" to the other side for about ten seconds.
     pub async fn typing(&self, channel: Snowflake) -> Result<()> {
         self.request(
