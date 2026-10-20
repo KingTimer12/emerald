@@ -5,9 +5,26 @@ The interface follows the look and wording of the official web client, in Englis
 Brazilian Portuguese, and the app uses a fraction of an Electron client's memory: roughly 60 to 100 MB, with
 CPU near zero when idle.
 
-> **Warning.** Third-party clients on user accounts violate Discord's Terms of Service
-> and can get the account suspended. Emerald mimics the official web client and stays
-> within the rate limits, but the risk is yours. Use it at your own discretion.
+> [!CAUTION]
+> **Using Emerald can get your Discord account banned.** Emerald is not made or approved
+> by Discord. It signs in to a normal user account and talks to Discord's private API,
+> which Discord forbids. Discord's help center, on
+> [automated user accounts](https://support.discord.com/hc/en-us/articles/115002192352-Automated-user-accounts-self-bots):
+>
+> > Automating normal user accounts (generally called "self-bots") outside of the OAuth2/bot
+> > API is forbidden, and can result in an account termination if found.
+>
+> And the [Terms of Service](https://discord.com/terms) (effective September 29, 2025), under
+> "Don't use the services to do harm to Discord", list among the forbidden uses:
+>
+> > using any unauthorized software designed to modify the services; [...] copying,
+> > dismantling, or reverse engineering any of our services
+>
+> Emerald behaves like the official web client: the same requests and headers, the current
+> build number, its rate limits and caching, and nothing automated. That lowers the odds of
+> standing out but does not make it allowed or safe. Discord does not publish how it detects
+> third-party clients, and a ban can be permanent. Only use an account you can afford to lose,
+> and never script it (mass messages, friend requests, joining servers, scraping).
 
 ## What works
 
@@ -63,7 +80,7 @@ Useful environment variables:
 |---|---|
 | `DISCORD_TOKEN` | Use this token instead of the stored one. |
 | `EMERALD_LOCALE` | Locale sent to Discord, when it should differ from the interface language. |
-| `EMERALD_BUILD_NUMBER` | Override `client_build_number` when the one in the code goes stale. |
+| `EMERALD_BUILD_NUMBER` | Force a `client_build_number`. Normally it is read at startup from `discord.com/app`, as the web client loads it, and cached for offline starts. |
 | `RUST_LOG=emerald=debug` | Verbose logs. |
 
 Tests:
@@ -79,6 +96,7 @@ cargo test
 | `~/.config/emerald/token` | `%APPDATA%\emerald\token` | Account token. Never share it. |
 | `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
 | `~/Library/Caches/emerald/cdn` | `%LOCALAPPDATA%\emerald\cdn` | CDN image cache, capped at 200 MB. |
+| `~/Library/Caches/emerald/build_number` | `%LOCALAPPDATA%\emerald\build_number` | Last web client build number seen. |
 | | `%LOCALAPPDATA%\emerald\WebView2` | WebView2 browser profile; the login session itself is InPrivate. |
 
 ## Architecture
@@ -105,6 +123,7 @@ src/
 │   ├── model/           Discord payloads, only the fields in use
 │   ├── permissions.rs   role and overwrite permission algorithm
 │   ├── identity.rs      headers and super properties matching the web client
+│   ├── build.rs         current web client build number, read from discord.com/app
 │   └── cache.rs         on-disk image cache
 └── ui/
     ├── markdown.rs      Discord markdown parser

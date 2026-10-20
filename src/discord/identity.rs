@@ -15,9 +15,6 @@ use std::sync::{Arc, RwLock};
 use base64::Engine;
 use serde_json::{Value, json};
 
-/// Observed `client_build_number`; it changes with every web deploy.
-/// Override with `EMERALD_BUILD_NUMBER` when it goes stale.
-const CLIENT_BUILD_NUMBER: u64 = 641_004;
 pub const API_VERSION: u8 = 9;
 /// `capabilities` the web client sends when channel obfuscation is off.
 pub const CAPABILITIES: u64 = 1_734_653;
@@ -51,13 +48,9 @@ pub struct Identity {
 }
 
 impl Identity {
-    pub fn new(token: String) -> Self {
-        // Discord answers errors in this language, so it follows the interface.
-        let locale = std::env::var("EMERALD_LOCALE").unwrap_or_else(|_| crate::i18n::current().to_owned());
-        let build_number = std::env::var("EMERALD_BUILD_NUMBER")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(CLIENT_BUILD_NUMBER);
+    /// `build_number` comes from `build::current`.
+    pub fn new(token: String, build_number: u64) -> Self {
+        let locale = locale();
 
         // Key order matches the captured header; serde_json preserves it.
         let properties = json!({
@@ -158,7 +151,12 @@ pub fn persist_token(token: &str) -> std::io::Result<()> {
     std::fs::rename(tmp, path)
 }
 
-fn accept_language(locale: &str) -> String {
+/// Discord answers errors in this language, so it follows the interface.
+pub fn locale() -> String {
+    std::env::var("EMERALD_LOCALE").unwrap_or_else(|_| crate::i18n::current().to_owned())
+}
+
+pub fn accept_language(locale: &str) -> String {
     match locale.split_once('-') {
         Some((lang, _)) if lang != "en" => {
             format!("{locale},{lang};q=0.9,en-US;q=0.8,en;q=0.7")
@@ -205,7 +203,7 @@ mod tests {
 
     #[test]
     fn super_properties_match_web_client_shape() {
-        let identity = Identity::new("t".into());
+        let identity = Identity::new("t".into(), 1);
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(&identity.super_properties)
             .unwrap();

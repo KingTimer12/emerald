@@ -1,3 +1,4 @@
+mod build;
 pub mod cache;
 mod commands;
 pub mod gateway;
@@ -24,7 +25,6 @@ pub fn spawn(
 ) {
     let (event_tx, event_rx) = async_channel::unbounded();
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<Command>();
-    let identity = Arc::new(identity::Identity::new(token));
     let (presence_tx, presence_rx) = watch::channel(status);
     let (ops_tx, ops_rx) = mpsc::unbounded_channel::<serde_json::Value>();
 
@@ -39,6 +39,10 @@ pub fn spawn(
                 .build()
                 .expect("tokio runtime");
             runtime.block_on(async move {
+                let accept_language = identity::accept_language(&identity::locale());
+                let build_number = build::current(&accept_language).await;
+                log::info!("client build {build_number}");
+                let identity = Arc::new(identity::Identity::new(token, build_number));
                 let rest = match rest::Rest::new(identity.clone()) {
                     Ok(rest) => Arc::new(rest),
                     Err(e) => {
