@@ -125,6 +125,19 @@ applies at once, and Discord's own answers (errors, for one) follow it too.
 `en-US.toml` and `pt-BR.toml` are written by hand. The tests check that every key the code
 uses exists, that pt-BR is complete, and that no language uses unknown keys or arguments.
 
+Other languages can be filled from the Discord web client's own translations:
+
+```sh
+python3 tools/discord_locales.py            # every language Discord has
+python3 tools/discord_locales.py --only de,fr
+```
+
+The script downloads the client's scripts once into `target/discord-intl` (about 100 MB),
+pairs each language's message bundle with the English one, and keeps the messages whose
+English and Portuguese text match ours. Keys with no Discord counterpart, such as
+Emerald's own messages and date formats, are left to the English fallback. The wording
+belongs to Discord, so check whether you may redistribute it before committing these files.
+
 A few design choices:
 
 - **UI-free stores.** `People`, `Spaces`, `History`, `ReadStates`, `Typing` and

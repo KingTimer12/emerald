@@ -2,7 +2,8 @@
 //! `locales/`, embedded at build time (see `build.rs`), whose nested tables
 //! flatten to dotted keys (`friends.add`). Code asks for text with [`t!`]; a
 //! key missing from the current language falls back to English, then to the
-//! key itself.
+//! key itself. `tools/discord_locales.py` fills other languages from the
+//! Discord web client's own translations.
 //!
 //! Locale codes are Discord's (`en-US`, `pt-BR`, …), so the same code goes
 //! to the API and server-side messages come back in the same language.
