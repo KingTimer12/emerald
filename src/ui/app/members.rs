@@ -9,7 +9,7 @@ use super::super::theme;
 use super::state::MemberList;
 use super::{Emerald, widgets};
 use crate::discord::Command;
-use super::state::member_search;
+use super::state::{member_search, members};
 use crate::discord::model::{ListPresence, MemberListItem, Snowflake, User, activity_kind};
 
 /// Pauses typing this long before the search is sent.
@@ -38,26 +38,30 @@ impl Emerald {
         let space = self.spaces.current();
         let channel = self.selected_channel.filter(|_| self.settings.show_members && !space.is_dms());
         let Some(channel) = channel else {
-            self.members = None;
+            self.members.close();
             return;
         };
-        if self.members.as_ref().is_some_and(|list| list.channel == channel) {
-            return;
-        }
         let overwrites = space
             .channels()
             .iter()
             .find(|c| c.id == channel)
             .map_or(&[][..], |c| c.permission_overwrites.as_slice());
-        if self.members.as_ref().is_none_or(|old| old.guild != space.id) {
+        // The @everyone role shares the guild's id.
+        let everyone = space.info().map_or(0, |guild| guild.role_permissions(space.id));
+        let id = members::list_id(everyone, overwrites);
+        let other_guild = self.members.current().is_none_or(|old| old.guild != space.id);
+        if !self.members.open(space.id, channel, id) {
+            return;
+        }
+        if other_guild {
             self.member_query.update(cx, |input, cx| input.set_text("", cx));
         }
-        let list = MemberList::new(space.id, channel, overwrites);
-        self.net.post(Command::SubscribeGuild {
-            guild: list.guild,
-            members: Some((channel, list.ranges().to_vec())),
-        });
-        self.members = Some(list);
+        if let Some(list) = self.members.current() {
+            self.net.post(Command::SubscribeGuild {
+                guild: list.guild,
+                members: Some((channel, list.ranges().to_vec())),
+            });
+        }
         self.members_scroll.scroll_to_item(0, ScrollStrategy::Top);
     }
 
@@ -70,7 +74,7 @@ impl Emerald {
             return;
         };
         cx.notify();
-        let Some(guild) = self.members.as_ref().map(|list| list.guild) else { return };
+        let Some(guild) = self.members.current().map(|list| list.guild) else { return };
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(SEARCH_DELAY).await;
             this.update(cx, |this, _| {
@@ -89,7 +93,7 @@ impl Emerald {
 
     /// Follows the rows on screen with the subscribed ranges, debounced.
     fn member_rows_visible(&mut self, visible: Range<usize>, cx: &mut Context<Self>) {
-        let Some(list) = &mut self.members else { return };
+        let Some(list) = self.members.current_mut() else { return };
         // uniform_list also renders one row alone to measure the row height;
         // that is not where the user is.
         if visible.len() <= 1 {
@@ -102,7 +106,7 @@ impl Emerald {
             cx.background_executor().timer(RESUBSCRIBE_DELAY).await;
             this.update(cx, |this, _| {
                 this.members_resubscribe = false;
-                if let Some(list) = &this.members {
+                if let Some(list) = this.members.current() {
                     this.net.post(Command::SubscribeGuild {
                         guild: list.guild,
                         members: Some((list.channel, list.ranges().to_vec())),
@@ -119,7 +123,7 @@ impl Emerald {
         let body = if searching {
             self.render_search_results(cx).into_any_element()
         } else {
-            let rows = self.members.as_ref().map_or(0, MemberList::len);
+            let rows = self.members.current().map_or(0, MemberList::len);
             uniform_list(
                 "members",
                 rows,
@@ -192,7 +196,7 @@ impl Emerald {
 
     fn render_member_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let row = div().w_full().h(px(ROW_HEIGHT)).px_2();
-        let list = self.members.as_ref();
+        let list = self.members.current();
         match list.and_then(|list| list.row(ix)) {
             Some(MemberListItem::Group(group)) => {
                 let count = list.and_then(|l| l.group(&group.id)).map_or(group.count, |g| g.count);

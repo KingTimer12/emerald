@@ -39,7 +39,7 @@ use friends::Friends;
 use images::Images;
 pub use outbox::Outbox;
 use settings::SettingsView;
-use state::{History, MemberList, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
+use state::{History, MemberLists, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
 
 actions!(emerald_ui, [Dismiss, EditLast]);
 
@@ -166,7 +166,7 @@ pub struct Emerald {
     /// The open channel's messages, mirrored from `history`.
     messages: ListState,
     /// Member list of the open guild channel.
-    members: Option<MemberList>,
+    members: MemberLists,
     /// A member list subscription waits out a scroll burst.
     members_resubscribe: bool,
     members_scroll: UniformListScrollHandle,
@@ -266,7 +266,7 @@ impl Emerald {
             busy: HashSet::new(),
             select_new_guild: false,
             messages,
-            members: None,
+            members: MemberLists::default(),
             members_resubscribe: false,
             members_scroll: UniformListScrollHandle::new(),
             member_query,

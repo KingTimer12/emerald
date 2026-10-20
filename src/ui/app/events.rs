@@ -44,9 +44,7 @@ impl Emerald {
             NetEvent::Avatar { url, bytes } => self.images.store(url, bytes),
             NetEvent::MembersChunk(chunk) => self.on_members(chunk),
             NetEvent::MemberList(update) => {
-                if let Some(list) = &mut self.members {
-                    list.apply(update);
-                }
+                self.members.apply(update);
             }
             NetEvent::MessageAck(ack) => self.reads.acked(ack.channel_id, ack.message_id, ack.mention_count),
             NetEvent::MemberUpdate(update) => {
@@ -176,7 +174,7 @@ impl Emerald {
         // no subscriptions: drop cached history and the member list, and
         // refetch only what is on screen.
         self.history.clear();
-        self.members = None;
+        self.members.clear();
         let current = self.spaces.current();
         if !current.is_dms() {
             let guild = current.id;

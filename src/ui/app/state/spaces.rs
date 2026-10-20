@@ -76,6 +76,11 @@ pub struct GuildInfo {
 }
 
 impl GuildInfo {
+    /// A role's guild-wide permissions; 0 for an unknown role.
+    pub fn role_permissions(&self, role: Snowflake) -> u64 {
+        self.roles.iter().find(|r| r.id == role).map_or(0, |r| r.permissions)
+    }
+
     /// Custom emoji uploaded here.
     pub fn emojis(&self) -> &[GuildEmoji] {
         &self.emojis

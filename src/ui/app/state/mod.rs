@@ -15,7 +15,7 @@ pub mod typing;
 pub use expiry::TtlCache;
 pub use history::{History, Log, MessageView};
 pub use member_search::MemberSearch;
-pub use members::MemberList;
+pub use members::{MemberList, MemberLists};
 pub use msg::{Msg, Reacted, Reply, Sticker};
 pub use people::People;
 pub use reads::ReadStates;

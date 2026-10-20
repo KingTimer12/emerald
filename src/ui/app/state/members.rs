@@ -1,7 +1,14 @@
-//! The member sidebar of one channel, loaded lazily. Guilds with millions
-//! of members are never downloaded: the server keeps the list and sends
-//! operations for the 100-row pages the client subscribes to, so only the
-//! rows near the viewport are held, the rest stay empty slots.
+//! The member sidebar, loaded lazily. Guilds with millions of members are
+//! never downloaded: the server keeps the list and sends operations for the
+//! 100-row pages the client subscribes to, so only the rows near the
+//! viewport are held, the rest stay empty slots.
+//!
+//! Channels with the same view permissions share one server-side list, and
+//! the gateway syncs a list only the first time it is subscribed in a
+//! session: it keeps sending updates for every list seen since, and switching
+//! back to one brings no new SYNC. So, like the web client, lists are kept
+//! per guild and list id for the whole session and reused when a channel
+//! shows one already seen.
 
 use std::ops::Range;
 
@@ -17,6 +24,9 @@ pub struct MemberList {
     /// The server's id for this list; channels with the same view
     /// overwrites share one.
     id: String,
+    /// The id computed from the overwrites, which finds the list again
+    /// should the server's ever differ.
+    computed: String,
     /// An update was applied, so `id` is confirmed.
     synced: bool,
     groups: Vec<MemberListGroup>,
@@ -28,11 +38,13 @@ pub struct MemberList {
 }
 
 impl MemberList {
-    pub fn new(guild: Snowflake, channel: Snowflake, overwrites: &[Overwrite]) -> Self {
+    /// `id` comes from `list_id`.
+    pub fn new(guild: Snowflake, channel: Snowflake, id: String) -> Self {
         Self {
             guild,
             channel,
-            id: list_id(overwrites),
+            computed: id.clone(),
+            id,
             synced: false,
             groups: Vec::new(),
             rows: Vec::new(),
@@ -144,6 +156,66 @@ impl MemberList {
     }
 }
 
+/// Every member list seen this session; at most one is on screen.
+#[derive(Default)]
+pub struct MemberLists {
+    lists: Vec<MemberList>,
+    current: Option<usize>,
+}
+
+impl MemberLists {
+    pub fn current(&self) -> Option<&MemberList> {
+        self.lists.get(self.current?)
+    }
+
+    pub fn current_mut(&mut self) -> Option<&mut MemberList> {
+        self.lists.get_mut(self.current?)
+    }
+
+    /// Shows the list of `channel`, whose id `list_id` gives, reusing the
+    /// one already held when another channel shares it. False when nothing
+    /// changed.
+    pub fn open(&mut self, guild: Snowflake, channel: Snowflake, id: String) -> bool {
+        if self.current().is_some_and(|list| list.channel == channel) {
+            return false;
+        }
+        let held = self
+            .lists
+            .iter()
+            .position(|list| list.guild == guild && (list.computed == id || list.id == id));
+        let ix = held.unwrap_or_else(|| {
+            self.lists.push(MemberList::new(guild, channel, id));
+            self.lists.len() - 1
+        });
+        self.lists[ix].channel = channel;
+        self.current = Some(ix);
+        true
+    }
+
+    /// Hides the list; the lists stay, the server still updates them.
+    pub fn close(&mut self) {
+        self.current = None;
+    }
+
+    /// A new session subscribes from scratch, so nothing held is current.
+    pub fn clear(&mut self) {
+        self.lists.clear();
+        self.current = None;
+    }
+
+    /// Applies `update` to the list it is for.
+    pub fn apply(&mut self, update: MemberListUpdate) -> bool {
+        let exact = self
+            .lists
+            .iter()
+            .position(|list| list.guild == update.guild_id && list.id == update.id);
+        match exact.or(self.current) {
+            Some(ix) => self.lists[ix].apply(update),
+            None => false,
+        }
+    }
+}
+
 /// The first page, always kept like the web client does, plus the pages
 /// the visible rows fall in.
 fn ranges_for(visible: Range<usize>) -> Vec<[usize; 2]> {
@@ -155,9 +227,15 @@ fn ranges_for(visible: Range<usize>) -> Vec<[usize; 2]> {
         .collect()
 }
 
-/// The id Discord gives a channel's member list: `everyone` when no
-/// overwrite touches VIEW_CHANNEL, else a MurmurHash3 of those overwrites.
-fn list_id(overwrites: &[Overwrite]) -> String {
+/// The id Discord gives a channel's member list, computed as the web client
+/// does: `everyone` when the @everyone role has VIEW_CHANNEL guild-wide
+/// (`everyone`) and no overwrite of the channel denies it, else a
+/// MurmurHash3 of the overwrites that touch VIEW_CHANNEL.
+pub fn list_id(everyone: u64, overwrites: &[Overwrite]) -> String {
+    let denied = overwrites.iter().any(|o| o.deny & permissions::VIEW_CHANNEL != 0);
+    if everyone & permissions::VIEW_CHANNEL != 0 && !denied {
+        return "everyone".into();
+    }
     let mut parts: Vec<String> = overwrites
         .iter()
         .filter_map(|o| {
@@ -241,24 +319,36 @@ mod tests {
 
     #[test]
     fn list_ids_depend_on_view_overwrites() {
-        assert_eq!(list_id(&[]), "everyone");
+        const VIEW: u64 = permissions::VIEW_CHANNEL;
+        assert_eq!(list_id(VIEW, &[]), "everyone");
         let deny = Overwrite {
             id: Snowflake(5),
             kind: overwrite_kind::ROLE,
             allow: 0,
-            deny: permissions::VIEW_CHANNEL,
+            deny: VIEW,
         };
         let unrelated = Overwrite {
             deny: permissions::SEND_MESSAGES,
             ..deny.clone()
         };
-        assert_eq!(list_id(&[unrelated]), "everyone");
-        assert_eq!(list_id(&[deny]), murmur3(b"deny:5", 0).to_string());
+        assert_eq!(list_id(VIEW, &[unrelated]), "everyone");
+        // Any overwrite that hides the channel names the list...
+        assert_eq!(list_id(VIEW, std::slice::from_ref(&deny)), murmur3(b"deny:5", 0).to_string());
+        // ...as does an @everyone role that cannot see channels at all,
+        // even where an overwrite lets it see this channel.
+        let allow = Overwrite {
+            id: GUILD,
+            kind: overwrite_kind::ROLE,
+            allow: VIEW,
+            deny: 0,
+        };
+        assert_eq!(list_id(0, std::slice::from_ref(&allow)), murmur3(b"allow:1", 0).to_string());
+        assert_eq!(list_id(VIEW, &[allow]), "everyone");
     }
 
     #[test]
     fn sync_then_edits_keep_a_sparse_list() {
-        let mut list = MemberList::new(GUILD, Snowflake(2), &[]);
+        let mut list = MemberList::new(GUILD, Snowflake(2), "everyone".into());
         let sync = serde_json::json!([{ "op": "SYNC", "range": [0, 99],
             "items": [{ "group": { "id": "online", "count": 2 } }, member(10), member(11)] }]);
         assert!(list.apply(update("everyone", &[("online", 2), ("offline", 1000)], sync)));
@@ -278,7 +368,7 @@ mod tests {
 
     #[test]
     fn other_lists_are_ignored_once_synced() {
-        let mut list = MemberList::new(GUILD, Snowflake(2), &[]);
+        let mut list = MemberList::new(GUILD, Snowflake(2), "everyone".into());
         let sync = || serde_json::json!([{ "op": "SYNC", "range": [0, 99], "items": [member(1)] }]);
         // A mismatched id is adopted on the first sync from the top...
         assert!(list.apply(update("123", &[("online", 0)], sync())));
@@ -287,8 +377,44 @@ mod tests {
     }
 
     #[test]
+    fn channels_sharing_a_list_reuse_it() {
+        let mut lists = MemberLists::default();
+        assert!(lists.open(GUILD, Snowflake(2), "everyone".into()));
+        let sync = serde_json::json!([{ "op": "SYNC", "range": [0, 99], "items": [member(1)] }]);
+        assert!(lists.apply(update("everyone", &[("online", 1)], sync)));
+        // Another channel with the same view: the server sends no new SYNC,
+        // so the rows already held must show.
+        assert!(lists.open(GUILD, Snowflake(3), "everyone".into()));
+        assert_eq!(lists.current().unwrap().channel, Snowflake(3));
+        assert!(lists.current().unwrap().row(0).is_some());
+        assert!(!lists.open(GUILD, Snowflake(3), "everyone".into()));
+    }
+
+    #[test]
+    fn hidden_lists_keep_following_updates() {
+        let mut lists = MemberLists::default();
+        lists.open(GUILD, Snowflake(2), "everyone".into());
+        let sync = || serde_json::json!([{ "op": "SYNC", "range": [0, 99], "items": [member(1)] }]);
+        lists.apply(update("everyone", &[("online", 1)], sync()));
+        let private = [Overwrite {
+            id: Snowflake(5),
+            kind: overwrite_kind::ROLE,
+            allow: 0,
+            deny: permissions::VIEW_CHANNEL,
+        }];
+        lists.open(GUILD, Snowflake(4), list_id(0, &private));
+        assert!(lists.current().unwrap().row(0).is_none());
+        // An update for the hidden list lands there, not on the one shown.
+        let edit = serde_json::json!([{ "op": "UPDATE", "index": 0, "item": member(9) }]);
+        assert!(lists.apply(update("everyone", &[("online", 1)], edit)));
+        assert!(lists.current().unwrap().row(0).is_none());
+        lists.open(GUILD, Snowflake(2), "everyone".into());
+        assert!(lists.current().unwrap().row(0).is_some());
+    }
+
+    #[test]
     fn scrolling_moves_ranges_and_frees_rows() {
-        let mut list = MemberList::new(GUILD, Snowflake(2), &[]);
+        let mut list = MemberList::new(GUILD, Snowflake(2), "everyone".into());
         assert_eq!(list.ranges(), [[0, 99]]);
         assert_eq!(list.scrolled(0..20), None);
         let sync = serde_json::json!([{ "op": "SYNC", "range": [0, 99], "items": [member(1)] }]);

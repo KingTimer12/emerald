@@ -35,7 +35,7 @@ impl Emerald {
             Some(channel) => self.select_channel(channel, window, cx),
             None => {
                 self.selected_channel = None;
-                self.members = None;
+                self.members.close();
                 cx.notify();
             }
         }

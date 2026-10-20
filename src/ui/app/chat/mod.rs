@@ -207,7 +207,7 @@ impl Emerald {
                     .when_some(user.filter(|_| wide && self.settings.show_profile), |row, user| {
                         row.child(self.render_profile_panel(user, cx))
                     })
-                    .when(wide && self.members.is_some(), |row| row.child(self.render_member_list(cx))),
+                    .when(wide && self.members.current().is_some(), |row| row.child(self.render_member_list(cx))),
             )
             .into_any_element()
     }
