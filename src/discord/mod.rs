@@ -7,6 +7,7 @@ pub mod model;
 pub mod permissions;
 mod protocol;
 pub mod rest;
+pub mod token;
 
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ use tokio::sync::{mpsc, watch};
 /// Runs all networking on one dedicated OS thread with a single-threaded
 /// tokio runtime, keeping the UI thread free and the thread count minimal.
 pub fn spawn(
-    token: String,
+    token: token::Token,
     status: Option<Status>,
 ) -> (
     async_channel::Receiver<NetEvent>,

@@ -399,10 +399,13 @@ impl Rest {
         for _ in 0..MAX_ATTEMPTS {
             let mut bucket = self.limits.acquire(route, call.major).await?;
 
+            // Sensitive: kept out of debug output and never HPACK-indexed.
+            let mut authorization = HeaderValue::from_str(self.identity.token().expose())?;
+            authorization.set_sensitive(true);
             let mut request = self
                 .http
                 .request(route.0.clone(), format!("{}{}", self.api, call.path))
-                .header(AUTHORIZATION, &*self.identity.token())
+                .header(AUTHORIZATION, authorization)
                 .header(ACCEPT_LANGUAGE, &*self.identity.accept_language())
                 .header("x-discord-locale", &*self.identity.locale());
             if let Some(body) = &call.body {

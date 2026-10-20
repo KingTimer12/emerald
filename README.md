@@ -29,8 +29,9 @@ CPU near zero when idle.
 ## What works
 
 - **Login** through Discord's own sign-in page in a native webview (WKWebView on macOS,
-  WebView2 on Windows), captcha included. The token is kept in the config directory
-  (see [Files](#files)); logging out revokes it on the server.
+  WebView2 on Windows), captcha included. The token is kept in the macOS Keychain or the Windows
+  Credential Manager (see [Files](#files)), wiped from memory when dropped, and never
+  logged; logging out revokes it on the server.
 - **Friends**: Online, All and Pending tabs; add by username, accept, decline, remove.
 - **Direct messages**: list ordered by activity, search, history, sending with optimistic
   confirmation, typing indicators, a profile panel (badges, bio, connected accounts)
@@ -78,7 +79,7 @@ Useful environment variables:
 
 | Variable | Purpose |
 |---|---|
-| `DISCORD_TOKEN` | Use this token instead of the stored one. |
+| `DISCORD_TOKEN` | Use this token instead of the stored one. It is removed from the environment once read. |
 | `EMERALD_LOCALE` | Locale sent to Discord, when it should differ from the interface language. |
 | `EMERALD_BUILD_NUMBER` | Force a `client_build_number`. Normally it is read at startup from `discord.com/app`, as the web client loads it, and cached for offline starts. |
 | `RUST_LOG=emerald=debug` | Verbose logs. |
@@ -93,7 +94,8 @@ cargo test
 
 | macOS | Windows | Contents |
 |---|---|---|
-| `~/.config/emerald/token` | `%APPDATA%\emerald\token` | Account token. Never share it. |
+| Keychain, item "Emerald" | Credential Manager, `Emerald:discord-token` | Account token (release builds). |
+| `~/.config/emerald/token` | `%APPDATA%\emerald\token` | Account token in debug builds, mode 0600. A release build moves it to the Keychain or Credential Manager and deletes the file. |
 | `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
 | `~/Library/Caches/emerald/cdn` | `%LOCALAPPDATA%\emerald\cdn` | CDN image cache, capped at 200 MB. |
 | `~/Library/Caches/emerald/build_number` | `%LOCALAPPDATA%\emerald\build_number` | Last web client build number seen. |
@@ -124,6 +126,7 @@ src/
 │   ├── permissions.rs   role and overwrite permission algorithm
 │   ├── identity.rs      headers and super properties matching the web client
 │   ├── build.rs         current web client build number, read from discord.com/app
+│   ├── token.rs         token storage: Keychain, Credential Manager or file
 │   └── cache.rs         on-disk image cache
 └── ui/
     ├── markdown.rs      Discord markdown parser

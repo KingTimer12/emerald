@@ -9,11 +9,12 @@
 //! web client itself sends `null` before that module initializes, which is
 //! what this client sends. `qos_token` is omitted for the same reason.
 
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use base64::Engine;
 use serde_json::{Value, json};
+
+use super::token::{self, Token};
 
 pub const API_VERSION: u8 = 9;
 /// `capabilities` the web client sends when channel obfuscation is off.
@@ -42,14 +43,14 @@ pub struct Identity {
     /// language so Discord answers in it.
     language: RwLock<(Arc<str>, Arc<str>)>,
     pub timezone: String,
-    token: RwLock<Arc<str>>,
+    token: RwLock<Arc<Token>>,
     /// Gateway session id; the web client sends it when accepting invites.
     session_id: RwLock<Option<String>>,
 }
 
 impl Identity {
     /// `build_number` comes from `build::current`.
-    pub fn new(token: String, build_number: u64) -> Self {
+    pub fn new(token: Token, build_number: u64) -> Self {
         let locale = locale();
 
         // Key order matches the captured header; serde_json preserves it.
@@ -83,7 +84,7 @@ impl Identity {
             super_properties,
             language: RwLock::new((locale.as_str().into(), accept_language(&locale).into())),
             timezone: system_timezone(),
-            token: RwLock::new(token.into()),
+            token: RwLock::new(Arc::new(token)),
             session_id: RwLock::new(None),
         }
     }
@@ -103,7 +104,7 @@ impl Identity {
         }
     }
 
-    pub fn token(&self) -> Arc<str> {
+    pub fn token(&self) -> Arc<Token> {
         self.token.read().unwrap().clone()
     }
 
@@ -118,37 +119,12 @@ impl Identity {
     /// READY may carry a rotated token (AUTH_TOKEN_REFRESH capability);
     /// the old one must not be reused afterwards.
     pub fn replace_token(&self, token: String) {
-        if let Err(e) = persist_token(&token) {
+        let Some(token) = Token::new(token) else { return };
+        if let Err(e) = token::save(&token) {
             log::error!("could not persist rotated token: {e}");
         }
-        if std::env::var_os("DISCORD_TOKEN").is_some() {
-            log::warn!("token rotated; DISCORD_TOKEN is now stale, using the stored token");
-        }
-        *self.token.write().unwrap() = token.into();
+        *self.token.write().unwrap() = Arc::new(token);
     }
-}
-
-pub fn token_path() -> Option<PathBuf> {
-    Some(crate::paths::config_dir()?.join("token"))
-}
-
-pub fn persist_token(token: &str) -> std::io::Result<()> {
-    use std::io::Write;
-
-    let path = token_path().ok_or(std::io::ErrorKind::NotFound)?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("tmp");
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    // On Windows the per-user AppData ACL already keeps other users out.
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(&tmp)?;
-    file.write_all(token.as_bytes())?;
-    file.sync_all()?;
-    std::fs::rename(tmp, path)
 }
 
 /// Discord answers errors in this language, so it follows the interface.
@@ -203,7 +179,7 @@ mod tests {
 
     #[test]
     fn super_properties_match_web_client_shape() {
-        let identity = Identity::new("t".into(), 1);
+        let identity = Identity::new(Token::new("t".into()).unwrap(), 1);
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(&identity.super_properties)
             .unwrap();

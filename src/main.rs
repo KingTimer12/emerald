@@ -22,16 +22,10 @@ actions!(emerald, [Quit, Logout]);
 /// on Windows the new one is spawned and this one exits. Either way gpui, the
 /// network thread and the gateway session all go away with it.
 pub(crate) fn sign_out() -> ! {
-    if let Some(path) = discord::identity::token_path() {
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => eprintln!("warning: could not delete the token: {e}"),
-        }
-    }
+    discord::token::forget();
     let error = match std::env::current_exe() {
-        // DISCORD_TOKEN would hand the revoked token straight back.
-        Ok(exe) => restart(std::process::Command::new(exe).env_remove("DISCORD_TOKEN")),
+        // `token::load` already took DISCORD_TOKEN out of the environment.
+        Ok(exe) => restart(&mut std::process::Command::new(exe)),
         Err(e) => e,
     };
     eprintln!("could not restart Emerald: {error}");
@@ -51,16 +45,6 @@ fn restart(command: &mut std::process::Command) -> std::io::Error {
         Ok(_) => std::process::exit(0),
         Err(e) => e,
     }
-}
-
-/// Reads the account token from `DISCORD_TOKEN`, falling back to the stored
-/// one (`token` under `paths::config_dir`).
-fn load_token() -> Option<String> {
-    std::env::var("DISCORD_TOKEN")
-        .ok()
-        .or_else(|| std::fs::read_to_string(discord::identity::token_path()?).ok())
-        .map(|t| t.trim().to_owned())
-        .filter(|t| !t.is_empty())
 }
 
 /// Child mode (see `webview`): runs one webview flow, prints its result and
@@ -93,12 +77,13 @@ fn main() {
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
-    let token = match load_token() {
+    // Still single-threaded here, as `token::load` requires.
+    let token = match discord::token::load() {
         Some(token) => token,
         // No stored token: open the official login webview in a child process.
-        None => match webview::run_child("--login", b"") {
+        None => match webview::run_child("--login", b"").and_then(discord::token::Token::new) {
             Some(token) => {
-                if let Err(e) = discord::identity::persist_token(&token) {
+                if let Err(e) = discord::token::save(&token) {
                     eprintln!("warning: could not save the token: {e}");
                 }
                 token

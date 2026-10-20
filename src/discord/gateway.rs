@@ -180,13 +180,13 @@ async fn connect(
     let handshake = match session.as_ref() {
         Some(s) => json!({
             "op": 6,
-            "d": { "token": &*token, "session_id": s.id, "seq": *seq },
+            "d": { "token": token.expose(), "session_id": s.id, "seq": *seq },
         }),
         // Field order follows the web client's IDENTIFY; qos_token is omitted.
         None => json!({
             "op": 2,
             "d": {
-                "token": &*token,
+                "token": token.expose(),
                 "capabilities": identity::CAPABILITIES,
                 "properties": identity.properties,
                 "presence": { "status": status, "since": 0, "activities": [], "afk": false },

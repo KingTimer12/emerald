@@ -31,10 +31,14 @@ toml = { version = "1", default-features = false, features = ["parse", "serde", 
 velato = { version = "0.12", default-features = false }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
 image = { version = "0.25", default-features = false }
+# Wipes the token from memory when it is dropped.
+zeroize = "1"
 
 # Login webview oficial (WKWebView nativo). Versões casadas com as que o gpui
 # já resolve, para o Cargo deduplicar e não gerar tipos objc2 incompatíveis.
 [target.'cfg(target_os = "macos")'.dependencies]
+# Token in the login Keychain.
+security-framework = "3"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = [
     "NSString", "NSURL", "NSURLRequest", "NSDate", "NSRunLoop", "NSGeometry",
@@ -57,7 +61,7 @@ webview2-com = "0.39"
 windows = { version = "0.62", features = [
     "Foundation", "Globalization",
     "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com",
-    "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_UI_HiDpi",
+    "Win32_Security_Credentials", "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_UI_HiDpi",
     "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
 ] }
 windows-core = "0.62"
