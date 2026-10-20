@@ -1,4 +1,8 @@
+// Release builds on Windows are GUI apps: no console window behind them.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod discord;
+mod paths;
 mod settings;
 mod ui;
 mod webview;
@@ -11,11 +15,10 @@ use gpui::{
 actions!(emerald, [Quit, Logout]);
 
 /// Forgets the stored token and restarts this binary, which then finds no
-/// token and opens the login webview. `exec` replaces the process, so gpui,
-/// the network thread and the gateway session all go away with it.
+/// token and opens the login webview. On Unix `exec` replaces the process;
+/// on Windows the new one is spawned and this one exits. Either way gpui, the
+/// network thread and the gateway session all go away with it.
 pub(crate) fn sign_out() -> ! {
-    use std::os::unix::process::CommandExt;
-
     if let Some(path) = discord::identity::token_path() {
         match std::fs::remove_file(&path) {
             Ok(()) => {}
@@ -25,15 +28,30 @@ pub(crate) fn sign_out() -> ! {
     }
     let error = match std::env::current_exe() {
         // DISCORD_TOKEN would hand the revoked token straight back.
-        Ok(exe) => std::process::Command::new(exe).env_remove("DISCORD_TOKEN").exec(),
+        Ok(exe) => restart(std::process::Command::new(exe).env_remove("DISCORD_TOKEN")),
         Err(e) => e,
     };
     eprintln!("não consegui reiniciar o Emerald: {error}");
     std::process::exit(1);
 }
 
-/// Reads the account token from `DISCORD_TOKEN`, falling back to
-/// `~/.config/emerald/token`.
+/// Replaces this process with `command`; returns only on failure.
+#[cfg(unix)]
+fn restart(command: &mut std::process::Command) -> std::io::Error {
+    use std::os::unix::process::CommandExt;
+    command.exec()
+}
+
+#[cfg(windows)]
+fn restart(command: &mut std::process::Command) -> std::io::Error {
+    match command.spawn() {
+        Ok(_) => std::process::exit(0),
+        Err(e) => e,
+    }
+}
+
+/// Reads the account token from `DISCORD_TOKEN`, falling back to the stored
+/// one (`token` under `paths::config_dir`).
 fn load_token() -> Option<String> {
     std::env::var("DISCORD_TOKEN")
         .ok()

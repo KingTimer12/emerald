@@ -13,9 +13,14 @@ struct Local {
 
 fn local(secs: i64) -> Option<Local> {
     let time = secs as libc::time_t;
-    // SAFETY: localtime_r only writes into the zeroed `tm` we own.
+    // SAFETY: localtime_r / localtime_s only write into the zeroed `tm` we own.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    #[cfg(unix)]
     if unsafe { libc::localtime_r(&time, &mut tm) }.is_null() {
+        return None;
+    }
+    #[cfg(windows)]
+    if unsafe { libc::localtime_s(&mut tm, &time) } != 0 {
         return None;
     }
     Some(Local {

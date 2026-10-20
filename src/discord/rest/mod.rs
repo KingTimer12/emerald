@@ -127,7 +127,7 @@ impl Rest {
         headers.insert(REFERER, HeaderValue::from_static("https://discord.com/channels/@me"));
         headers.insert("sec-ch-ua", HeaderValue::from_static(identity::SEC_CH_UA));
         headers.insert("sec-ch-ua-mobile", HeaderValue::from_static("?0"));
-        headers.insert("sec-ch-ua-platform", HeaderValue::from_static("\"macOS\""));
+        headers.insert("sec-ch-ua-platform", HeaderValue::from_static(identity::SEC_CH_UA_PLATFORM));
         headers.insert("sec-fetch-dest", HeaderValue::from_static("empty"));
         headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
         headers.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));
