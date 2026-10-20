@@ -11,6 +11,22 @@ use crate::discord::model::Status;
 /// Message text sizes offered in Appearance, as in Discord's font scaling.
 pub const FONT_SIZES: [f32; 6] = [12., 14., 15., 16., 18., 20.];
 
+/// "Time format" in Language & Time: the language's own clock, or a fixed one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TimeFormat {
+    #[default]
+    Auto,
+    #[serde(rename = "12h")]
+    Hours12,
+    #[serde(rename = "24h")]
+    Hours24,
+}
+
+impl TimeFormat {
+    pub const ALL: [TimeFormat; 3] = [TimeFormat::Auto, TimeFormat::Hours12, TimeFormat::Hours24];
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -22,6 +38,9 @@ pub struct Settings {
     pub show_profile: bool,
     /// Member list beside guild channels.
     pub show_members: bool,
+    /// Interface language as a Discord locale code; `None` follows the system.
+    pub language: Option<String>,
+    pub time_format: TimeFormat,
 }
 
 impl Default for Settings {
@@ -32,11 +51,18 @@ impl Default for Settings {
             status: None,
             show_profile: true,
             show_members: true,
+            language: None,
+            time_format: TimeFormat::Auto,
         }
     }
 }
 
 impl Settings {
+    /// The interface language these settings ask for.
+    pub fn language(&self) -> &str {
+        self.language.as_deref().unwrap_or_else(|| crate::i18n::system())
+    }
+
     pub fn load() -> Self {
         path()
             .and_then(|path| std::fs::read(path).ok())

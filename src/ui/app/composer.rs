@@ -21,7 +21,7 @@ pub(super) struct Composer {
 impl Composer {
     pub fn new(cx: &mut Context<Emerald>) -> Self {
         Self {
-            input: cx.new(|cx| TextInput::new("Selecione um canal", cx)),
+            input: cx.new(|cx| TextInput::new(t!("composer.no_channel"), cx)),
             draft: SharedString::default(),
             error: None,
         }
@@ -56,7 +56,7 @@ impl Emerald {
         }
         if content.chars().count() > MAX_MESSAGE_LEN {
             self.composer.error =
-                Some(format!("Sua mensagem passou do limite de {MAX_MESSAGE_LEN} caracteres.").into());
+                Some(t!("composer.too_long", max = MAX_MESSAGE_LEN).into());
             self.composer.input.update(cx, |input, cx| input.set_text(content, cx));
             cx.notify();
             return;

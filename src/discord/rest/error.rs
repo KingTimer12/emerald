@@ -10,7 +10,7 @@ pub struct Forbidden(pub Option<String>);
 
 impl std::fmt::Display for Forbidden {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.as_deref().unwrap_or("sem permissão"))
+        f.write_str(self.0.as_deref().unwrap_or(t!("errors.forbidden")))
     }
 }
 
@@ -22,7 +22,7 @@ pub struct Unauthorized;
 
 impl std::fmt::Display for Unauthorized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("401: token inválido ou expirado")
+        f.write_str(t!("errors.unauthorized"))
     }
 }
 
@@ -62,7 +62,7 @@ pub struct CaptchaRequired(pub Challenge);
 
 impl std::fmt::Display for CaptchaRequired {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("A verificação (captcha) não foi concluída.")
+        f.write_str(t!("errors.captcha_incomplete"))
     }
 }
 
@@ -107,7 +107,7 @@ impl ErrorBody {
             .into();
         }
         if self.captcha_key.is_some() {
-            return anyhow::anyhow!("O Discord recusou a verificação. Tente de novo.");
+            return anyhow::anyhow!(t!("errors.captcha_rejected"));
         }
         match self.message {
             Some(message) => anyhow::anyhow!("{message}"),

@@ -65,7 +65,7 @@ pub(super) fn show(
         Ok(message) => message,
         Err(e) => {
             eprintln!(
-                "não consegui abrir o WebView2 (o runtime do Edge WebView2 está instalado?): {e:?}"
+                "could not open WebView2 (is the Edge WebView2 runtime installed?): {e:?}"
             );
             None
         }

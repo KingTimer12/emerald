@@ -138,7 +138,7 @@ impl Space {
         channels.retain(|c| c.kind.is_private());
         let mut space = Self {
             id: DMS,
-            name: "Mensagens diretas".into(),
+            name: t!("dm.title").into(),
             initials: "DM".into(),
             icon_url: None,
             channels,
@@ -286,7 +286,7 @@ impl Space {
             self.rows.push(Row::Friends);
             self.rows.push(Row::Category {
                 id: None,
-                title: "MENSAGENS DIRETAS".into(),
+                title: t!("dm.header").into(),
             });
             self.rows
                 .extend(self.channels.iter().map(|c| Row::Channel(ChannelRow::new(c))));
@@ -425,6 +425,13 @@ impl Spaces {
 
     pub fn guild(&self, id: Snowflake) -> Option<&GuildInfo> {
         self.list.iter().find(|s| s.id == id)?.guild.as_ref()
+    }
+
+    /// Words the DM space's own labels again, in a new language.
+    pub fn relabel(&mut self) {
+        let dms = self.dms_mut();
+        dms.name = t!("dm.title").into();
+        dms.rebuild();
     }
 
     pub fn guild_mut(&mut self, id: Snowflake) -> Option<&mut GuildInfo> {
@@ -625,7 +632,7 @@ mod tests {
         };
         let mut space = Space::dms(vec![dm(1, 10, "Ana"), dm(2, 20, "Bruno")]);
         let all = space.search("");
-        assert_eq!(names(&space, &all), ["friends", "MENSAGENS DIRETAS", "Bruno", "Ana"]);
+        assert_eq!(names(&space, &all), ["friends", t!("dm.header"), "Bruno", "Ana"]);
         assert!(space.touch(Snowflake(1), Snowflake(30)));
         let found = space.search("an");
         assert_eq!(names(&space, &found), ["Ana"]);

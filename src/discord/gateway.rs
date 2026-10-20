@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
-use super::{NetEvent, Snapshot};
+use super::{Link, NetEvent, Snapshot};
 use super::identity::{self, Identity};
 use super::model::{
     Channel, Guild, MemberListUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, Presence,
@@ -83,8 +83,8 @@ pub async fn run(
             .map_or(GATEWAY, |s| s.resume_url.as_str())
             .to_owned();
         let mut ready = false;
-        let status = if session.is_some() { "Retomando sessão…" } else { "Conectando…" };
-        events.try_send(NetEvent::Status(status.into())).ok();
+        let link = if session.is_some() { Link::Resuming } else { Link::Connecting };
+        events.try_send(NetEvent::Status(link)).ok();
 
         let outcome = connect(
             &url,
@@ -124,10 +124,7 @@ pub async fn run(
         let delay = Duration::from_secs(1u64 << failures.min(6)).min(Duration::from_secs(60))
             + jitter(Duration::from_secs(2));
         events
-            .try_send(NetEvent::Status(format!(
-                "Desconectado, reconectando em {}s",
-                delay.as_secs()
-            )))
+            .try_send(NetEvent::Status(Link::Reconnecting(delay.as_secs())))
             .ok();
         sleep(delay).await;
     }
@@ -152,7 +149,7 @@ async fn connect(
     let headers = request.headers_mut();
     headers.insert("user-agent", HeaderValue::from_static(identity::USER_AGENT));
     headers.insert("origin", HeaderValue::from_static("https://discord.com"));
-    headers.insert("accept-language", HeaderValue::from_str(&identity.accept_language)?);
+    headers.insert("accept-language", HeaderValue::from_str(&identity.accept_language())?);
     headers.insert("cache-control", HeaderValue::from_static("no-cache"));
     headers.insert("pragma", HeaderValue::from_static("no-cache"));
     let (ws, _) = timeout(Duration::from_secs(15), tokio_tungstenite::connect_async(request))
@@ -264,7 +261,7 @@ async fn connect(
 fn close_outcome(code: Option<u16>) -> Outcome {
     match code {
         Some(4004) => Outcome::AuthFailed,
-        Some(code @ 4010..=4014) => Outcome::Fatal(format!("Gateway recusou a conexão ({code}).")),
+        Some(code @ 4010..=4014) => Outcome::Fatal(t!("connection.refused", code = code)),
         Some(4007 | 4009) => Outcome::Fresh,
         _ => Outcome::Resume,
     }
@@ -344,7 +341,7 @@ fn dispatch(
         },
         "RESUMED" => {
             *ready = true;
-            NetEvent::Status("Conectado".into())
+            NetEvent::Status(Link::Connected)
         }
         "GUILD_CREATE" => match parse::<Guild>(kind, data) {
             Some(g) => NetEvent::GuildCreate(g),

@@ -30,7 +30,7 @@ use gpui::{
 use super::text_input::{Submitted, TextInput};
 use super::theme;
 use crate::discord::model::{Profile, Snowflake};
-use crate::discord::{Action, Command};
+use crate::discord::{Action, Command, Link};
 use crate::settings::Settings;
 use add_server::AddServer;
 use composer::Composer;
@@ -46,8 +46,6 @@ pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([KeyBinding::new("escape", Dismiss, Some("Emerald"))]);
 }
 
-/// Status text the network layer reports once the session is live.
-const CONNECTED: &str = "Conectado";
 /// A cached profile is refetched when opened after this long.
 const PROFILE_TTL: Duration = Duration::from_secs(10 * 60);
 /// The profile panel only fits beside the chat in wide windows.
@@ -57,7 +55,7 @@ const PROFILE_MIN_WINDOW: f32 = 1100.;
 enum Overlay {
     AddServer(AddServer),
     Settings(SettingsView),
-    /// "Ver Perfil Completo" for this user, as members of `guild` see them.
+    /// "View Full Profile" for this user, as members of `guild` see them.
     Profile { user: Snowflake, guild: Option<Snowflake> },
 }
 
@@ -84,16 +82,40 @@ impl Feedback {
 
 /// The gateway connection as the user panel shows it.
 struct Connection {
+    /// The last state the gateway reported.
+    link: Link,
     status: SharedString,
+    /// `status` is an error or "logging out" rather than the link's state.
+    custom: bool,
     /// Session is live; drives the user panel's status dot.
     connected: bool,
     fatal: Option<SharedString>,
 }
 
 impl Connection {
-    fn set_status(&mut self, status: String) {
-        self.connected = status == CONNECTED;
-        self.status = status.into();
+    fn set_link(&mut self, link: Link) {
+        self.link = link;
+        self.custom = false;
+        self.connected = link == Link::Connected;
+        self.status = match link {
+            Link::Connecting => t!("connection.connecting").into(),
+            Link::Resuming => t!("connection.resuming").into(),
+            Link::Connected => t!("connection.connected").into(),
+            Link::Reconnecting(secs) => t!("connection.reconnecting", secs = secs).into(),
+        };
+    }
+
+    /// Shows a message other than the link's state.
+    fn set_message(&mut self, message: impl Into<SharedString>) {
+        self.status = message.into();
+        self.custom = true;
+    }
+
+    /// Words the link's state again, in a new language.
+    fn relabel(&mut self) {
+        if !self.custom {
+            self.set_link(self.link);
+        }
     }
 }
 
@@ -145,11 +167,11 @@ impl Emerald {
         let composer = Composer::new(cx);
         let friends = Friends::new(cx);
         let dm_search = cx.new(|cx| {
-            TextInput::new("Encontre ou comece uma conversa", cx)
+            TextInput::new(t!("dm.search_placeholder"), cx)
                 .keep_on_submit()
                 .compact()
         });
-        let member_query = cx.new(|cx| TextInput::new("Pesquisar", cx).keep_on_submit().compact());
+        let member_query = cx.new(|cx| TextInput::new(t!("members.search"), cx).keep_on_submit().compact());
         let subscriptions = vec![
             cx.observe(&member_query, |this, _, cx| this.on_member_query(cx)),
             cx.subscribe(&composer.input, |this, _, event: &Submitted, cx| {
@@ -181,7 +203,9 @@ impl Emerald {
             net: Box::new(net),
             settings,
             connection: Connection {
-                status: "Conectando…".into(),
+                link: Link::Connecting,
+                status: t!("connection.connecting").into(),
+                custom: false,
                 connected: false,
                 fatal: None,
             },
@@ -245,7 +269,7 @@ impl Emerald {
     /// Asks the network thread to revoke the token; `main` signs out locally
     /// when the answer arrives. Without a network thread, signs out at once.
     fn log_out(&mut self, cx: &mut Context<Self>) {
-        self.connection.status = "Saindo…".into();
+        self.connection.set_message(t!("connection.logging_out"));
         self.connection.connected = false;
         cx.notify();
         if !self.net.post(Command::LogOut) {

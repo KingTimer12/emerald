@@ -150,9 +150,9 @@ impl Emerald {
         let results = self.member_search.results().len();
         if results == 0 {
             let text = if self.member_search.is_waiting() {
-                "Buscando…"
+                t!("members.searching")
             } else {
-                "Nenhum membro encontrado"
+                t!("members.no_results")
             };
             return div()
                 .w_full()
@@ -299,8 +299,8 @@ impl Emerald {
     /// "Online", "Offline", or the hoisted role's name.
     fn group_label(&self, id: &str) -> String {
         let label = match id {
-            "online" => "Online".to_owned(),
-            "offline" => "Offline".to_owned(),
+            "online" => t!("members.online").to_owned(),
+            "offline" => t!("members.offline").to_owned(),
             role => role
                 .parse()
                 .ok()
@@ -325,7 +325,7 @@ fn app_tag() -> impl IntoElement {
 }
 
 /// The line under a member's name: their custom status, else what they are
-/// doing, in the pt-BR web client's wording.
+/// doing, in the web client's wording.
 fn activity_text(presence: &ListPresence) -> Option<String> {
     let custom = presence.activities.iter().find_map(|a| {
         (a.kind == activity_kind::CUSTOM)
@@ -335,26 +335,30 @@ fn activity_text(presence: &ListPresence) -> Option<String> {
     });
     custom.or_else(|| {
         presence.activities.iter().find_map(|a| {
-            let verb = match a.kind {
-                activity_kind::PLAYING => "Jogando",
-                activity_kind::STREAMING => "Transmitindo",
-                activity_kind::LISTENING => "Ouvindo",
-                activity_kind::WATCHING => "Assistindo",
-                activity_kind::COMPETING => "Competindo em",
+            let name = &a.name;
+            Some(match a.kind {
+                activity_kind::PLAYING => t!("activity.playing", name = name),
+                activity_kind::STREAMING => t!("activity.streaming", name = name),
+                activity_kind::LISTENING => t!("activity.listening", name = name),
+                activity_kind::WATCHING => t!("activity.watching", name = name),
+                activity_kind::COMPETING => t!("activity.competing", name = name),
                 _ => return None,
-            };
-            Some(format!("{verb} {}", a.name))
+            })
         })
     })
 }
 
-/// `1234567` as `1.234.567`.
+/// `1234567` as `1.234.567` or `1,234,567`, as the language groups digits.
 fn thousands(n: u64) -> String {
+    group_digits(n, t!("number.group_separator"))
+}
+
+fn group_digits(n: u64, separator: &str) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (ix, digit) in digits.chars().enumerate() {
         if ix > 0 && (digits.len() - ix).is_multiple_of(3) {
-            out.push('.');
+            out.push_str(separator);
         }
         out.push(digit);
     }
@@ -368,9 +372,9 @@ mod tests {
 
     #[test]
     fn counts_use_dots() {
-        assert_eq!(thousands(0), "0");
-        assert_eq!(thousands(999), "999");
-        assert_eq!(thousands(1_234_567), "1.234.567");
+        assert_eq!(group_digits(0, "."), "0");
+        assert_eq!(group_digits(999, "."), "999");
+        assert_eq!(group_digits(1_234_567, "."), "1.234.567");
     }
 
     #[test]
@@ -393,7 +397,7 @@ mod tests {
         );
         assert_eq!(
             activity_text(&presence(vec![activity(activity_kind::LISTENING, "Spotify", None)])),
-            Some("Ouvindo Spotify".into())
+            Some("Listening to Spotify".into())
         );
     }
 }

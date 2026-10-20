@@ -28,15 +28,15 @@ impl Emerald {
                 .and_then(|g| g.member_style(id).0.map(str::to_owned))
                 .or_else(|| mentions.iter().find(|(m, _)| *m == id).map(|(_, n)| n.to_string()))
                 .or_else(|| self.people.display_name(id).map(str::to_owned))
-                .unwrap_or_else(|| "usuário-desconhecido".to_owned()),
+                .unwrap_or_else(|| t!("chat.unknown_user").to_owned()),
             Mention::Channel(id) => self
                 .spaces
                 .channel(id)
                 .and_then(|c| c.name.clone())
-                .unwrap_or_else(|| "canal-desconhecido".to_owned()),
+                .unwrap_or_else(|| t!("chat.unknown_channel").to_owned()),
             Mention::Role(id) => guild
                 .and_then(|g| g.role(id))
-                .map_or_else(|| "cargo-desconhecido".to_owned(), |r| r.name.clone()),
+                .map_or_else(|| t!("chat.unknown_role").to_owned(), |r| r.name.clone()),
         };
         let rich = markdown::parse(content, &name);
         let links = rich.links;

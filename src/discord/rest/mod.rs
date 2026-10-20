@@ -123,7 +123,6 @@ impl Rest {
         // Same header set the web client sends on its API calls.
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
-        headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_str(&identity.accept_language)?);
         headers.insert(REFERER, HeaderValue::from_static("https://discord.com/channels/@me"));
         headers.insert("sec-ch-ua", HeaderValue::from_static(identity::SEC_CH_UA));
         headers.insert("sec-ch-ua-mobile", HeaderValue::from_static("?0"));
@@ -132,7 +131,6 @@ impl Rest {
         headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
         headers.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));
         headers.insert("x-debug-options", HeaderValue::from_static("bugReporterEnabled"));
-        headers.insert("x-discord-locale", HeaderValue::from_str(&identity.locale)?);
         headers.insert("x-discord-timezone", HeaderValue::from_str(&identity.timezone)?);
         headers.insert("x-super-properties", HeaderValue::from_str(&identity.super_properties)?);
         headers.insert(USER_AGENT, HeaderValue::from_static(identity::USER_AGENT));
@@ -177,11 +175,11 @@ impl Rest {
         const MAX_BYTES: usize = 2 * 1024 * 1024;
         let response = self.cdn.get(url).send().await?.error_for_status()?;
         if response.content_length().is_some_and(|len| len as usize > MAX_BYTES) {
-            bail!("imagem grande demais");
+            bail!(t!("errors.image_too_large"));
         }
         let bytes = response.bytes().await?;
         if bytes.len() > MAX_BYTES {
-            bail!("imagem grande demais");
+            bail!(t!("errors.image_too_large"));
         }
         Ok(bytes.to_vec())
     }
@@ -362,7 +360,9 @@ impl Rest {
             let mut request = self
                 .http
                 .request(route.0.clone(), format!("{}{}", self.api, call.path))
-                .header(AUTHORIZATION, &*self.identity.token());
+                .header(AUTHORIZATION, &*self.identity.token())
+                .header(ACCEPT_LANGUAGE, &*self.identity.accept_language())
+                .header("x-discord-locale", &*self.identity.locale());
             if let Some(body) = &call.body {
                 request = request.header(ORIGIN, "https://discord.com").json(body);
             }
@@ -409,7 +409,7 @@ impl Rest {
                 status => return Err(ErrorBody::read(response).await.into_error(status)),
             }
         }
-        bail!("rate limit persistente em {} {}", route.0, route.1)
+        bail!(t!("errors.rate_limited", route = format!("{} {}", route.0, route.1)))
     }
 }
 

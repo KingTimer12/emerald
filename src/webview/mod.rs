@@ -92,7 +92,7 @@ const CAPTCHA_HTML: &str = r#"<!doctype html>
 </script>
 <script src="https://js.hcaptcha.com/1/api.js?onload=onLoad&render=explicit" async defer></script>
 </head><body>
-  <div>O Discord pediu uma verificação.</div>
+  <div>__PROMPT__</div>
   <div id="captcha"></div>
 </body></html>"#;
 
@@ -109,7 +109,7 @@ enum Page<'a> {
 /// Returns the captured account token, or `None` if the window was dismissed.
 pub fn acquire_token() -> Option<String> {
     platform::show(
-        "Entrar — Emerald",
+        t!("login.title"),
         Page::Url("https://discord.com/login"),
         Some(&format!("{POST_JS}{CAPTURE_JS}")),
         (960.0, 760.0),
@@ -123,10 +123,11 @@ pub fn solve_captcha(sitekey: &str, rqdata: Option<&str>) -> Option<String> {
     // values from breaking out of the script.
     let html = CAPTCHA_HTML
         .replace("__POST_JS__", POST_JS)
+        .replace("__PROMPT__", &escape_html(t!("login.captcha_prompt")))
         .replace("__SITEKEY__", &serde_json::to_string(sitekey).ok()?)
         .replace("__RQDATA__", &serde_json::to_string(&rqdata).ok()?);
     platform::show(
-        "Verificação — Emerald",
+        t!("login.captcha_title"),
         Page::Html {
             html: &html,
             base: "https://discord.com/",
@@ -154,4 +155,9 @@ pub fn run_child(flag: &str, input: &[u8]) -> Option<String> {
     }
     let result = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     (!result.is_empty()).then_some(result)
+}
+
+/// Text as HTML element content.
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }

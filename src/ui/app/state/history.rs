@@ -141,7 +141,7 @@ impl History {
         let Some(content) = update.content else { return };
         let Some(log) = self.logs.get_mut(&update.channel_id) else { return };
         if let Some(ix) = log.position(update.id) {
-            log.messages[ix].content = format!("{content} (editada)").into();
+            log.messages[ix].content = format!("{content} {}", t!("chat.edited")).into();
             if let Some(v) = view {
                 v.refresh(ix);
             }

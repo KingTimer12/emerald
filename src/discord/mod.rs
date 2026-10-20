@@ -10,7 +10,7 @@ pub mod rest;
 use std::sync::Arc;
 
 use model::Status;
-pub use protocol::{Action, Command, NetEvent, Snapshot};
+pub use protocol::{Action, Command, Link, NetEvent, Snapshot};
 use tokio::sync::{mpsc, watch};
 
 /// Runs all networking on one dedicated OS thread with a single-threaded
@@ -46,7 +46,7 @@ pub fn spawn(
                         return;
                     }
                 };
-                tokio::spawn(gateway::run(identity, event_tx.clone(), presence_rx, ops_rx));
+                tokio::spawn(gateway::run(identity.clone(), event_tx.clone(), presence_rx, ops_rx));
                 if let Some(dir) = cache::dir() {
                     tokio::task::spawn_blocking(move || cache::prune(&dir));
                 }
@@ -55,6 +55,7 @@ pub fn spawn(
                         Command::SetStatus(status) => {
                             presence_tx.send_replace(Some(status));
                         }
+                        Command::SetLocale(locale) => identity.set_locale(&locale),
                         Command::RequestMembers { guild, users } => {
                             ops_tx.send(gateway::request_members(guild, &users)).ok();
                         }

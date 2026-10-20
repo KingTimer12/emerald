@@ -35,8 +35,8 @@ impl Emerald {
             .me()
             .map_or_else(String::new, |me| me.display_name().to_owned());
         let name = cx.new(|cx| {
-            let mut input = TextInput::new("Nome do servidor", cx).keep_on_submit();
-            input.set_text(format!("Servidor de {owner}"), cx);
+            let mut input = TextInput::new(t!("servers.name_placeholder"), cx).keep_on_submit();
+            input.set_text(t!("servers.default_name", owner = owner), cx);
             input
         });
         let invite = cx.new(|cx| TextInput::new("https://discord.gg/hTKzmak", cx).keep_on_submit());
@@ -81,7 +81,7 @@ impl Emerald {
     fn create_guild(&mut self, name: String, cx: &mut Context<Self>) {
         let name = name.trim().to_owned();
         if name.is_empty() {
-            return self.set_add_server_error("Dê um nome ao seu servidor.", cx);
+            return self.set_add_server_error(t!("servers.name_required"), cx);
         }
         if let Some(Overlay::AddServer(modal)) = &mut self.overlay {
             modal.error = None;
@@ -93,7 +93,7 @@ impl Emerald {
 
     fn join_guild(&mut self, input: String, cx: &mut Context<Self>) {
         let Some(code) = invite_code(&input) else {
-            return self.set_add_server_error("Insira um link ou código de convite válido.", cx);
+            return self.set_add_server_error(t!("servers.invalid_invite"), cx);
         };
         if let Some(Overlay::AddServer(modal)) = &mut self.overlay {
             modal.error = None;
@@ -131,9 +131,9 @@ impl Emerald {
                     .flex_col()
                     .items_center()
                     .gap_2()
-                    .child(title("Crie seu servidor"))
+                    .child(title(t!("servers.create_title")))
                     .child(subtitle(
-                        "Seu servidor é onde você e seus amigos se reúnem. Crie o seu e comece a conversar.",
+                        t!("servers.create_hint"),
                     ))
                     .child(
                         div()
@@ -154,7 +154,7 @@ impl Emerald {
                                 div()
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(rgb(theme::TEXT_STRONG))
-                                    .child("Criar o meu"),
+                                    .child(t!("servers.create_own")),
                             )
                             .child(div().text_size(px(20.)).text_color(rgb(theme::INTERACTIVE)).child("›"))
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -171,10 +171,10 @@ impl Emerald {
                             .text_size(px(20.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(rgb(theme::TEXT_STRONG))
-                            .child("Já tem um convite?"),
+                            .child(t!("servers.have_invite")),
                     )
                     .child(
-                        widgets::button("go-join", "Entrar em um servidor", ButtonKind::Secondary)
+                        widgets::button("go-join", t!("servers.join_title"), ButtonKind::Secondary)
                             .w_full()
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.add_server_step(Step::Join, window, cx)
@@ -189,9 +189,9 @@ impl Emerald {
                         .flex_col()
                         .items_center()
                         .gap_2()
-                        .child(title("Personalize o seu servidor"))
+                        .child(title(t!("servers.customize_title")))
                         .child(subtitle(
-                            "Deixe o seu novo servidor com a sua cara dando um nome a ele. Você pode mudar isso depois.",
+                            t!("servers.customize_hint"),
                         ))
                         .child(
                             div()
@@ -200,14 +200,14 @@ impl Emerald {
                                 .flex()
                                 .flex_col()
                                 .gap_2()
-                                .child(widgets::label("NOME DO SERVIDOR"))
+                                .child(widgets::label(t!("servers.name_label")))
                                 .child(modal.name.clone())
                                 .children(error),
                         ),
                     footer(
                         cx,
                         Step::Choose,
-                        widgets::button("create", if busy { "Criando…" } else { "Criar" }, ButtonKind::Brand)
+                        widgets::button("create", if busy { t!("servers.creating") } else { t!("servers.create") }, ButtonKind::Brand)
                             .when(busy, |b| b.opacity(0.5))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let Some(Overlay::AddServer(modal)) = &this.overlay else { return };
@@ -231,9 +231,9 @@ impl Emerald {
                         .flex_col()
                         .items_center()
                         .gap_2()
-                        .child(title("Entrar em um servidor"))
+                        .child(title(t!("servers.join_title")))
                         .child(subtitle(
-                            "Insira um convite abaixo para entrar em um servidor existente.",
+                            t!("servers.join_hint"),
                         ))
                         .child(
                             div()
@@ -242,10 +242,10 @@ impl Emerald {
                                 .flex()
                                 .flex_col()
                                 .gap_2()
-                                .child(widgets::label("LINK DO CONVITE"))
+                                .child(widgets::label(t!("servers.invite_label")))
                                 .child(modal.invite.clone())
                                 .children(error)
-                                .child(widgets::label("OS CONVITES DEVEM SE PARECER COM").mt_3())
+                                .child(widgets::label(t!("servers.invite_examples")).mt_3())
                                 .child(example("hTKzmak"))
                                 .child(example("https://discord.gg/hTKzmak"))
                                 .child(example("https://discord.gg/pessoas-legais")),
@@ -255,7 +255,7 @@ impl Emerald {
                         Step::Choose,
                         widgets::button(
                             "join",
-                            if busy { "Entrando…" } else { "Entrar no servidor" },
+                            if busy { t!("servers.joining") } else { t!("servers.join") },
                             ButtonKind::Brand,
                         )
                         .when(busy, |b| b.opacity(0.5))
@@ -311,14 +311,14 @@ impl Emerald {
     }
 }
 
-/// "Voltar" on the left, the step's primary button on the right.
+/// "Back" on the left, the step's primary button on the right.
 fn footer(cx: &mut Context<Emerald>, back: Step, primary: gpui::Stateful<gpui::Div>) -> gpui::Div {
     div()
         .flex()
         .items_center()
         .justify_between()
         .child(
-            widgets::link_button("back", "Voltar").on_click(cx.listener(move |this, _, window, cx| {
+            widgets::link_button("back", t!("common.back")).on_click(cx.listener(move |this, _, window, cx| {
                 this.add_server_step(back, window, cx)
             })),
         )

@@ -1,8 +1,8 @@
 # Emerald
 
 A native Discord client for macOS and Windows, written in Rust with [gpui](https://www.gpui.rs/).
-The interface follows the look of the official web client (in Brazilian Portuguese),
-and the app uses a fraction of an Electron client's memory: roughly 60 to 100 MB, with
+The interface follows the look and wording of the official web client, in English or
+Brazilian Portuguese, and the app uses a fraction of an Electron client's memory: roughly 60 to 100 MB, with
 CPU near zero when idle.
 
 > **Warning.** Third-party clients on user accounts violate Discord's Terms of Service
@@ -26,7 +26,7 @@ CPU near zero when idle.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
 - **Unread state** synced with other devices, with read receipts batched.
-- **Settings**: display name, status, font size, compact mode.
+- **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
 Not there yet: voice, threads, forums, reactions, emoji images, editing messages.
 
@@ -57,6 +57,7 @@ Useful environment variables:
 | Variable | Purpose |
 |---|---|
 | `DISCORD_TOKEN` | Use this token instead of the stored one. |
+| `EMERALD_LOCALE` | Locale sent to Discord, when it should differ from the interface language. |
 | `EMERALD_BUILD_NUMBER` | Override `client_build_number` when the one in the code goes stale. |
 | `RUST_LOG=emerald=debug` | Verbose logs. |
 
@@ -84,6 +85,7 @@ runtime. They talk through messages: the UI sends `Command`s, the network answer
 ```
 src/
 ├── main.rs              entry point, webview child modes, login cycle
+├── i18n.rs              interface text per language, the `t!` macro
 ├── paths.rs             per-platform config and cache directories
 ├── settings.rs          JSON preferences
 ├── webview/             login and captcha webview (child process)
@@ -110,6 +112,18 @@ src/
         ├── navigation.rs, composer.rs
         └── sidebar.rs, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
 ```
+
+## Translations
+
+Interface text lives in `locales/<code>.toml`, one file per language, with Discord's
+locale codes (`en-US`, `pt-BR`, `de`, …). Code reads it with `t!("friends.add")`, or
+`t!("composer.dm", name = name)` for text with arguments. `build.rs` embeds every file in
+`locales/`, so adding a language means adding a file. A key a language lacks falls back to
+English. The language follows the system until one is picked in Language & Time; switching
+applies at once, and Discord's own answers (errors, for one) follow it too.
+
+`en-US.toml` and `pt-BR.toml` are written by hand. The tests check that every key the code
+uses exists, that pt-BR is complete, and that no language uses unknown keys or arguments.
 
 A few design choices:
 

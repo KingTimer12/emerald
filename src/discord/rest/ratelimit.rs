@@ -136,7 +136,7 @@ impl RateLimiter {
                 if state.invalid_count >= INVALID_CAP
                     && state.invalid_start.is_some_and(|s| now - s < INVALID_WINDOW)
                 {
-                    bail!("muitas requisições inválidas; pausado para evitar bloqueio");
+                    bail!(t!("errors.invalid_requests"));
                 }
                 match state.global_until {
                     Some(until) if until > now => Some(until - now),

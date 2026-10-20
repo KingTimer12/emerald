@@ -1,5 +1,5 @@
 //! Friends list: the DM home screen with Online / All / Pending tabs and the
-//! "Add Friend" form, worded like the pt-BR web client.
+//! "Add Friend" form, worded like the web client.
 
 use gpui::{AnyElement, Context, Entity, Focusable, FontWeight, SharedString, div, prelude::*, px, rgb};
 
@@ -17,7 +17,7 @@ pub(super) struct Friends {
     pub feedback: Option<Feedback>,
     /// Username of the request in flight, for the success message.
     pub pending: Option<String>,
-    /// Friend whose "Remover" was clicked once and awaits confirmation.
+    /// Friend whose "Remove" was clicked once and awaits confirmation.
     pub confirm_remove: Option<Snowflake>,
 }
 
@@ -25,7 +25,7 @@ impl Friends {
     pub fn new(cx: &mut Context<Emerald>) -> Self {
         Self {
             tab: FriendsTab::Online,
-            input: cx.new(|cx| TextInput::new("Nome de usuário", cx).keep_on_submit()),
+            input: cx.new(|cx| TextInput::new(t!("friends.username_placeholder"), cx).keep_on_submit()),
             feedback: None,
             pending: None,
             confirm_remove: None,
@@ -139,13 +139,13 @@ impl Emerald {
                 div()
                     .text_color(rgb(theme::TEXT_STRONG))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Amigos"),
+                    .child(t!("friends.title")),
             )
             .child(div().w(px(1.)).h(px(24.)).bg(theme::selected()))
-            .child(tab("tab-online", "Disponível", FriendsTab::Online, cx))
-            .child(tab("tab-all", "Todos", FriendsTab::All, cx))
+            .child(tab("tab-online", t!("friends.tab_online"), FriendsTab::Online, cx))
+            .child(tab("tab-all", t!("friends.tab_all"), FriendsTab::All, cx))
             .child(
-                tab("tab-pending", "Pendente", FriendsTab::Pending, cx)
+                tab("tab-pending", t!("friends.tab_pending"), FriendsTab::Pending, cx)
                     .when(pending > 0, |t| t.child(widgets::badge(pending))),
             )
             .child(
@@ -163,7 +163,7 @@ impl Emerald {
                             .text_color(rgb(theme::TEXT_STRONG))
                             .hover(|s| s.bg(rgb(theme::BUTTON_POSITIVE_HOVER)))
                     })
-                    .child("Adicionar amigo")
+                    .child(t!("friends.add"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.friends.tab = FriendsTab::Add;
                         window.focus(&this.friends.input.focus_handle(cx));
@@ -206,13 +206,13 @@ impl Emerald {
                     .text_size(px(20.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(theme::TEXT_STRONG))
-                    .child("Adicionar amigo"),
+                    .child(t!("friends.add")),
             )
             .child(
                 div()
                     .text_size(px(14.))
                     .text_color(rgb(theme::TEXT_MUTED))
-                    .child("Você pode adicionar amigos com o nome de usuário do Discord deles."),
+                    .child(t!("friends.add_hint")),
             )
             .child(
                 div()
@@ -224,7 +224,7 @@ impl Emerald {
                     .child(
                         widgets::button(
                             "send-friend-request",
-                            if busy { "Enviando…" } else { "Enviar pedido de amizade" },
+                            if busy { t!("friends.sending") } else { t!("friends.send") },
                             ButtonKind::Brand,
                         )
                         .when(empty || busy, |b| b.opacity(0.5))
@@ -241,16 +241,16 @@ impl Emerald {
         let entries = self.friend_entries();
         let (title, empty) = match self.friends.tab {
             FriendsTab::Online => (
-                "DISPONÍVEL",
-                "Não há ninguém disponível para brincar com o Wumpus.",
+                t!("friends.online_header"),
+                t!("friends.empty_online"),
             ),
             FriendsTab::All => (
-                "TODOS OS AMIGOS",
-                "O Wumpus está esperando amigos. Mas você não precisa esperar!",
+                t!("friends.all_header"),
+                t!("friends.empty_all"),
             ),
             _ => (
-                "PENDENTE",
-                "Não há pedidos de amizade pendentes. Mas aqui está o Wumpus por enquanto.",
+                t!("friends.pending_header"),
+                t!("friends.empty_pending"),
             ),
         };
         if entries.is_empty() {
@@ -287,13 +287,13 @@ impl Emerald {
     fn render_friend(&self, entry: Entry, cx: &mut Context<Self>) -> AnyElement {
         let id = entry.id;
         let subtitle: SharedString = match entry.kind {
-            relationship_kind::INCOMING => "Pedido de amizade recebido".into(),
-            relationship_kind::OUTGOING => "Pedido de amizade enviado".into(),
+            relationship_kind::INCOMING => t!("friends.incoming").into(),
+            relationship_kind::OUTGOING => t!("friends.outgoing").into(),
             _ => widgets::status_label(entry.status.as_ref().map(|s| -> &str { s.as_ref() })).into(),
         };
         let small = |button: gpui::Stateful<gpui::Div>| button.h(px(32.)).px_3();
         // Discord lets you message anyone you can reach, pending or not.
-        let message = small(widgets::button(("message", id.0 as usize), "Mensagem", ButtonKind::Secondary))
+        let message = small(widgets::button(("message", id.0 as usize), t!("friends.message"), ButtonKind::Secondary))
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
                 this.open_dm(id, window, cx);
@@ -303,21 +303,21 @@ impl Emerald {
         let actions = match entry.kind {
             relationship_kind::INCOMING => actions
                 .child(
-                    small(widgets::button(("accept", id.0 as usize), "Aceitar", ButtonKind::Positive))
+                    small(widgets::button(("accept", id.0 as usize), t!("friends.accept"), ButtonKind::Positive))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             this.net.post(Command::AcceptFriend { user: id });
                         })),
                 )
                 .child(
-                    small(widgets::button(("decline", id.0 as usize), "Recusar", ButtonKind::Secondary))
+                    small(widgets::button(("decline", id.0 as usize), t!("friends.decline"), ButtonKind::Secondary))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             this.net.post(Command::RemoveRelationship { user: id });
                         })),
                 ),
             relationship_kind::OUTGOING => actions.child(
-                small(widgets::button(("cancel", id.0 as usize), "Cancelar", ButtonKind::Secondary))
+                small(widgets::button(("cancel", id.0 as usize), t!("common.cancel"), ButtonKind::Secondary))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.net.post(Command::RemoveRelationship { user: id });
@@ -330,7 +330,7 @@ impl Emerald {
                         // Removing a friend is a two-click action.
                         small(widgets::button(
                             ("remove", id.0 as usize),
-                            if confirming { "Confirmar remoção" } else { "Remover" },
+                            if confirming { t!("friends.confirm_remove") } else { t!("friends.remove") },
                             if confirming { ButtonKind::Danger } else { ButtonKind::Secondary },
                         ))
                         .on_click(cx.listener(move |this, _, _, cx| {

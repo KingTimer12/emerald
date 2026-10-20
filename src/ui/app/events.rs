@@ -6,14 +6,14 @@ use std::time::Instant;
 use gpui::{Context, Window};
 
 use super::state::{DMS, Space, typing};
-use super::{CONNECTED, Emerald, Feedback, Overlay, shown};
+use super::{Emerald, Feedback, Overlay, shown};
 use crate::discord::model::{Channel, ChannelKind, MembersChunk, Message, TypingStart};
-use crate::discord::{Action, Command, NetEvent, Snapshot};
+use crate::discord::{Action, Command, Link, NetEvent, Snapshot};
 
 impl Emerald {
     pub fn on_net(&mut self, event: NetEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event {
-            NetEvent::Status(status) => self.connection.set_status(status),
+            NetEvent::Status(link) => self.connection.set_link(link),
             NetEvent::Fatal(reason) => self.connection.fatal = Some(reason.into()),
             // Intercepted in `main`, which restarts into the login flow.
             NetEvent::AuthExpired | NetEvent::LoggedOut { .. } => {}
@@ -93,7 +93,7 @@ impl Emerald {
             } => {
                 let view = shown(&self.messages, self.selected_channel, channel);
                 self.history.page_failed(channel, forbidden, view);
-                self.connection.status = format!("Erro: {error}").into();
+                self.connection.set_message(t!("common.error", error = error));
             }
             NetEvent::TypingStart(typing) => self.on_typing(typing, cx),
             NetEvent::Profile { guild, profile } => {
@@ -118,7 +118,7 @@ impl Emerald {
             members,
             read_states,
         } = snapshot;
-        self.connection.set_status(CONNECTED.to_owned());
+        self.connection.set_link(Link::Connected);
         let me_id = me.id;
         self.people.load(me, users, relationships);
         dms.retain(|c| c.kind.is_private());
@@ -260,12 +260,12 @@ impl Emerald {
                 }
                 self.friends.feedback = Some(Feedback::from_result(
                     result,
-                    format!("Sucesso! Seu pedido de amizade para {username} foi enviado."),
+                    t!("friends.request_sent", username = username),
                 ));
             }
             Action::Relationship => {
                 if let Err(error) = result {
-                    self.connection.status = format!("Erro: {error}").into();
+                    self.connection.set_message(t!("common.error", error = error));
                 }
             }
             Action::JoinGuild | Action::CreateGuild => match result {
@@ -279,7 +279,7 @@ impl Emerald {
             },
             Action::UpdateProfile => {
                 if let Some(Overlay::Settings(view)) = &mut self.overlay {
-                    view.feedback = Some(Feedback::from_result(result, "Nome exibido atualizado."));
+                    view.feedback = Some(Feedback::from_result(result, t!("settings.display_name_saved")));
                 }
             }
         }

@@ -1,4 +1,4 @@
-//! User profile beside 1:1 DMs and the "Ver Perfil Completo" modal, both
+//! User profile beside 1:1 DMs and the "View Full Profile" modal, both
 //! fed by `GET /users/{id}/profile`.
 
 use gpui::{Context, Div, FontWeight, MouseButton, SharedString, Window, div, img, prelude::*, px, rgb};
@@ -205,15 +205,15 @@ impl Emerald {
                                     .text_color(rgb(theme::TEXT_MUTED))
                                     .child(p)
                             }))
-                            .children(card.bio.clone().map(|bio| section("Sobre mim", text(bio))))
+                            .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
                             .child(section(
-                                "Membro desde",
+                                t!("profile.member_since"),
                                 text(time::short_date(user.unix_secs())),
                             )),
                     )
                     .child(
                         div().w_full().flex_none().p_3().child(
-                            widgets::button("full-profile", "Ver Perfil Completo", ButtonKind::Secondary)
+                            widgets::button("full-profile", t!("profile.view_full"), ButtonKind::Secondary)
                                 .w_full()
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.open_profile(user, None, window, cx)
@@ -254,7 +254,7 @@ impl Emerald {
 
         let accounts = (!card.accounts.is_empty()).then(|| {
             section(
-                "Contas conectadas",
+                t!("profile.connections"),
                 div().flex().flex_wrap().gap_2().children(card.accounts.iter().map(|(kind, name)| {
                     div()
                         .flex()
@@ -283,7 +283,7 @@ impl Emerald {
 
         let roles = (!card.roles.is_empty()).then(|| {
             section(
-                "Cargos",
+                t!("profile.roles"),
                 div().flex().flex_wrap().gap_1().children(card.roles.iter().map(|(name, color)| {
                     // Roles without a color are drawn grey, like Discord does.
                     let color = if *color == 0 { theme::INTERACTIVE_MUTED } else { *color };
@@ -382,8 +382,8 @@ impl Emerald {
                                     })),
                             )
                             .child(div().w_full().h(px(1.)).bg(theme::border()))
-                            .children(card.bio.clone().map(|bio| section("Sobre mim", text(bio))))
-                            .child(section("Membro desde", member_since(user, &card, guild_name)))
+                            .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
+                            .child(section(t!("profile.member_since"), member_since(user, &card, guild_name)))
                             .children(roles)
                             .children(accounts),
                     ),

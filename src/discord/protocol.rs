@@ -28,9 +28,19 @@ pub struct Snapshot {
     pub read_states: Vec<(Snowflake, Snowflake)>,
 }
 
+/// The gateway connection's state, worded by the UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Link {
+    Connecting,
+    Resuming,
+    Connected,
+    /// Dropped; the next attempt is this many seconds away.
+    Reconnecting(u64),
+}
+
 /// Events flowing from the network thread to the UI.
 pub enum NetEvent {
-    Status(String),
+    Status(Link),
     Fatal(String),
     /// The token was rejected (gateway 4004 / REST 401); sign in again.
     AuthExpired,
@@ -135,6 +145,8 @@ pub enum Command {
         name: Option<String>,
     },
     SetStatus(Status),
+    /// The interface language changed; Discord's answers follow it.
+    SetLocale(String),
     /// Gateway op 8: fetch these members' nicknames and roles.
     RequestMembers {
         guild: Snowflake,

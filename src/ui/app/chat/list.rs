@@ -86,9 +86,7 @@ impl Emerald {
             let username = user
                 .and_then(|user| self.people.user(user))
                 .map(|u| SharedString::from(u.username.clone()));
-            let prefix = "Este é o começo do seu histórico de mensagens diretas com ";
-            let text = format!("{prefix}{title}.");
-            let name = prefix.len()..prefix.len() + title.len();
+            let (text, names) = t_spans!("chat.dm_start", name = title);
             intro
                 .children(user.map(|user| widgets::avatar(title, user, self.user_avatar(user), 80., None)))
                 .child(heading(title.clone(), 30.))
@@ -100,14 +98,16 @@ impl Emerald {
                         .child(username)
                 }))
                 .child(
-                    div().mt_2().text_color(theme::muted()).child(StyledText::new(text).with_highlights([(
-                        name,
-                        HighlightStyle {
-                            font_weight: Some(FontWeight::BOLD),
-                            color: Some(rgb(theme::TEXT_STRONG).into()),
-                            ..Default::default()
-                        },
-                    )])),
+                    div().mt_2().text_color(theme::muted()).child(StyledText::new(text).with_highlights(names.into_iter().map(|name| {
+                        (
+                            name,
+                            HighlightStyle {
+                                font_weight: Some(FontWeight::BOLD),
+                                color: Some(rgb(theme::TEXT_STRONG).into()),
+                                ..Default::default()
+                            },
+                        )
+                    }))),
                 )
                 .into_any_element()
         } else {
@@ -122,12 +122,12 @@ impl Emerald {
                         .justify_center()
                         .child(icons::icon(icon, 44., theme::TEXT_STRONG)),
                 )
-                .child(heading(format!("Boas-vindas a #{title}!").into(), 32.))
+                .child(heading(t!("chat.welcome", name = title).into(), 32.))
                 .child(
                     div()
                         .mt_1()
                         .text_color(theme::muted())
-                        .child(format!("Este é o começo do canal #{title}.")),
+                        .child(t!("chat.channel_start", name = title)),
                 )
                 .into_any_element()
         }
@@ -302,7 +302,7 @@ impl Emerald {
                 div()
                     .italic()
                     .text_color(theme::muted())
-                    .child("A mensagem original foi apagada"),
+                    .child(t!("chat.reply_deleted")),
             );
         };
         let (name, color) = self.member_style(reply.author_id, &reply.author);
@@ -389,7 +389,7 @@ impl Emerald {
                         .gap_1()
                         .text_size(px(14.))
                         .text_color(theme::muted())
-                        .child(div().text_xs().child("Figurinha"))
+                        .child(div().text_xs().child(t!("chat.sticker")))
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
                         .into_any_element(),
                 }
@@ -465,9 +465,9 @@ impl Emerald {
 /// One-line text of a system message, or `None` for a regular one.
 fn system_text(kind: u8, author: &str) -> Option<String> {
     Some(match kind {
-        message_kind::MEMBER_JOIN => format!("{author} entrou no servidor."),
-        message_kind::PIN => format!("{author} fixou uma mensagem neste canal."),
-        message_kind::BOOST => format!("{author} impulsionou o servidor!"),
+        message_kind::MEMBER_JOIN => t!("chat.member_join", author = author),
+        message_kind::PIN => t!("chat.pin", author = author),
+        message_kind::BOOST => t!("chat.boost", author = author),
         _ => return None,
     })
 }

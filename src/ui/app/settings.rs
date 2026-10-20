@@ -14,11 +14,14 @@ use crate::discord::model::{Snowflake, Status, avatar_url};
 use crate::discord::{Action, Command};
 use crate::settings::FONT_SIZES;
 
+mod language;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Page {
     Account,
     Status,
     Appearance,
+    Language,
 }
 
 pub struct SettingsView {
@@ -26,7 +29,10 @@ pub struct SettingsView {
     display_name: Entity<TextInput>,
     reveal_email: bool,
     pub feedback: Option<super::Feedback>,
-    _subscription: Subscription,
+    /// The language picker's search box, and whether its list is open.
+    language_query: Entity<TextInput>,
+    language_open: bool,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl Emerald {
@@ -42,19 +48,25 @@ impl Emerald {
             .and_then(|me| me.global_name.clone())
             .unwrap_or_default();
         let display_name = cx.new(|cx| {
-            let mut input = TextInput::new("Nome exibido", cx).keep_on_submit();
+            let mut input = TextInput::new(t!("settings.display_name_placeholder"), cx).keep_on_submit();
             input.set_text(current, cx);
             input
         });
-        let subscription = cx.subscribe(&display_name, |this, _, event: &Submitted, cx| {
-            this.save_display_name(event.0.clone(), cx)
-        });
+        let language_query = cx.new(|cx| TextInput::new(t!("settings.search_languages"), cx).keep_on_submit().compact());
+        let subscriptions = vec![
+            cx.subscribe(&display_name, |this, _, event: &Submitted, cx| {
+                this.save_display_name(event.0.clone(), cx)
+            }),
+            cx.observe(&language_query, |_, _, cx| cx.notify()),
+        ];
         self.overlay = Some(Overlay::Settings(SettingsView {
             page,
             display_name,
             reveal_email: false,
             feedback: None,
-            _subscription: subscription,
+            language_query,
+            language_open: false,
+            _subscriptions: subscriptions,
         }));
         window.focus(&self.focus_handle);
         cx.notify();
@@ -115,12 +127,13 @@ impl Emerald {
             .px_3()
             .overflow_y_scroll()
             .bg(rgb(theme::BASE_LOWEST))
-            .child(widgets::label("CONFIGURAÇÕES DE USUÁRIO").px_2p5().pb_1())
-            .child(item("page-account", "Minha conta", Page::Account, cx))
-            .child(item("page-status", "Status", Page::Status, cx))
+            .child(widgets::label(t!("settings.user_settings")).px_2p5().pb_1())
+            .child(item("page-account", t!("settings.my_account"), Page::Account, cx))
+            .child(item("page-status", t!("settings.status"), Page::Status, cx))
             .child(separator())
-            .child(widgets::label("CONFIGURAÇÕES DO APLICATIVO").px_2p5().pb_1())
-            .child(item("page-appearance", "Aparência", Page::Appearance, cx))
+            .child(widgets::label(t!("settings.app_settings")).px_2p5().pb_1())
+            .child(item("page-appearance", t!("settings.appearance"), Page::Appearance, cx))
+            .child(item("page-language", t!("settings.language_time"), Page::Language, cx))
             .child(separator())
             .child(
                 div()
@@ -132,7 +145,7 @@ impl Emerald {
                     .cursor_pointer()
                     .text_color(rgb(theme::DANGER))
                     .hover(|s| s.bg(theme::hover()))
-                    .child("Sair")
+                    .child(t!("settings.log_out"))
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::Logout), cx)),
             );
 
@@ -140,6 +153,7 @@ impl Emerald {
             Page::Account => self.render_account(view, cx),
             Page::Status => self.render_status(cx),
             Page::Appearance => self.render_appearance(cx),
+            Page::Language => self.render_language(view, cx),
         };
 
         let close = div()
@@ -201,11 +215,11 @@ impl Emerald {
 
     fn render_account(&self, view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
         let Some(me) = self.people.me() else {
-            return page_title("Minha conta").into_any_element();
+            return page_title(t!("settings.my_account")).into_any_element();
         };
         let name: SharedString = me.display_name().to_owned().into();
         let email: SharedString = match (&me.email, view.reveal_email) {
-            (None, _) => "Nenhum e-mail".into(),
+            (None, _) => t!("settings.no_email").into(),
             (Some(email), true) => email.clone().into(),
             (Some(email), false) => mask_email(email).into(),
         };
@@ -222,7 +236,7 @@ impl Emerald {
         div()
             .flex()
             .flex_col()
-            .child(page_title("Minha conta"))
+            .child(page_title(t!("settings.my_account")))
             .child(
                 div()
                     .rounded_lg()
@@ -268,14 +282,14 @@ impl Emerald {
                             .flex()
                             .flex_col()
                             .gap_6()
-                            .child(field("NOME EXIBIDO", name))
-                            .child(field("NOME DE USUÁRIO", me.username.clone().into()))
+                            .child(field(t!("settings.display_name_label"), name))
+                            .child(field(t!("settings.username_label"), me.username.clone().into()))
                             .child(
                                 div()
                                     .flex()
                                     .items_end()
                                     .gap_1()
-                                    .child(field("E-MAIL", email))
+                                    .child(field(t!("settings.email_label"), email))
                                     .when(me.email.is_some(), |row| {
                                         row.child(
                                             div()
@@ -284,7 +298,7 @@ impl Emerald {
                                                 .text_color(rgb(theme::LINK))
                                                 .cursor_pointer()
                                                 .hover(|s| s.underline())
-                                                .child(if view.reveal_email { "Ocultar" } else { "Mostrar" })
+                                                .child(if view.reveal_email { t!("common.hide") } else { t!("common.show") })
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     if let Some(view) = this.settings_view() {
                                                         view.reveal_email = !view.reveal_email;
@@ -302,12 +316,12 @@ impl Emerald {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(section_title("Editar nome exibido"))
+                    .child(section_title(t!("settings.edit_display_name")))
                     .child(
                         div()
                             .text_size(px(14.))
                             .text_color(rgb(theme::TEXT_MUTED))
-                            .child("É assim que os outros te veem. Deixe em branco para usar o nome de usuário."),
+                            .child(t!("settings.display_name_hint")),
                     )
                     .child(
                         div()
@@ -318,7 +332,7 @@ impl Emerald {
                             .child(
                                 widgets::button(
                                     "save-display-name",
-                                    if busy { "Salvando…" } else { "Salvar" },
+                                    if busy { t!("common.saving") } else { t!("common.save") },
                                     ButtonKind::Brand,
                                 )
                                 .when(busy, |b| b.opacity(0.5))
@@ -340,26 +354,22 @@ impl Emerald {
             .flex()
             .flex_col()
             .gap_2()
-            .child(page_title("Status"))
+            .child(page_title(t!("settings.status")))
             .child(
                 div()
                     .mb_4()
                     .text_size(px(14.))
                     .text_color(rgb(theme::TEXT_MUTED))
-                    .child(
-                        "Escolha como você aparece para os outros. A escolha fica salva neste computador \
-                         e é enviada ao Discord a cada conexão; se o app oficial estiver aberto ao mesmo \
-                         tempo, ele pode sobrescrevê-la.",
-                    ),
+                    .child(t!("settings.status_hint")),
             )
             .children(Status::ALL.into_iter().map(|status| {
                 let selected = current == Some(status);
                 let description = match status {
                     Status::Online => None,
                     Status::Idle => None,
-                    Status::Dnd => Some("Você não receberá notificações de mensagens."),
+                    Status::Dnd => Some(t!("settings.dnd_hint")),
                     Status::Invisible => {
-                        Some("Você não aparecerá online, mas terá acesso total ao Discord.")
+                        Some(t!("settings.invisible_hint"))
                     }
                 };
                 div()
@@ -411,7 +421,7 @@ impl Emerald {
     fn render_appearance(&self, cx: &mut Context<Self>) -> AnyElement {
         let size = self.settings.font_size;
         let compact = self.settings.compact;
-        let preview_text = "Assim ficam as mensagens no chat.";
+        let preview_text = t!("settings.preview_text");
         let preview = div()
             .p_4()
             .rounded_lg()
@@ -461,9 +471,9 @@ impl Emerald {
             .flex()
             .flex_col()
             .gap_2()
-            .child(page_title("Aparência"))
+            .child(page_title(t!("settings.appearance")))
             .child(preview)
-            .child(section_title("Tamanho da fonte do chat").mt_6())
+            .child(section_title(t!("settings.font_size")).mt_6())
             .child(
                 div().flex().gap_2().children(FONT_SIZES.into_iter().enumerate().map(|(ix, option)| {
                     let selected = option == size;
@@ -500,12 +510,12 @@ impl Emerald {
                             .flex()
                             .flex_col()
                             .flex_1()
-                            .child(section_title("Modo compacto"))
+                            .child(section_title(t!("settings.compact")))
                             .child(
                                 div()
                                     .text_size(px(14.))
                                     .text_color(rgb(theme::TEXT_MUTED))
-                                    .child("Mais mensagens na tela, em uma linha cada e sem avatares."),
+                                    .child(t!("settings.compact_hint")),
                             ),
                     )
                     .child(widgets::toggle("compact-toggle", compact))
@@ -518,7 +528,7 @@ impl Emerald {
     }
 }
 
-fn page_title(text: &'static str) -> gpui::Div {
+pub(super) fn page_title(text: &'static str) -> gpui::Div {
     div()
         .mb_5()
         .text_size(px(20.))
@@ -527,7 +537,7 @@ fn page_title(text: &'static str) -> gpui::Div {
         .child(text)
 }
 
-fn section_title(text: &'static str) -> gpui::Div {
+pub(super) fn section_title(text: &'static str) -> gpui::Div {
     div()
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(theme::TEXT_STRONG))

@@ -116,6 +116,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
         }
         // Routed to the gateway before spawning.
         Command::SetStatus(_)
+        | Command::SetLocale(_)
         | Command::RequestMembers { .. }
         | Command::SearchMembers { .. }
         | Command::SubscribeGuild { .. } => {

@@ -104,7 +104,7 @@ impl From<Message> for Msg {
                         .content
                         .lines()
                         .next()
-                        .map_or_else(|| "Clique para ver o anexo".to_owned(), str::to_owned)
+                        .map_or_else(|| t!("chat.attachment").to_owned(), str::to_owned)
                         .into(),
                 ),
             }),

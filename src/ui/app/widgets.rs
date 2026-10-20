@@ -23,14 +23,14 @@ pub fn status_color(status: &str) -> u32 {
     }
 }
 
-/// pt-BR labels the web client uses for each presence.
+/// The labels the web client uses for each presence.
 pub fn status_label(status: Option<&str>) -> &'static str {
     match status {
-        Some("online") => "Disponível",
-        Some("idle") => "Ausente",
-        Some("dnd") => "Não perturbar",
-        Some("invisible") => "Invisível",
-        _ => "Offline",
+        Some("online") => t!("status.online"),
+        Some("idle") => t!("status.idle"),
+        Some("dnd") => t!("status.dnd"),
+        Some("invisible") => t!("status.invisible"),
+        _ => t!("status.offline"),
     }
 }
 
@@ -143,7 +143,7 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bu
         .child(label.into())
 }
 
-/// Plain text button, like Discord's "Voltar" and "Cancelar".
+/// Plain text button, like Discord's "Back" and "Cancel".
 pub fn link_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id)

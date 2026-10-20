@@ -52,13 +52,13 @@ impl Emerald {
         let row = space.row(id);
         let name = row.map_or_else(SharedString::default, |row| row.name.clone());
         let user = row.and_then(|row| row.user);
-        // Same wording as the pt-BR web client.
+        // Same wording as the web client.
         let placeholder = if !self.can_send(id) {
-            "Você não tem permissão para enviar mensagens neste canal.".to_owned()
+            t!("composer.no_permission").to_owned()
         } else if space.is_dms() {
-            format!("Conversar com @{name}")
+            t!("composer.dm", name = name)
         } else {
-            format!("Conversar em #{name}")
+            t!("composer.channel", name = name)
         };
         if let Some(user) = user {
             self.profile(user, None);

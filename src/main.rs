@@ -1,6 +1,9 @@
 // Release builds on Windows are GUI apps: no console window behind them.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+#[macro_use]
+mod i18n;
+
 mod discord;
 mod paths;
 mod settings;
@@ -23,7 +26,7 @@ pub(crate) fn sign_out() -> ! {
         match std::fs::remove_file(&path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => eprintln!("aviso: não consegui apagar o token: {e}"),
+            Err(e) => eprintln!("warning: could not delete the token: {e}"),
         }
     }
     let error = match std::env::current_exe() {
@@ -31,7 +34,7 @@ pub(crate) fn sign_out() -> ! {
         Ok(exe) => restart(std::process::Command::new(exe).env_remove("DISCORD_TOKEN")),
         Err(e) => e,
     };
-    eprintln!("não consegui reiniciar o Emerald: {error}");
+    eprintln!("could not restart Emerald: {error}");
     std::process::exit(1);
 }
 
@@ -82,6 +85,10 @@ fn run_child_mode() {
 }
 
 fn main() {
+    // Before the child modes too: the login and captcha windows have titles.
+    let settings = settings::Settings::load();
+    i18n::set(settings.language());
+    ui::set_time_format(settings.time_format);
     run_child_mode();
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
@@ -92,17 +99,16 @@ fn main() {
         None => match webview::run_child("--login", b"") {
             Some(token) => {
                 if let Err(e) = discord::identity::persist_token(&token) {
-                    eprintln!("aviso: não consegui salvar o token: {e}");
+                    eprintln!("warning: could not save the token: {e}");
                 }
                 token
             }
             None => {
-                eprintln!("Login cancelado.");
+                eprintln!("{}", t!("login.cancelled"));
                 std::process::exit(1);
             }
         },
     };
-    let settings = settings::Settings::load();
     let (events, commands) = discord::spawn(token, settings.status);
 
     Application::new().with_assets(ui::Icons).run(move |cx: &mut App| {
@@ -148,7 +154,7 @@ fn main() {
                             discord::NetEvent::AuthExpired => sign_out(),
                             discord::NetEvent::LoggedOut { error } => {
                                 if let Some(error) = error {
-                                    eprintln!("aviso: o token não foi revogado no Discord: {error}");
+                                    eprintln!("warning: Discord did not revoke the token: {error}");
                                 }
                                 sign_out();
                             }

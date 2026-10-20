@@ -41,8 +41,9 @@ const BROWSER_VERSION: &str = "155.0.0.0";
 pub struct Identity {
     pub properties: Value,
     pub super_properties: String,
-    pub locale: String,
-    pub accept_language: String,
+    /// `x-discord-locale` and `Accept-Language`, which follow the interface
+    /// language so Discord answers in it.
+    language: RwLock<(Arc<str>, Arc<str>)>,
     pub timezone: String,
     token: RwLock<Arc<str>>,
     /// Gateway session id; the web client sends it when accepting invites.
@@ -51,7 +52,8 @@ pub struct Identity {
 
 impl Identity {
     pub fn new(token: String) -> Self {
-        let locale = std::env::var("EMERALD_LOCALE").unwrap_or_else(|_| "pt-BR".into());
+        // Discord answers errors in this language, so it follows the interface.
+        let locale = std::env::var("EMERALD_LOCALE").unwrap_or_else(|_| crate::i18n::current().to_owned());
         let build_number = std::env::var("EMERALD_BUILD_NUMBER")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -86,11 +88,25 @@ impl Identity {
         Self {
             properties,
             super_properties,
-            accept_language: accept_language(&locale),
-            locale,
+            language: RwLock::new((locale.as_str().into(), accept_language(&locale).into())),
             timezone: system_timezone(),
             token: RwLock::new(token.into()),
             session_id: RwLock::new(None),
+        }
+    }
+
+    pub fn locale(&self) -> Arc<str> {
+        self.language.read().unwrap().0.clone()
+    }
+
+    pub fn accept_language(&self) -> Arc<str> {
+        self.language.read().unwrap().1.clone()
+    }
+
+    /// The interface switched languages. `EMERALD_LOCALE` still wins.
+    pub fn set_locale(&self, locale: &str) {
+        if std::env::var_os("EMERALD_LOCALE").is_none() {
+            *self.language.write().unwrap() = (locale.into(), accept_language(locale).into());
         }
     }
 

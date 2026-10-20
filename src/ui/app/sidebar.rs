@@ -169,7 +169,7 @@ impl Emerald {
                         .p_4()
                         .text_size(px(14.))
                         .text_color(theme::muted())
-                        .child("Nenhuma conversa encontrada."),
+                        .child(t!("dm.no_results")),
                 )
             })
             .child(
@@ -230,7 +230,7 @@ impl Emerald {
                                 s.text_color(rgb(theme::TEXT_STRONG))
                             })),
                     )
-                    .child(div().flex_1().child("Amigos"))
+                    .child(div().flex_1().child(t!("friends.title")))
                     .when(pending > 0, |r| r.child(widgets::badge(pending)))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.friends_open = true;
@@ -336,7 +336,7 @@ impl Emerald {
                         } else {
                             // Voice, stage and forum channels are listed only.
                             r.cursor_default()
-                                .tooltip(widgets::tooltip("Ainda não suportado no Emerald"))
+                                .tooltip(widgets::tooltip(t!("common.unsupported")))
                         }
                     })
                     .into_any_element()

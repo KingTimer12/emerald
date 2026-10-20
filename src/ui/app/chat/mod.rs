@@ -85,7 +85,7 @@ impl Emerald {
                     div()
                         .text_xs()
                         .text_color(theme::muted())
-                        .child("carregando…"),
+                        .child(t!("common.loading")),
                 )
             })
             // Right-aligned toggle: the DM profile or the guild member list.
@@ -95,7 +95,7 @@ impl Emerald {
                     "toggle-profile",
                     icons::PROFILE,
                     self.settings.show_profile,
-                    ["Ocultar perfil do usuário", "Mostrar perfil do usuário"],
+                    [t!("chat.hide_profile"), t!("chat.show_profile")],
                     cx.listener(|this, _, _, cx| {
                         this.settings.show_profile = !this.settings.show_profile;
                         this.save_settings(cx);
@@ -105,7 +105,7 @@ impl Emerald {
                     "toggle-members",
                     icons::FRIENDS,
                     self.settings.show_members,
-                    ["Ocultar lista de membros", "Mostrar lista de membros"],
+                    [t!("chat.hide_members"), t!("chat.show_members")],
                     cx.listener(|this, _, _, cx| {
                         this.settings.show_members = !this.settings.show_members;
                         this.sync_member_list(cx);
@@ -122,7 +122,7 @@ impl Emerald {
                 .items_center()
                 .justify_center()
                 .text_color(theme::muted())
-                .child("Escolha um canal")
+                .child(t!("chat.pick_channel"))
                 .into_any_element()
         } else {
             list(
@@ -194,25 +194,19 @@ impl Emerald {
             .into_any_element()
     }
 
-    /// "Paulo está digitando…", in the web client's pt-BR wording.
+    /// "Paulo is typing…", in the web client's wording.
     fn typing_text(&self) -> Option<StyledText> {
         let channel = self.selected_channel?;
         let names: Vec<&str> = self
             .typing
             .who(channel)
-            .map(|user| self.people.display_name(user).unwrap_or("Alguém"))
+            .map(|user| self.people.display_name(user).unwrap_or(t!("common.someone")))
             .collect();
         let (text, bold): (String, Vec<std::ops::Range<usize>>) = match names.as_slice() {
             [] => return None,
-            [one] => (format!("{one} está digitando…"), vec![0..one.len()]),
-            [a, b] => {
-                let second = a.len() + 3;
-                (
-                    format!("{a} e {b} estão digitando…"),
-                    vec![0..a.len(), second..second + b.len()],
-                )
-            }
-            _ => ("Várias pessoas estão digitando…".to_owned(), Vec::new()),
+            [one] => t_spans!("chat.typing_one", name = one),
+            [a, b] => t_spans!("chat.typing_two", a = a, b = b),
+            _ => (t!("chat.typing_many").to_owned(), Vec::new()),
         };
         Some(StyledText::new(text).with_highlights(bold.into_iter().map(|range| {
             (
