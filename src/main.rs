@@ -23,6 +23,10 @@ actions!(emerald, [Quit, Logout]);
 /// network thread and the gateway session all go away with it.
 pub(crate) fn sign_out() -> ! {
     discord::token::forget();
+    // Kept API answers belong to the account that is leaving.
+    if let Some(cache) = discord::cache::Cache::open_default() {
+        cache.clear_responses();
+    }
     let error = match std::env::current_exe() {
         // `token::load` already took DISCORD_TOKEN out of the environment.
         Ok(exe) => restart(&mut std::process::Command::new(exe)),

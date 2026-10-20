@@ -31,6 +31,8 @@ toml = { version = "1", default-features = false, features = ["parse", "serde", 
 velato = { version = "0.12", default-features = false }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
 image = { version = "0.25", default-features = false }
+# Disk cache in one SQLite file; bundled, so no system library is needed.
+rusqlite = { version = "0.40", features = ["bundled"] }
 bytes = "1"
 # Wipes the token from memory when it is dropped.
 zeroize = "1"

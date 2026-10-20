@@ -97,7 +97,7 @@ cargo test
 | Keychain, item "Emerald" | Credential Manager, `Emerald:discord-token` | Account token (release builds). |
 | `~/.config/emerald/token` | `%APPDATA%\emerald\token` | Account token in debug builds, mode 0600. A release build moves it to the Keychain or Credential Manager and deletes the file. |
 | `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
-| `~/Library/Caches/emerald/cdn` | `%LOCALAPPDATA%\emerald\cdn` | CDN image cache, capped at 200 MB. |
+| `~/Library/Caches/emerald/cache.sqlite` | `%LOCALAPPDATA%\emerald\cache.sqlite` | SQLite cache, readable only by you: CDN images (capped at 200 MB, least recently used out first) and the last profiles fetched, cleared on sign-out. |
 | `~/Library/Caches/emerald/build_number` | `%LOCALAPPDATA%\emerald\build_number` | Last web client build number seen. |
 | | `%LOCALAPPDATA%\emerald\WebView2` | WebView2 browser profile; the login session itself is InPrivate. |
 
@@ -133,7 +133,7 @@ src/
 │   ├── identity.rs      headers and super properties matching the web client
 │   ├── build.rs         current web client build number, read from discord.com/app
 │   ├── token.rs         token storage: Keychain, Credential Manager or file
-│   └── cache.rs         on-disk image cache
+│   └── cache.rs         SQLite disk cache
 └── ui/
     ├── markdown.rs      Discord markdown parser
     ├── text_input.rs    text field

@@ -44,7 +44,15 @@ pub fn spawn(
                 let build_number = build::current(&accept_language).await;
                 log::info!("client build {build_number}");
                 let identity = Arc::new(identity::Identity::new(token, build_number));
-                let rest = match rest::Rest::new(identity.clone()) {
+                let cache = tokio::task::spawn_blocking(|| {
+                    let cache = cache::Cache::open_default()?;
+                    cache.prune();
+                    Some(Arc::new(cache))
+                })
+                .await
+                .ok()
+                .flatten();
+                let rest = match rest::Rest::new(identity.clone(), cache) {
                     Ok(rest) => Arc::new(rest),
                     Err(e) => {
                         event_tx.try_send(NetEvent::Fatal(e.to_string())).ok();
@@ -52,9 +60,6 @@ pub fn spawn(
                     }
                 };
                 tokio::spawn(gateway::run(identity.clone(), event_tx.clone(), presence_rx, ops_rx));
-                if let Some(dir) = cache::dir() {
-                    tokio::task::spawn_blocking(move || cache::prune(&dir));
-                }
                 while let Some(cmd) = cmd_rx.recv().await {
                     match cmd {
                         Command::SetStatus(status) => {

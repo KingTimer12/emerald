@@ -28,6 +28,7 @@ use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
 
 use super::ReplyTo;
+use super::cache::Cache;
 use super::identity::{self, Identity};
 use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Profile, Snowflake, User};
 
@@ -38,11 +39,12 @@ pub const HISTORY_PAGE: usize = 50;
 const CREATE_GUILD_TEMPLATE: &str = "2TffvPucqHkN";
 /// Major parameter for routes that are not scoped to a channel or guild.
 const NO_MAJOR: Snowflake = Snowflake(0);
-/// Profiles: the microcache's second, and a stale copy for ten minutes while
-/// a refresh is slow or failing.
+/// Profiles: the microcache's second, a stale copy for ten minutes while a
+/// refresh is slow or failing, and the last one on disk after a restart.
 const PROFILE_CACHE: Policy = Policy {
     fresh: Duration::from_secs(1),
     stale: Duration::from_secs(600),
+    persist: true,
 };
 
 #[derive(Deserialize)]
@@ -131,8 +133,8 @@ pub struct Rest {
     http: reqwest::Client,
     /// Plain client for cdn.discordapp.com: no API headers, no auth.
     cdn: reqwest::Client,
-    /// Where downloaded CDN images are kept; `None` disables the cache.
-    image_cache: Option<std::path::PathBuf>,
+    /// CDN images and kept responses on disk; `None` runs uncached.
+    cache: Option<Arc<Cache>>,
     micro: MicroCache,
     identity: Arc<Identity>,
     api: String,
@@ -140,7 +142,7 @@ pub struct Rest {
 }
 
 impl Rest {
-    pub fn new(identity: Arc<Identity>) -> Result<Self> {
+    pub fn new(identity: Arc<Identity>, cache: Option<Arc<Cache>>) -> Result<Self> {
         // Same header set the web client sends on its API calls.
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
@@ -170,7 +172,7 @@ impl Rest {
         Ok(Self {
             http,
             cdn,
-            image_cache: super::cache::dir(),
+            cache,
             micro: MicroCache::default(),
             api: format!("https://discord.com/api/v{}", identity::API_VERSION),
             identity,
@@ -181,16 +183,25 @@ impl Rest {
     /// Fetches a CDN image from the disk cache, or downloads and caches it.
     /// Refuses anything implausibly large for an avatar or sticker.
     pub async fn cdn_image(&self, url: &str) -> Result<Vec<u8>> {
-        if let Some(dir) = &self.image_cache {
-            if let Some(bytes) = super::cache::get(dir, url).await {
-                return Ok(bytes);
-            }
+        if let Some(bytes) = self.on_disk(|cache, url| cache.image(url), url).await.flatten() {
+            return Ok(bytes);
         }
         let bytes = self.download(url).await?;
-        if let Some(dir) = &self.image_cache {
-            super::cache::put(dir, url, &bytes).await;
-        }
+        let stored = bytes.clone();
+        self.on_disk(move |cache, url| cache.put_image(url, &stored), url).await;
         Ok(bytes)
+    }
+
+    /// Runs `op` on the disk cache off the async thread; `None` when there
+    /// is no cache.
+    async fn on_disk<T: Send + 'static>(
+        &self,
+        op: impl FnOnce(&Cache, &str) -> T + Send + 'static,
+        key: &str,
+    ) -> Option<T> {
+        let cache = self.cache.clone()?;
+        let key = key.to_owned();
+        tokio::task::spawn_blocking(move || op(&cache, &key)).await.ok()
     }
 
     async fn download(&self, url: &str) -> Result<Vec<u8>> {
@@ -430,15 +441,20 @@ impl Rest {
                     }
                     // That request was cancelled: look again, and fetch if no one else is.
                 }
-                Lookup::Fetch(ticket) => return self.refresh(call, ticket).await,
+                Lookup::Fetch(ticket) => return self.refresh(call, policy, ticket).await,
             }
         }
     }
 
-    async fn refresh(&self, call: &Call<'_>, ticket: Ticket<'_>) -> Result<Bytes> {
+    async fn refresh(&self, call: &Call<'_>, policy: Policy, ticket: Ticket<'_>) -> Result<Bytes> {
         let result = async { Ok::<_, anyhow::Error>(self.send(call).await?.bytes().await?) }.await;
         let error = match result {
             Ok(body) => {
+                if policy.persist {
+                    let (account, kept) = (self.identity.account(), body.clone());
+                    self.on_disk(move |cache, key| cache.put_response(account, key, &kept), ticket.key())
+                        .await;
+                }
                 ticket.finish(body.clone());
                 return Ok(body);
             }
@@ -448,7 +464,13 @@ impl Rest {
                 return Err(error);
             }
         };
-        match ticket.stale().cloned() {
+        let mut stand_in = ticket.stale().cloned();
+        if stand_in.is_none() && policy.persist {
+            let account = self.identity.account();
+            let kept = self.on_disk(move |cache, key| cache.response(account, key), ticket.key()).await;
+            stand_in = kept.flatten().map(|(body, _)| body.into());
+        }
+        match stand_in {
             Some(body) => {
                 log::info!("{} failed ({error}); serving a cached copy", call.route.1);
                 ticket.share(Ok(body.clone()));

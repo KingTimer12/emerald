@@ -108,6 +108,18 @@ impl Identity {
         self.token.read().unwrap().clone()
     }
 
+    /// The account's user id: a token's first segment is it in base64.
+    /// Zero for a token in another shape.
+    pub fn account(&self) -> u64 {
+        let token = self.token();
+        let first = token.expose().split('.').next().unwrap_or_default().trim_end_matches('=');
+        base64::engine::general_purpose::STANDARD_NO_PAD
+            .decode(first)
+            .ok()
+            .and_then(|id| String::from_utf8(id).ok()?.parse().ok())
+            .unwrap_or(0)
+    }
+
     pub fn session_id(&self) -> Option<String> {
         self.session_id.read().unwrap().clone()
     }
@@ -187,6 +199,14 @@ mod tests {
         let keys: Vec<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
         assert_eq!(keys, CAPTURED_KEYS);
         assert_eq!(value["browser_user_agent"], USER_AGENT);
+    }
+
+    #[test]
+    fn account_comes_from_the_token() {
+        // base64("1547312596632338476"), no padding, as Discord issues it.
+        let token = Token::new("MTU0NzMxMjU5NjYzMjMzODQ3Ng.x.y".into()).unwrap();
+        assert_eq!(Identity::new(token, 1).account(), 1_547_312_596_632_338_476);
+        assert_eq!(Identity::new(Token::new("junk".into()).unwrap(), 1).account(), 0);
     }
 
     #[test]

@@ -36,6 +36,9 @@ pub struct Policy {
     pub fresh: Duration,
     /// Served while a refresh is in flight, or when the refresh fails.
     pub stale: Duration,
+    /// Also kept on disk (`cache::Cache::put_response`), for errors after a
+    /// restart.
+    pub persist: bool,
 }
 
 impl Policy {
@@ -43,6 +46,7 @@ impl Policy {
     pub const MICRO: Self = Self {
         fresh: Duration::from_secs(1),
         stale: Duration::from_secs(10),
+        persist: false,
     };
 }
 
@@ -147,6 +151,10 @@ pub struct Ticket<'a> {
 }
 
 impl Ticket<'_> {
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
     /// The expired copy still within the route's stale window, if any.
     pub fn stale(&self) -> Option<&Bytes> {
         self.stale.as_ref()
