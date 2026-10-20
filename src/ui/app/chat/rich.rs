@@ -22,6 +22,19 @@ impl Emerald {
         mentions: &[(Snowflake, SharedString)],
         clickable: bool,
     ) -> AnyElement {
+        self.rich_text_noted(id, content, mentions, clickable, None)
+    }
+
+    /// [`Self::rich_text`] followed by a muted `note`, as "(edited)" trails
+    /// the text it marks.
+    pub(super) fn rich_text_noted(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        content: &str,
+        mentions: &[(Snowflake, SharedString)],
+        clickable: bool,
+        note: Option<&str>,
+    ) -> AnyElement {
         let guild = self.spaces.current().info();
         let name = |mention: Mention| match mention {
             Mention::User(id) => guild
@@ -38,7 +51,13 @@ impl Emerald {
                 .and_then(|g| g.role(id))
                 .map_or_else(|| t!("chat.unknown_role").to_owned(), |r| r.name.clone()),
         };
-        let rich = markdown::parse(content, &name);
+        let mut rich = markdown::parse(content, &name);
+        if let Some(note) = note {
+            rich.text.push(' ');
+            let start = rich.text.len();
+            rich.text.push_str(note);
+            rich.spans.push((start..rich.text.len(), Style::Muted));
+        }
         let links = rich.links;
         let styled = StyledText::new(rich.text).with_highlights(flatten(&rich.spans));
         if !clickable || links.is_empty() {
@@ -105,6 +124,10 @@ fn highlight(style: Style) -> HighlightStyle {
         },
         Style::Link => HighlightStyle {
             color: Some(rgb(theme::LINK).into()),
+            ..Default::default()
+        },
+        Style::Muted => HighlightStyle {
+            color: Some(rgb(theme::TEXT_MUTED).into()),
             ..Default::default()
         },
         Style::Mention => HighlightStyle {

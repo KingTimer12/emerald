@@ -25,7 +25,8 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             channel,
             content,
             nonce,
-        } => match with_captcha!(|captcha| rest.send_message(channel, &content, &nonce, captcha).await) {
+            reply,
+        } => match with_captcha!(|captcha| rest.send_message(channel, &content, &nonce, reply, captcha).await) {
             // Usually the gateway echo arrives first; the UI drops the duplicate.
             Ok(message) => NetEvent::MessageCreate(message),
             Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
@@ -36,6 +37,17 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 error: e.to_string(),
             },
         },
+        Command::EditMessage {
+            channel,
+            message,
+            content,
+        } => outcome(Action::Message, rest.edit_message(channel, message, &content).await),
+        Command::DeleteMessage { channel, message } => {
+            outcome(Action::Message, rest.delete_message(channel, message).await)
+        }
+        Command::PinMessage { channel, message, pin } => {
+            outcome(Action::Message, rest.pin_message(channel, message, pin).await)
+        }
         Command::SendFriendRequest { username } => outcome(
             Action::FriendRequest,
             with_captcha!(|captcha| rest.send_friend_request(&username, captcha).await),

@@ -100,6 +100,15 @@ pub struct Message {
     #[serde(default)]
     pub mentions: Vec<User>,
     #[serde(default)]
+    pub mention_roles: Vec<Snowflake>,
+    #[serde(default)]
+    pub mention_everyone: bool,
+    #[serde(default)]
+    pub pinned: bool,
+    /// Set once the author edited the message.
+    #[serde(default)]
+    pub edited_timestamp: Option<String>,
+    #[serde(default)]
     pub attachments: Vec<Attachment>,
     #[serde(default)]
     pub embeds: Vec<Embed>,
@@ -122,12 +131,26 @@ fn lenient_nonce<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::E
     })
 }
 
+/// MESSAGE_UPDATE carries only what changed: an edit brings the content,
+/// a pin the flag, a link preview the embeds.
 #[derive(Debug, Deserialize)]
 pub struct MessageUpdate {
     pub id: Snowflake,
     pub channel_id: Snowflake,
     #[serde(default)]
     pub content: Option<String>,
+    #[serde(default)]
+    pub edited_timestamp: Option<String>,
+    #[serde(default)]
+    pub pinned: Option<bool>,
+    #[serde(default)]
+    pub embeds: Option<Vec<Embed>>,
+    #[serde(default)]
+    pub mentions: Option<Vec<User>>,
+    #[serde(default)]
+    pub mention_roles: Option<Vec<Snowflake>>,
+    #[serde(default)]
+    pub mention_everyone: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +163,9 @@ pub struct MessageDelete {
 pub struct MessageAck {
     pub channel_id: Snowflake,
     pub message_id: Snowflake,
+    /// Mentions left unread; only "mark unread" sets it.
+    #[serde(default)]
+    pub mention_count: u32,
 }
 
 #[derive(Debug, Deserialize)]

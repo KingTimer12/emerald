@@ -52,6 +52,43 @@ impl Member {
     }
 }
 
+/// GUILD_MEMBER_UPDATE: a member's nickname or roles changed.
+#[derive(Debug, Deserialize)]
+pub struct MemberUpdate {
+    pub guild_id: Snowflake,
+    pub user: User,
+    #[serde(default)]
+    pub nick: Option<String>,
+    #[serde(default)]
+    pub roles: Vec<Snowflake>,
+}
+
+impl MemberUpdate {
+    pub fn into_member(self) -> (Snowflake, Snowflake, Member) {
+        let id = self.user.id;
+        let member = Member {
+            user_id: Some(id),
+            user: Some(self.user),
+            nick: self.nick,
+            roles: self.roles,
+        };
+        (self.guild_id, id, member)
+    }
+}
+
+/// GUILD_ROLE_CREATE and GUILD_ROLE_UPDATE.
+#[derive(Debug, Deserialize)]
+pub struct RoleUpdate {
+    pub guild_id: Snowflake,
+    pub role: Role,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RoleDelete {
+    pub guild_id: Snowflake,
+    pub role_id: Snowflake,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct MembersChunk {
     pub guild_id: Snowflake,

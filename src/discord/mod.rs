@@ -10,7 +10,7 @@ pub mod rest;
 use std::sync::Arc;
 
 use model::Status;
-pub use protocol::{Action, Command, Link, NetEvent, Snapshot};
+pub use protocol::{Action, Command, Link, NetEvent, ReplyTo, Snapshot};
 use tokio::sync::{mpsc, watch};
 
 /// Runs all networking on one dedicated OS thread with a single-threaded

@@ -1,8 +1,8 @@
 //! The messages between the UI and the network thread.
 
 use super::model::{
-    Channel, Guild, Member, MemberListUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
-    Profile, Relationship, Snowflake, Status, TypingStart, User,
+    Channel, Guild, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete,
+    MessageUpdate, Profile, Relationship, RoleDelete, RoleUpdate, Snowflake, Status, TypingStart, User,
 };
 
 /// A user-initiated REST action whose outcome the UI reports back.
@@ -13,6 +13,8 @@ pub enum Action {
     JoinGuild,
     CreateGuild,
     UpdateProfile,
+    /// Editing, deleting or pinning a message.
+    Message,
 }
 
 /// The account as READY describes it, when a session starts.
@@ -24,8 +26,8 @@ pub struct Snapshot {
     pub relationships: Vec<Relationship>,
     /// The current user's membership per guild.
     pub members: Vec<(Snowflake, Member)>,
-    /// Last read message per channel.
-    pub read_states: Vec<(Snowflake, Snowflake)>,
+    /// Per channel: the last read message and the unread mentions.
+    pub read_states: Vec<(Snowflake, Snowflake, u32)>,
 }
 
 /// The gateway connection's state, worded by the UI.
@@ -53,6 +55,11 @@ pub enum NetEvent {
     MembersChunk(MembersChunk),
     /// Rows of a lazily loaded member list.
     MemberList(MemberListUpdate),
+    /// A member's nickname or roles changed.
+    MemberUpdate(MemberUpdate),
+    /// A role was created or changed.
+    RoleUpdate(RoleUpdate),
+    RoleDelete(RoleDelete),
     /// A channel was read up to `message_id`, here or on another device.
     MessageAck(MessageAck),
     /// Friend presences as `(user, status)`.
@@ -108,6 +115,14 @@ pub enum NetEvent {
     },
 }
 
+/// The message a send answers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReplyTo {
+    pub message: Snowflake,
+    /// Pings the original author.
+    pub mention: bool,
+}
+
 /// Requests flowing from the UI to the network thread.
 pub enum Command {
     History {
@@ -118,6 +133,24 @@ pub enum Command {
         channel: Snowflake,
         content: String,
         nonce: String,
+        reply: Option<ReplyTo>,
+    },
+    /// The gateway echoes the outcome as MESSAGE_UPDATE.
+    EditMessage {
+        channel: Snowflake,
+        message: Snowflake,
+        content: String,
+    },
+    /// The gateway echoes the outcome as MESSAGE_DELETE.
+    DeleteMessage {
+        channel: Snowflake,
+        message: Snowflake,
+    },
+    /// Pins or unpins; the gateway echoes it as MESSAGE_UPDATE.
+    PinMessage {
+        channel: Snowflake,
+        message: Snowflake,
+        pin: bool,
     },
     SendFriendRequest {
         username: String,

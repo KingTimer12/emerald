@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use gpui::{App, Context, Focusable, SharedString, Window};
+use gpui::{App, Context, Focusable, Window};
 
 use super::Emerald;
 use super::state::Row;
@@ -49,17 +49,12 @@ impl Emerald {
 
         let space = self.spaces.current();
         let readable = space.permissions(id) & permissions::READ_MESSAGE_HISTORY != 0;
-        let row = space.row(id);
-        let name = row.map_or_else(SharedString::default, |row| row.name.clone());
-        let user = row.and_then(|row| row.user);
-        // Same wording as the web client.
-        let placeholder = if !self.can_send(id) {
-            t!("composer.no_permission").to_owned()
-        } else if space.is_dms() {
-            t!("composer.dm", name = name)
-        } else {
-            t!("composer.channel", name = name)
-        };
+        let user = space.row(id).and_then(|row| row.user);
+        let placeholder = self.composer_placeholder(id);
+        self.message_menu = None;
+        if self.edit.as_ref().is_some_and(|e| e.channel != id) {
+            self.edit = None;
+        }
         if let Some(user) = user {
             self.profile(user, None);
         }

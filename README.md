@@ -19,16 +19,21 @@ CPU near zero when idle.
   confirmation, typing indicators, a profile panel (badges, bio, connected accounts)
   and the full profile.
 - **Servers**: channels and collapsible categories, permissions computed the way Discord
-  does (hidden channels, sending blocked without permission), nicknames and role colors,
-  replies, images, embeds, stickers and system messages.
+  does (hidden channels, sending blocked without permission), nicknames and role colors
+  that follow live member and role changes, replies, images, embeds, stickers and system
+  messages.
+- **Message actions** from a hover toolbar or right click: reply (with or without the
+  ping), edit in place (Up edits your last message), pin, copy, delete with confirmation
+  (Shift skips it).
 - **Discord markdown**: bold, italics, underline, strikethrough, code, headings, mentions,
   clickable links. Masked links always show their real host.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
-- **Unread state** synced with other devices, with read receipts batched.
+- **Unread state** synced with other devices, with read receipts batched; mention counts
+  on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, threads, forums, reactions, emoji images, editing messages.
+Not there yet: voice, threads, forums, reactions, emoji images, uploads.
 
 ## Requirements
 

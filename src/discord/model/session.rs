@@ -38,6 +38,9 @@ pub struct ReadState {
     pub id: Snowflake,
     #[serde(default)]
     pub last_message_id: Option<Snowflake>,
+    /// Unread mentions; every unread message counts in a DM.
+    #[serde(default)]
+    pub mention_count: u32,
     /// Non-channel read states (e.g. guild events) use other types.
     #[serde(default)]
     pub read_state_type: u8,

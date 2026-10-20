@@ -1,7 +1,10 @@
 //! The chat list's rows: the channel intro, messages with their replies,
 //! attachments, embeds and stickers, and day separators.
 
-use gpui::{AnyElement, Div, FontWeight, HighlightStyle, ListOffset, ListState, SharedString, StyledText, div, img, prelude::*, px, rgb};
+use gpui::{
+    AnyElement, Context, Div, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString, StyledText,
+    div, img, prelude::*, px, rgb,
+};
 
 use super::super::super::{icons, markdown, theme, time};
 use super::super::state::{Log, MessageView, Msg, Reply};
@@ -49,13 +52,13 @@ impl MessageView for ListState {
 
 impl Emerald {
     /// Row `ix` of the chat list: the intro on top, then the messages.
-    pub(super) fn render_list_row(&self, ix: usize) -> AnyElement {
+    pub(super) fn render_list_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let log = self.selected_channel.and_then(|c| self.history.get(c));
         if ix < TOP {
             return self.render_intro(log);
         }
         match log {
-            Some(log) if ix - TOP < log.messages.len() => self.render_message(log, ix - TOP),
+            Some(log) if ix - TOP < log.messages.len() => self.render_message(log, ix - TOP, cx),
             _ => div().into_any_element(),
         }
     }
@@ -133,15 +136,38 @@ impl Emerald {
         }
     }
 
-    fn render_message(&self, log: &Log, ix: usize) -> AnyElement {
+    fn render_message(&self, log: &Log, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let msg = &log.messages[ix];
         let previous = ix.checked_sub(1).map(|ix| &log.messages[ix]);
         let new_day = previous.is_none_or(|p| p.day != msg.day);
         let (author, author_color) = self.author_style(msg);
+        let my_roles = self.spaces.current().info().map_or(&[][..], |g| g.my_roles());
+        let mentioned = msg.mentions_user(self.people.my_id(), my_roles);
+        let editing = self.is_editing(msg);
+        let group: SharedString = format!("message-{ix}").into();
+        let toolbar = self.message_toolbar(msg, ix, group.clone(), cx);
+        // Pings get Discord's gold tint and a bar on the left edge.
         let row = div()
             .id(("message", ix))
+            .group(group)
+            .relative()
             .w_full()
-            .hover(|s| s.bg(theme::hover()));
+            .when(mentioned, |row| {
+                row.bg(theme::mentioned()).child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(2.))
+                        .bg(rgb(theme::MENTIONED_BAR)),
+                )
+            })
+            .when(editing, |row| row.bg(theme::hover()))
+            .hover(move |s| s.bg(if mentioned { theme::mentioned_hover() } else { theme::hover() }))
+            .when(!msg.pending, |row| {
+                row.on_mouse_down(MouseButton::Right, self.on_message_right_click(ix, cx))
+            });
 
         let message = if let Some(text) = system_text(msg.kind, &author) {
             // System line: arrow in the avatar column, then the event.
@@ -174,6 +200,7 @@ impl Emerald {
                         .text_color(theme::muted())
                         .child(msg.time.clone()),
                 )
+                .children(toolbar)
                 .into_any_element()
         } else if self.settings.compact {
             // Compact mode: one line per message, no avatars or group gaps.
@@ -203,6 +230,7 @@ impl Emerald {
                         )
                         .child(self.message_body(msg, ix)),
                 )
+                .children(toolbar)
                 .into_any_element()
         } else if !new_day
             && msg.reply.is_none()
@@ -216,6 +244,7 @@ impl Emerald {
                 .pr_4()
                 .py(px(2.))
                 .child(self.message_body(msg, ix))
+                .children(toolbar)
                 .into_any_element()
         } else {
             // Group start: 17px gap above, outside the hover highlight. A day
@@ -266,7 +295,8 @@ impl Emerald {
                                         )
                                         .child(self.message_body(msg, ix)),
                                 ),
-                        ),
+                        )
+                        .children(toolbar),
                 )
                 .into_any_element()
         };
@@ -338,8 +368,15 @@ impl Emerald {
             .gap_1()
             .min_w(px(0.))
             .text_color(if msg.pending { theme::muted() } else { theme::text() })
-            .when(!msg.content.is_empty(), |body| {
-                body.child(self.rich_text(("content", ix), &msg.content, &msg.mentions, true))
+            .map(|body| {
+                if self.is_editing(msg) {
+                    body.child(self.render_edit_box())
+                } else if msg.content.is_empty() {
+                    body
+                } else {
+                    let edited = msg.edited.then(|| t!("chat.edited"));
+                    body.child(self.rich_text_noted(("content", ix), &msg.content, &msg.mentions, true, edited))
+                }
             })
             .children(msg.images.iter().map(|(url, w, h)| {
                 let frame = div().size_full().rounded_lg().overflow_hidden();

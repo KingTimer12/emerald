@@ -17,6 +17,8 @@ pub enum Style {
     Spoiler,
     Link,
     Mention,
+    /// Never parsed: for notes the view appends, like "(edited)".
+    Muted,
 }
 
 /// What a `<…>` token refers to, for the caller to name.

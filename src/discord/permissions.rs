@@ -7,7 +7,10 @@ use super::model::{Overwrite, Role, Snowflake, overwrite_kind};
 pub const ADMINISTRATOR: u64 = 1 << 3;
 pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const SEND_MESSAGES: u64 = 1 << 11;
+pub const MANAGE_MESSAGES: u64 = 1 << 13;
 pub const READ_MESSAGE_HISTORY: u64 = 1 << 16;
+/// Split off MANAGE_MESSAGES in 2025: pinning without moderating.
+pub const PIN_MESSAGES: u64 = 1 << 51;
 
 /// Everything a guild needs to resolve the current user's permissions.
 pub struct GuildAccess<'a> {

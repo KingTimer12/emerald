@@ -40,10 +40,13 @@ pub use outbox::Outbox;
 use settings::SettingsView;
 use state::{History, MemberList, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
 
-actions!(emerald_ui, [Dismiss]);
+actions!(emerald_ui, [Dismiss, EditLast]);
 
 pub fn bind_keys(cx: &mut App) {
-    cx.bind_keys([KeyBinding::new("escape", Dismiss, Some("Emerald"))]);
+    cx.bind_keys([
+        KeyBinding::new("escape", Dismiss, Some("Emerald")),
+        KeyBinding::new("up", EditLast, Some("Emerald")),
+    ]);
 }
 
 /// A cached profile is refetched when opened after this long.
@@ -57,6 +60,8 @@ enum Overlay {
     Settings(SettingsView),
     /// "View Full Profile" for this user, as members of `guild` see them.
     Profile { user: Snowflake, guild: Option<Snowflake> },
+    /// "Delete Message", asking before it goes.
+    DeleteMessage { channel: Snowflake, message: Snowflake },
 }
 
 /// Result line under a form, green on success and red on failure.
@@ -136,6 +141,10 @@ pub struct Emerald {
     selected_channel: Option<Snowflake>,
     friends: Friends,
     composer: Composer,
+    /// The own message being edited in place, and its edit box.
+    edit: Option<chat::Editing>,
+    edit_input: Entity<TextInput>,
+    message_menu: Option<chat::MessageMenu>,
     /// Filters the DM list by name; enter opens the first match.
     dm_search: Entity<TextInput>,
     overlay: Option<Overlay>,
@@ -172,7 +181,11 @@ impl Emerald {
                 .compact()
         });
         let member_query = cx.new(|cx| TextInput::new(t!("members.search"), cx).keep_on_submit().compact());
+        let edit_input = cx.new(|cx| TextInput::new("", cx));
         let subscriptions = vec![
+            cx.subscribe_in(&edit_input, window, |this, _, event: &Submitted, window, cx| {
+                this.save_edit(event.0.clone(), window, cx)
+            }),
             cx.observe(&member_query, |this, _, cx| this.on_member_query(cx)),
             cx.subscribe(&composer.input, |this, _, event: &Submitted, cx| {
                 this.send(event.0.clone(), cx)
@@ -220,6 +233,9 @@ impl Emerald {
             selected_channel: None,
             friends,
             composer,
+            edit: None,
+            edit_input,
+            message_menu: None,
             dm_search,
             overlay: None,
             busy: HashSet::new(),
@@ -309,12 +325,17 @@ impl Render for Emerald {
             Some(Overlay::Profile { user, guild }) => {
                 Some(self.render_profile_modal(*user, *guild, cx).into_any_element())
             }
+            Some(Overlay::DeleteMessage { channel, message }) => {
+                Some(self.render_delete_modal(*channel, *message, cx).into_any_element())
+            }
             None => None,
         };
+        let menu = self.render_message_menu(cx);
         div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
-            .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.close_overlay(window, cx)))
+            .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.dismiss(window, cx)))
+            .on_action(cx.listener(|this, _: &EditLast, window, cx| this.edit_last(window, cx)))
             .on_action(cx.listener(|this, _: &crate::Logout, _, cx| this.log_out(cx)))
             .relative()
             .flex()
@@ -340,5 +361,6 @@ impl Render for Emerald {
             )
             .child(self.render_user_panel(cx))
             .children(overlay)
+            .children(menu)
     }
 }

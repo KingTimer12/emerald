@@ -15,8 +15,14 @@ pub const STAGE: &str = "icons/stage.svg";
 pub const CHEVRON: &str = "icons/chevron.svg";
 /// App mark, an emerald cut seen from above; stands in for the DM space.
 pub const EMERALD: &str = "icons/emerald.svg";
+pub const REPLY: &str = "icons/reply.svg";
+pub const EDIT: &str = "icons/edit.svg";
+pub const MORE: &str = "icons/more.svg";
+pub const PIN: &str = "icons/pin.svg";
+pub const TRASH: &str = "icons/trash.svg";
+pub const COPY: &str = "icons/copy.svg";
 
-const ALL: [(&str, &[u8]); 9] = [
+const ALL: [(&str, &[u8]); 15] = [
     (FRIENDS, include_bytes!("../../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../../assets/icons/text.svg")),
@@ -26,6 +32,12 @@ const ALL: [(&str, &[u8]); 9] = [
     (STAGE, include_bytes!("../../assets/icons/stage.svg")),
     (CHEVRON, include_bytes!("../../assets/icons/chevron.svg")),
     (EMERALD, include_bytes!("../../assets/icons/emerald.svg")),
+    (REPLY, include_bytes!("../../assets/icons/reply.svg")),
+    (EDIT, include_bytes!("../../assets/icons/edit.svg")),
+    (MORE, include_bytes!("../../assets/icons/more.svg")),
+    (PIN, include_bytes!("../../assets/icons/pin.svg")),
+    (TRASH, include_bytes!("../../assets/icons/trash.svg")),
+    (COPY, include_bytes!("../../assets/icons/copy.svg")),
 ];
 
 pub struct Icons;

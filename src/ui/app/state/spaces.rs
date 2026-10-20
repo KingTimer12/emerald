@@ -110,6 +110,11 @@ impl GuildInfo {
         self.members.insert(user, member);
     }
 
+    /// The current user's roles here, which decide who a message pings.
+    pub fn my_roles(&self) -> &[Snowflake] {
+        &self.my_roles
+    }
+
     /// The `authors` not known yet and not asked for before, now marked
     /// asked for.
     pub fn unrequested(&mut self, authors: impl Iterator<Item = Snowflake>) -> Vec<Snowflake> {
@@ -251,6 +256,37 @@ impl Space {
 
     fn matching(&self, keep: impl Fn(&Row) -> bool) -> Vec<usize> {
         (0..self.rows.len()).filter(|ix| keep(&self.rows[*ix])).collect()
+    }
+
+    /// GUILD_MEMBER_UPDATE. The current user's roles also change what they
+    /// may see and do.
+    pub fn update_member(&mut self, user: Snowflake, member: Member) {
+        let Some(guild) = &mut self.guild else { return };
+        let mine = user == guild.me;
+        if mine {
+            guild.my_roles = member.roles.clone();
+        }
+        guild.members.insert(user, member);
+        if mine {
+            self.rebuild();
+        }
+    }
+
+    /// GUILD_ROLE_CREATE and GUILD_ROLE_UPDATE.
+    pub fn upsert_role(&mut self, role: Role) {
+        let Some(guild) = &mut self.guild else { return };
+        match guild.roles.iter_mut().find(|r| r.id == role.id) {
+            Some(known) => *known = role,
+            None => guild.roles.push(role),
+        }
+        self.rebuild();
+    }
+
+    pub fn remove_role(&mut self, id: Snowflake) {
+        let Some(guild) = &mut self.guild else { return };
+        guild.roles.retain(|r| r.id != id);
+        guild.my_roles.retain(|r| *r != id);
+        self.rebuild();
     }
 
     pub fn upsert_channel(&mut self, channel: Channel) {
@@ -607,6 +643,37 @@ mod tests {
         assert_eq!(names(&space, &all), ["c6", "C1", "c4", "c3"]);
         assert_eq!(space.initials.as_ref(), "RB");
         assert_eq!(space.first_openable(), Some(Snowflake(6)));
+    }
+
+    #[test]
+    fn role_and_member_updates_change_access() {
+        let mut space = guild(vec![channel(1, ChannelKind::GUILD_TEXT, None, 0)]);
+        assert_ne!(space.permissions(Snowflake(1)) & permissions::VIEW_CHANNEL, 0);
+        // @everyone loses the channel; a new role given to the user brings it back.
+        let role = |id: u64, permissions: u64| Role {
+            id: Snowflake(id),
+            name: format!("r{id}"),
+            color: 0xff0000,
+            position: 1,
+            permissions,
+        };
+        space.upsert_role(role(100, 0));
+        assert_eq!(space.permissions(Snowflake(1)), 0);
+        assert!(space.rows().is_empty());
+        space.upsert_role(role(7, permissions::VIEW_CHANNEL));
+        let member = |roles: Vec<Snowflake>| Member {
+            user_id: Some(Snowflake(1)),
+            user: None,
+            nick: Some("eu".into()),
+            roles,
+        };
+        space.update_member(Snowflake(1), member(vec![Snowflake(7)]));
+        assert_ne!(space.permissions(Snowflake(1)) & permissions::VIEW_CHANNEL, 0);
+        let info = space.info().unwrap();
+        assert_eq!(info.member_style(Snowflake(1)), (Some("eu"), Some(0xff0000)));
+        space.remove_role(Snowflake(7));
+        assert_eq!(space.permissions(Snowflake(1)), 0);
+        assert!(space.info().unwrap().my_roles().is_empty());
     }
 
     #[test]

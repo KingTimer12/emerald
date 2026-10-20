@@ -2,11 +2,12 @@
 
 use gpui::{AppContext, Context, Entity, SharedString};
 
+use super::chat::Replying;
 use super::state::Msg;
 use super::{Emerald, shown};
 use super::super::text_input::TextInput;
 use crate::discord::model::Snowflake;
-use crate::discord::{Command, rest};
+use crate::discord::{Command, ReplyTo, rest};
 
 const MAX_MESSAGE_LEN: usize = 2000;
 
@@ -16,6 +17,8 @@ pub(super) struct Composer {
     draft: SharedString,
     /// Why the last message in the open channel was not sent.
     pub error: Option<SharedString>,
+    /// The message the next send answers.
+    pub reply: Option<Replying>,
 }
 
 impl Composer {
@@ -24,12 +27,14 @@ impl Composer {
             input: cx.new(|cx| TextInput::new(t!("composer.no_channel"), cx)),
             draft: SharedString::default(),
             error: None,
+            reply: None,
         }
     }
 
     /// A channel was opened.
     pub fn open(&mut self, placeholder: String, cx: &mut Context<Emerald>) {
         self.error = None;
+        self.reply = None;
         self.input
             .update(cx, |input, cx| input.set_placeholder(placeholder, cx));
     }
@@ -64,16 +69,44 @@ impl Emerald {
         self.composer.error = None;
         self.typing.sent();
         let nonce = rest::nonce();
+        let reply = self.composer.reply.take().filter(|r| r.channel == channel);
         if let Some(me) = self.people.me() {
+            let preview = reply.as_ref().map(|r| r.preview.clone());
             let view = shown(&self.messages, self.selected_channel, channel);
             self.history
-                .add_pending(channel, Msg::pending(me, content.clone(), nonce.clone()), view);
+                .add_pending(channel, Msg::pending(me, content.clone(), nonce.clone(), preview), view);
         }
         self.net.post(Command::Send {
             channel,
             content,
             nonce,
+            reply: reply.map(|r| ReplyTo {
+                message: r.message,
+                mention: r.mention,
+            }),
         });
+        cx.notify();
+    }
+
+    /// The words in the message box for `channel`, as the web client puts them.
+    pub(super) fn composer_placeholder(&self, channel: Snowflake) -> String {
+        let space = self.spaces.current();
+        let name = space.row(channel).map_or_else(SharedString::default, |row| row.name.clone());
+        if !self.can_send(channel) {
+            t!("composer.no_permission").to_owned()
+        } else if space.is_dms() {
+            t!("composer.dm", name = name)
+        } else {
+            t!("composer.channel", name = name)
+        }
+    }
+
+    /// Permissions changed: the open channel may now be writable or not.
+    pub(super) fn refresh_composer(&mut self, cx: &mut Context<Self>) {
+        if let Some(channel) = self.selected_channel.filter(|_| !self.friends_open) {
+            let placeholder = self.composer_placeholder(channel);
+            self.composer.input.update(cx, |input, cx| input.set_placeholder(placeholder, cx));
+        }
         cx.notify();
     }
 

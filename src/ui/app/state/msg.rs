@@ -25,6 +25,11 @@ pub struct Msg {
     pub kind: u8,
     /// Names of the users mentioned, for `<@id>` in the content.
     pub mentions: Vec<(Snowflake, SharedString)>,
+    pub mention_roles: Vec<Snowflake>,
+    pub mention_everyone: bool,
+    pub pinned: bool,
+    /// The author changed the text after sending it.
+    pub edited: bool,
     pub reply: Option<Reply>,
     /// Image attachments as (thumbnail URL, width, height) in display pixels.
     pub images: Vec<(SharedString, f32, f32)>,
@@ -38,6 +43,7 @@ pub struct Msg {
 }
 
 /// The message a reply points at; `content` is `None` once it is deleted.
+#[derive(Clone)]
 pub struct Reply {
     pub author_id: Snowflake,
     pub author: SharedString,
@@ -45,12 +51,33 @@ pub struct Reply {
     pub content: Option<SharedString>,
 }
 
+impl Reply {
+    /// A preview of `msg`, as a reply to it shows it.
+    pub fn of(msg: &Msg) -> Self {
+        Self {
+            author_id: msg.author_id,
+            author: msg.author.clone(),
+            avatar_url: msg.avatar_url.clone(),
+            content: Some(preview(&msg.content).into()),
+        }
+    }
+}
+
+/// The first line of a message, or a stand-in when it has no text.
+fn preview(content: &str) -> String {
+    content
+        .lines()
+        .next()
+        .map_or_else(|| t!("chat.attachment").to_owned(), str::to_owned)
+}
+
 impl Msg {
     /// Our own message as typed, shown until the server echoes it.
-    pub fn pending(me: &User, content: String, nonce: String) -> Self {
+    pub fn pending(me: &User, content: String, nonce: String, reply: Option<Reply>) -> Self {
         Self {
             nonce: Some(nonce),
             pending: true,
+            reply,
             ..Self::blank(me, Snowflake(0), time::now_secs(), content)
         }
     }
@@ -69,6 +96,10 @@ impl Msg {
             stickers: Vec::new(),
             kind: message_kind::DEFAULT,
             mentions: Vec::new(),
+            mention_roles: Vec::new(),
+            mention_everyone: false,
+            pinned: false,
+            edited: false,
             reply: None,
             images: Vec::new(),
             files: Vec::new(),
@@ -81,6 +112,25 @@ impl Msg {
     pub fn is_pending(&self, nonce: &str) -> bool {
         self.pending && self.nonce.as_deref() == Some(nonce)
     }
+
+    /// Pings `me`, by name, through one of `my_roles`, or with @everyone.
+    pub fn mentions_user(&self, me: Snowflake, my_roles: &[Snowflake]) -> bool {
+        self.mention_everyone
+            || self.mentions.iter().any(|(id, _)| *id == me)
+            || self.mention_roles.iter().any(|role| my_roles.contains(role))
+    }
+
+    /// Plain text the author can edit here: the message box is one line.
+    pub fn editable_text(&self) -> Option<&str> {
+        let text = self.content.as_ref();
+        let regular = matches!(self.kind, message_kind::DEFAULT | message_kind::REPLY);
+        (regular && !self.pending && !text.contains('\n')).then_some(text)
+    }
+}
+
+/// The names of `users`, for the mentions in a message.
+pub fn mention_names(users: &[User]) -> Vec<(Snowflake, SharedString)> {
+    users.iter().map(|u| (u.id, u.display_name().to_owned().into())).collect()
 }
 
 impl From<Message> for Msg {
@@ -99,14 +149,7 @@ impl From<Message> for Msg {
                 author: original.author.display_name().to_owned().into(),
                 avatar_url: original.author.avatar_url().into(),
                 // One line, like Discord's reply preview.
-                content: Some(
-                    original
-                        .content
-                        .lines()
-                        .next()
-                        .map_or_else(|| t!("chat.attachment").to_owned(), str::to_owned)
-                        .into(),
-                ),
+                content: Some(preview(&original.content).into()),
             }),
             None if message.kind == message_kind::REPLY => Some(Reply {
                 author_id: Snowflake(0),
@@ -123,11 +166,11 @@ impl From<Message> for Msg {
                 .map(|s| (s.name.clone().into(), s.url().map(Into::into)))
                 .collect(),
             kind: message.kind,
-            mentions: message
-                .mentions
-                .iter()
-                .map(|u| (u.id, u.display_name().to_owned().into()))
-                .collect(),
+            mentions: mention_names(&message.mentions),
+            mention_roles: message.mention_roles,
+            mention_everyone: message.mention_everyone,
+            pinned: message.pinned,
+            edited: message.edited_timestamp.is_some(),
             reply,
             images,
             files,

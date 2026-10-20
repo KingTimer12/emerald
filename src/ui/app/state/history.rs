@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use super::msg::Msg;
+use super::msg::{Msg, mention_names};
 use crate::discord::model::{Message, MessageDelete, MessageUpdate, Snowflake};
 use crate::discord::rest::HISTORY_PAGE;
 
@@ -137,14 +137,56 @@ impl History {
         }
     }
 
+    /// MESSAGE_UPDATE: applies whatever it carries.
     pub fn edit(&mut self, update: MessageUpdate, view: Option<&dyn MessageView>) {
-        let Some(content) = update.content else { return };
         let Some(log) = self.logs.get_mut(&update.channel_id) else { return };
-        if let Some(ix) = log.position(update.id) {
-            log.messages[ix].content = format!("{content} {}", t!("chat.edited")).into();
-            if let Some(v) = view {
-                v.refresh(ix);
-            }
+        let Some(ix) = log.position(update.id) else { return };
+        let msg = &mut log.messages[ix];
+        if let Some(content) = update.content {
+            msg.content = content.into();
+        }
+        msg.edited |= update.edited_timestamp.is_some();
+        if let Some(pinned) = update.pinned {
+            msg.pinned = pinned;
+        }
+        if let Some(embeds) = update.embeds {
+            msg.embeds = embeds;
+        }
+        if let Some(mentions) = update.mentions {
+            msg.mentions = mention_names(&mentions);
+        }
+        if let Some(roles) = update.mention_roles {
+            msg.mention_roles = roles;
+        }
+        if let Some(everyone) = update.mention_everyone {
+            msg.mention_everyone = everyone;
+        }
+        if let Some(v) = view {
+            v.refresh(ix);
+        }
+    }
+
+    /// The message `id` in `channel`, with its position in the log.
+    pub fn find(&self, channel: Snowflake, id: Snowflake) -> Option<(usize, &Msg)> {
+        let log = self.logs.get(&channel)?;
+        let ix = log.position(id)?;
+        Some((ix, &log.messages[ix]))
+    }
+
+    /// The newest message by `author` that can be edited here.
+    pub fn last_editable(&self, channel: Snowflake, author: Snowflake) -> Option<Snowflake> {
+        let log = self.logs.get(&channel)?;
+        log.messages
+            .iter()
+            .rev()
+            .find(|m| m.author_id == author && m.editable_text().is_some())
+            .map(|m| m.id)
+    }
+
+    /// Redraws the message `id` if it is in the log `view` shows.
+    pub fn redraw(&self, channel: Snowflake, id: Snowflake, view: Option<&dyn MessageView>) {
+        if let (Some((ix, _)), Some(view)) = (self.find(channel, id), view) {
+            view.refresh(ix);
         }
     }
 
@@ -337,7 +379,7 @@ mod tests {
         let mut history = History::default();
         let rows = Rows::default();
         history.open(CHANNEL, false, &rows);
-        history.add_pending(CHANNEL, Msg::pending(&me(), "oi".into(), "n1".into()), Some(&rows));
+        history.add_pending(CHANNEL, Msg::pending(&me(), "oi".into(), "n1".into(), None), Some(&rows));
         history.receive(message(5, Some("n1")), true, Some(&rows));
         // The echo arriving twice (gateway and REST) is dropped.
         history.receive(message(5, Some("n1")), true, Some(&rows));
@@ -348,11 +390,35 @@ mod tests {
     }
 
     #[test]
+    fn updates_apply_only_what_they_carry() {
+        let mut history = History::default();
+        let rows = Rows::default();
+        history.open(CHANNEL, false, &rows);
+        history.receive(message(5, None), false, Some(&rows));
+        let update = |json: serde_json::Value| serde_json::from_value::<MessageUpdate>(json).unwrap();
+        history.edit(update(serde_json::json!({ "id": "5", "channel_id": "9", "pinned": true })), Some(&rows));
+        let msg = history.find(CHANNEL, Snowflake(5)).unwrap().1;
+        assert!(msg.pinned && !msg.edited);
+        assert_eq!(msg.content.as_ref(), "m5");
+        history.edit(
+            update(serde_json::json!({
+                "id": "5", "channel_id": "9", "content": "novo", "edited_timestamp": "2026-10-20T10:00:00Z"
+            })),
+            Some(&rows),
+        );
+        let msg = history.find(CHANNEL, Snowflake(5)).unwrap().1;
+        assert!(msg.pinned && msg.edited);
+        assert_eq!(msg.content.as_ref(), "novo");
+        assert_eq!(history.last_editable(CHANNEL, Snowflake(1)), Some(Snowflake(5)));
+        assert_eq!(history.last_editable(CHANNEL, Snowflake(2)), None);
+    }
+
+    #[test]
     fn failed_send_removes_its_copy() {
         let mut history = History::default();
         let rows = Rows::default();
         history.open(CHANNEL, false, &rows);
-        history.add_pending(CHANNEL, Msg::pending(&me(), "oi".into(), "n1".into()), Some(&rows));
+        history.add_pending(CHANNEL, Msg::pending(&me(), "oi".into(), "n1".into(), None), Some(&rows));
         history.drop_pending(CHANNEL, "n1", Some(&rows));
         assert_eq!(*rows.count.borrow(), 0);
     }

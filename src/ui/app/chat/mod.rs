@@ -1,8 +1,11 @@
 //! The chat column: header, message list with the channel intro and day
 //! separators, composer with the typing indicator, and the DM profile panel.
 
+mod actions;
 mod list;
 mod rich;
+
+pub(super) use actions::{Editing, MessageMenu, Replying};
 
 use gpui::{AnyElement, Context, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px, rgb};
 
@@ -127,7 +130,7 @@ impl Emerald {
         } else {
             list(
                 self.messages.clone(),
-                cx.processor(|this, ix, _, _| this.render_list_row(ix)),
+                cx.processor(|this, ix, _, cx| this.render_list_row(ix, cx)),
             )
             .flex_1()
             .pb_4()
@@ -149,7 +152,13 @@ impl Emerald {
                     .text_color(rgb(theme::FEEDBACK_CRITICAL))
                     .child(error)
             }))
-            .child(self.composer.input.clone())
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .children(self.render_reply_bar(cx))
+                    .child(self.composer.input.clone()),
+            )
             // Typing indicator in the strip under the input, as on Discord.
             .child(
                 div()
@@ -221,13 +230,13 @@ impl Emerald {
 
     /// Author name and color: guild nickname and top role color when the
     /// member is known, else the account's display name.
-    fn member_style(&self, user: Snowflake, fallback: &SharedString) -> (SharedString, Option<u32>) {
+    pub(super) fn member_style(&self, user: Snowflake, fallback: &SharedString) -> (SharedString, Option<u32>) {
         let guild = self.spaces.current().info();
         let (nick, color) = guild.map_or((None, None), |g| g.member_style(user));
         (nick.map_or_else(|| fallback.clone(), |n| n.to_owned().into()), color)
     }
 
-    fn author_style(&self, msg: &Msg) -> (SharedString, u32) {
+    pub(super) fn author_style(&self, msg: &Msg) -> (SharedString, u32) {
         let (name, color) = self.member_style(msg.author_id, &msg.author);
         (name, color.unwrap_or(theme::TEXT_STRONG))
     }

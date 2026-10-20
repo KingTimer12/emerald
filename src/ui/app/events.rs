@@ -48,7 +48,29 @@ impl Emerald {
                     list.apply(update);
                 }
             }
-            NetEvent::MessageAck(ack) => self.reads.acked(ack.channel_id, ack.message_id),
+            NetEvent::MessageAck(ack) => self.reads.acked(ack.channel_id, ack.message_id, ack.mention_count),
+            NetEvent::MemberUpdate(update) => {
+                let (guild, user, member) = update.into_member();
+                if let Some(user) = &member.user {
+                    self.people.remember_new(user);
+                }
+                if let Some(space) = self.spaces.get_mut(guild) {
+                    space.update_member(user, member);
+                }
+                self.refresh_composer(cx);
+            }
+            NetEvent::RoleUpdate(update) => {
+                if let Some(space) = self.spaces.get_mut(update.guild_id) {
+                    space.upsert_role(update.role);
+                }
+                self.refresh_composer(cx);
+            }
+            NetEvent::RoleDelete(delete) => {
+                if let Some(space) = self.spaces.get_mut(delete.guild_id) {
+                    space.remove_role(delete.role_id);
+                }
+                self.refresh_composer(cx);
+            }
             NetEvent::ActionDone(action) => self.on_action_result(action, Ok(()), window, cx),
             NetEvent::ActionFailed { action, error } => {
                 self.on_action_result(action, Err(error), window, cx)
@@ -74,6 +96,7 @@ impl Emerald {
                 self.history.edit(update, view);
             }
             NetEvent::MessageDelete(delete) => {
+                self.message_gone(delete.channel_id, delete.id, window, cx);
                 let view = shown(&self.messages, self.selected_channel, delete.channel_id);
                 self.history.delete(delete, view);
             }
@@ -195,8 +218,10 @@ impl Emerald {
             }
         }
         if !mine {
-            if self.selected_channel == Some(channel) {
+            if self.selected_channel == Some(channel) && !self.friends_open {
                 self.ack(channel, message.id, cx);
+            } else if self.pings_me(&message) {
+                self.reads.add_mention(channel);
             } else {
                 self.reads.mark_unread(channel);
             }
@@ -204,6 +229,18 @@ impl Emerald {
         self.typing.stop(channel, author);
         let view = shown(&self.messages, self.selected_channel, channel);
         self.history.receive(message, mine, view);
+    }
+
+    /// Whether `message` counts as a mention: every DM message does, as on
+    /// Discord; in a guild, one naming the user, one of their roles, or
+    /// @everyone.
+    fn pings_me(&self, message: &Message) -> bool {
+        let me = self.people.my_id();
+        let Some(guild) = message.guild_id else { return true };
+        let my_roles = self.spaces.guild(guild).map_or(&[][..], |g| g.my_roles());
+        message.mention_everyone
+            || message.mentions.iter().any(|u| u.id == me)
+            || message.mention_roles.iter().any(|role| my_roles.contains(role))
     }
 
     /// Moves the DM a message landed in to the top of the sidebar, adding
@@ -277,6 +314,11 @@ impl Emerald {
                     }
                 }
             },
+            Action::Message => {
+                if let Err(error) = result {
+                    self.composer.error = Some(error.into());
+                }
+            }
             Action::UpdateProfile => {
                 if let Some(Overlay::Settings(view)) = &mut self.overlay {
                     view.feedback = Some(Feedback::from_result(result, t!("settings.display_name_saved")));

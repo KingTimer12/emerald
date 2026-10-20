@@ -67,6 +67,7 @@ impl Emerald {
     fn render_space(&self, ix: usize, space: &Space, cx: &mut Context<Self>) -> impl IntoElement {
         let selected = ix == self.spaces.selected();
         let unread = !selected && space.channels().iter().any(|c| self.reads.is_unread(c.id));
+        let mentions = self.reads.total_mentions(space.channels().iter());
         let group: SharedString = format!("space-{ix}").into();
         // White pill on the left edge: full height when selected, a dot when
         // unread, half height on hover.
@@ -129,6 +130,19 @@ impl Emerald {
                     })
                     .on_click(cx.listener(move |this, _, window, cx| this.select_space(ix, window, cx))),
             )
+            // Mention count in the icon's corner, ringed with the background.
+            .when(mentions > 0, |space| {
+                space.child(
+                    div()
+                        .absolute()
+                        .bottom(px(-4.))
+                        .right(px(10.))
+                        .rounded_full()
+                        .border_4()
+                        .border_color(rgb(theme::BASE_LOWEST))
+                        .child(widgets::badge(mentions as usize)),
+                )
+            })
     }
 
     pub(super) fn render_channels(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -286,6 +300,7 @@ impl Emerald {
                 let opens = kind.is_openable();
                 let selected = self.selected_channel == Some(id) && !self.friends_open;
                 let unread = self.reads.is_unread(id);
+                let mentions = self.reads.mentions(id);
                 let forbidden = self.history.is_forbidden(id);
                 let (color, icon_color) = if forbidden {
                     (theme::INTERACTIVE_MUTED, theme::INTERACTIVE_MUTED)
@@ -328,6 +343,7 @@ impl Emerald {
                         None => r.child(icon(glyph, 20., icon_color)),
                     })
                     .child(div().flex_1().min_w(px(0.)).truncate().child(name.clone()))
+                    .when(mentions > 0 && !selected, |r| r.child(widgets::badge(mentions as usize)))
                     .map(|r| {
                         if opens {
                             r.on_click(cx.listener(move |this, _, window, cx| {

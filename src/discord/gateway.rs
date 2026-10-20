@@ -21,9 +21,9 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use super::{Link, NetEvent, Snapshot};
 use super::identity::{self, Identity};
 use super::model::{
-    Channel, Guild, MemberListUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, Presence,
-    Ready, ReadySupplemental, Relationship, RelationshipRemove, Snowflake, Status, TypingStart,
-    User,
+    Channel, Guild, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
+    Presence, Ready, ReadySupplemental, Relationship, RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status,
+    TypingStart, User,
 };
 
 /// Raw gateway payloads from the UI (op 8, op 37), sent once a session is up.
@@ -307,7 +307,7 @@ fn dispatch(
                 .entries
                 .into_iter()
                 .filter(|state| state.read_state_type == 0)
-                .filter_map(|state| Some((state.id, state.last_message_id?)))
+                .filter_map(|state| Some((state.id, state.last_message_id?, state.mention_count)))
                 .collect();
             NetEvent::Ready(Box::new(Snapshot {
                 me: r.user,
@@ -378,6 +378,18 @@ fn dispatch(
         },
         "GUILD_MEMBER_LIST_UPDATE" => match parse::<MemberListUpdate>(kind, data) {
             Some(update) => NetEvent::MemberList(update),
+            None => return,
+        },
+        "GUILD_MEMBER_UPDATE" => match parse::<MemberUpdate>(kind, data) {
+            Some(update) => NetEvent::MemberUpdate(update),
+            None => return,
+        },
+        "GUILD_ROLE_CREATE" | "GUILD_ROLE_UPDATE" => match parse::<RoleUpdate>(kind, data) {
+            Some(update) => NetEvent::RoleUpdate(update),
+            None => return,
+        },
+        "GUILD_ROLE_DELETE" => match parse::<RoleDelete>(kind, data) {
+            Some(delete) => NetEvent::RoleDelete(delete),
             None => return,
         },
         "MESSAGE_ACK" => match parse::<MessageAck>(kind, data) {

@@ -93,6 +93,23 @@ unknown_role = "unknown-role"
 unknown_user = "unknown-user"
 welcome = "Welcome to #{name}!"
 
+[message]
+copy_id = "Copy Message ID"
+copy_text = "Copy Text"
+delete = "Delete Message"
+delete_button = "Delete"
+delete_confirm = "Are you sure you want to delete this message?"
+delete_tip = "You can hold down shift when clicking delete message to bypass this confirmation entirely."
+edit = "Edit"
+edit_hint = "escape to cancel • enter to save"
+mention_off = "OFF"
+mention_on = "ON"
+more = "More"
+pin = "Pin Message"
+reply = "Reply"
+replying_to = "Replying to {name}"
+unpin = "Unpin Message"
+
 [activity]
 competing = "Competing in {name}"
 listening = "Listening to {name}"

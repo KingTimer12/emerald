@@ -92,6 +92,23 @@ unknown_role = "cargo-desconhecido"
 unknown_user = "usuário-desconhecido"
 welcome = "Boas-vindas a #{name}!"
 
+[message]
+copy_id = "Copiar ID da mensagem"
+copy_text = "Copiar texto"
+delete = "Excluir mensagem"
+delete_button = "Excluir"
+delete_confirm = "Deseja mesmo excluir essa mensagem?"
+delete_tip = "Fica a dica: você pode pressionar Shift enquanto clica em excluir mensagem para ignorar a confirmação completamente."
+edit = "Editar"
+edit_hint = "esc para cancelar • enter para salvar"
+mention_off = "DESLIGADO"
+mention_on = "LIGADO"
+more = "Mais"
+pin = "Fixar mensagem"
+reply = "Responder"
+replying_to = "Respondendo para {name}"
+unpin = "Desafixar mensagem"
+
 [activity]
 competing = "Competindo em {name}"
 listening = "Ouvindo {name}"

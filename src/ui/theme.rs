@@ -95,6 +95,16 @@ pub fn mention_bg() -> Rgba {
     rgba(0x5865f24d)
 }
 
+/// `--background-mentioned` behind a message that pings the user, its
+/// hover shade, and the bar on its left edge.
+pub fn mentioned() -> Rgba {
+    rgba(0xf0b2321a)
+}
+pub fn mentioned_hover() -> Rgba {
+    rgba(0xf0b23229)
+}
+pub const MENTIONED_BAR: u32 = 0xf0b232;
+
 /// Inline code and spoiler background.
 pub fn code_bg() -> Rgba {
     rgba(0x1e1f2299)

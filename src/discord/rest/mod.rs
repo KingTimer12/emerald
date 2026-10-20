@@ -23,6 +23,7 @@ pub use error::{CaptchaRequired, Challenge, Forbidden, Solution, Unauthorized};
 use error::ErrorBody;
 use ratelimit::{RateLimiter, Route};
 
+use super::ReplyTo;
 use super::identity::{self, Identity};
 use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Profile, Snowflake, User};
 
@@ -207,15 +208,29 @@ impl Rest {
         channel: Snowflake,
         content: &str,
         nonce: &str,
+        reply: Option<ReplyTo>,
         captcha: Option<&Solution>,
     ) -> Result<Message> {
-        let body = json!({
+        let mut body = json!({
             "mobile_network_type": "unknown",
             "content": content,
             "nonce": nonce,
             "tts": false,
             "flags": 0,
         });
+        if let Some(reply) = reply {
+            body["message_reference"] = json!({
+                "channel_id": channel.to_string(),
+                "message_id": reply.message.to_string(),
+            });
+            // Like the web client: other mentions still ping, the author not.
+            if !reply.mention {
+                body["allowed_mentions"] = json!({
+                    "parse": ["users", "roles", "everyone"],
+                    "replied_user": false,
+                });
+            }
+        }
         self.fetch(
             Call::post("/channels/{id}/messages", format!("/channels/{channel}/messages"))
                 .major(channel)
@@ -223,6 +238,33 @@ impl Rest {
                 .captcha(captcha),
         )
         .await
+    }
+
+    pub async fn edit_message(&self, channel: Snowflake, message: Snowflake, content: &str) -> Result<()> {
+        self.run(
+            Call::patch("/channels/{id}/messages/{id}", format!("/channels/{channel}/messages/{message}"))
+                .major(channel)
+                .json(json!({ "content": content })),
+        )
+        .await
+    }
+
+    pub async fn delete_message(&self, channel: Snowflake, message: Snowflake) -> Result<()> {
+        self.run(
+            Call::delete("/channels/{id}/messages/{id}", format!("/channels/{channel}/messages/{message}"))
+                .major(channel),
+        )
+        .await
+    }
+
+    pub async fn pin_message(&self, channel: Snowflake, message: Snowflake, pin: bool) -> Result<()> {
+        let path = format!("/channels/{channel}/messages/pins/{message}");
+        let call = if pin {
+            Call::put("/channels/{id}/messages/pins/{id}", path)
+        } else {
+            Call::delete("/channels/{id}/messages/pins/{id}", path)
+        };
+        self.run(call.major(channel)).await
     }
 
     /// Read receipt, as the web client sends when a channel is on screen.
