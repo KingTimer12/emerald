@@ -18,12 +18,12 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
-use super::{Link, NetEvent, Snapshot};
+use super::{Link, NetEvent, ReactionEvent, Snapshot};
 use super::identity::{self, Identity};
 use super::model::{
     Channel, Guild, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
-    Presence, Ready, ReadySupplemental, Relationship, RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status,
-    TypingStart, User,
+    Presence, ReactionAddMany, ReactionClear, ReactionUpdate, Ready, ReadySupplemental, Relationship,
+    RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status, TypingStart, User, GuildEmojisUpdate,
 };
 
 /// Raw gateway payloads from the UI (op 8, op 37), sent once a session is up.
@@ -394,6 +394,23 @@ fn dispatch(
         },
         "MESSAGE_ACK" => match parse::<MessageAck>(kind, data) {
             Some(ack) => NetEvent::MessageAck(ack),
+            None => return,
+        },
+        "MESSAGE_REACTION_ADD" | "MESSAGE_REACTION_REMOVE" => match parse::<ReactionUpdate>(kind, data) {
+            Some(update) if kind == "MESSAGE_REACTION_ADD" => NetEvent::Reaction(ReactionEvent::Add(update)),
+            Some(update) => NetEvent::Reaction(ReactionEvent::Remove(update)),
+            None => return,
+        },
+        "MESSAGE_REACTION_ADD_MANY" => match parse::<ReactionAddMany>(kind, data) {
+            Some(batch) => NetEvent::Reaction(ReactionEvent::AddMany(batch)),
+            None => return,
+        },
+        "MESSAGE_REACTION_REMOVE_ALL" | "MESSAGE_REACTION_REMOVE_EMOJI" => match parse::<ReactionClear>(kind, data) {
+            Some(clear) => NetEvent::Reaction(ReactionEvent::Clear(clear)),
+            None => return,
+        },
+        "GUILD_EMOJIS_UPDATE" => match parse::<GuildEmojisUpdate>(kind, data) {
+            Some(update) => NetEvent::GuildEmojis(update),
             None => return,
         },
         "TYPING_START" => match parse::<TypingStart>(kind, data) {

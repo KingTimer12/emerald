@@ -1,4 +1,5 @@
 mod app;
+mod emoji;
 mod icons;
 mod lottie;
 mod markdown;

@@ -95,6 +95,19 @@ impl Emerald {
                 let view = shown(&self.messages, self.selected_channel, update.channel_id);
                 self.history.edit(update, view);
             }
+            NetEvent::Reaction(event) => self.on_reaction(event),
+            NetEvent::ReactionFailed {
+                channel,
+                message,
+                emoji,
+                add,
+                error,
+            } => self.reaction_failed(channel, message, &emoji, add, error),
+            NetEvent::GuildEmojis(update) => {
+                if let Some(guild) = self.spaces.guild_mut(update.guild_id) {
+                    guild.set_emojis(update.emojis);
+                }
+            }
             NetEvent::MessageDelete(delete) => {
                 self.message_gone(delete.channel_id, delete.id, window, cx);
                 let view = shown(&self.messages, self.selected_channel, delete.channel_id);

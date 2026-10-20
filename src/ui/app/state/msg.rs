@@ -3,7 +3,7 @@
 use gpui::SharedString;
 
 use super::super::super::time;
-use crate::discord::model::{Attachment, Embed, Message, Snowflake, User, message_kind};
+use crate::discord::model::{Attachment, Embed, Emoji, Message, Reaction, Snowflake, User, message_kind};
 
 /// Largest size an attached image is shown at, as in the web client.
 const IMAGE_MAX: (f32, f32) = (400., 300.);
@@ -35,10 +35,37 @@ pub struct Msg {
     /// Other attachments, by file name.
     pub files: Vec<SharedString>,
     pub embeds: Vec<Embed>,
+    /// In the order they were first added, as Discord shows them.
+    pub reactions: Vec<Reacted>,
     /// Set on our own sends until the server confirms them.
     pub nonce: Option<String>,
     /// Sent but not yet confirmed; drawn dimmed.
     pub pending: bool,
+}
+
+/// Everyone's reactions with one emoji. Super reactions are counted apart
+/// and drawn as their own chip.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reacted {
+    pub emoji: Emoji,
+    pub normal: u32,
+    pub burst: u32,
+    /// We reacted with it.
+    pub me: bool,
+    pub me_burst: bool,
+}
+
+impl From<Reaction> for Reacted {
+    fn from(reaction: Reaction) -> Self {
+        let counts = reaction.counts();
+        Self {
+            emoji: reaction.emoji,
+            normal: counts.normal,
+            burst: counts.burst,
+            me: reaction.me,
+            me_burst: reaction.me_burst,
+        }
+    }
 }
 
 pub struct Sticker {
@@ -111,6 +138,7 @@ impl Msg {
             images: Vec::new(),
             files: Vec::new(),
             embeds: Vec::new(),
+            reactions: Vec::new(),
             nonce: None,
             pending: false,
         }
@@ -125,6 +153,52 @@ impl Msg {
         self.mention_everyone
             || self.mentions.iter().any(|(id, _)| *id == me)
             || self.mention_roles.iter().any(|role| my_roles.contains(role))
+    }
+
+    /// One user's reaction came or went; `mine` when that user is us.
+    /// Repeats of our own (the gateway echoing what we already show) change
+    /// nothing. True when something changed.
+    pub fn react(&mut self, emoji: &Emoji, burst: bool, mine: bool, add: bool) -> bool {
+        let found = self.reactions.iter().position(|r| r.emoji.same(emoji));
+        let Some(ix) = found else {
+            if add {
+                self.reactions.push(Reacted {
+                    emoji: emoji.clone(),
+                    normal: u32::from(!burst),
+                    burst: u32::from(burst),
+                    me: mine && !burst,
+                    me_burst: mine && burst,
+                });
+            }
+            return add;
+        };
+        let reaction = &mut self.reactions[ix];
+        let (count, me) = if burst {
+            (&mut reaction.burst, &mut reaction.me_burst)
+        } else {
+            (&mut reaction.normal, &mut reaction.me)
+        };
+        if mine && *me == add {
+            return false;
+        }
+        if mine {
+            *me = add;
+        }
+        *count = if add { *count + 1 } else { count.saturating_sub(1) };
+        if reaction.normal == 0 && reaction.burst == 0 {
+            self.reactions.remove(ix);
+        }
+        true
+    }
+
+    /// Drops the reactions with `emoji`, or all of them.
+    pub fn clear_reactions(&mut self, emoji: Option<&Emoji>) -> bool {
+        let before = self.reactions.len();
+        match emoji {
+            Some(emoji) => self.reactions.retain(|r| !r.emoji.same(emoji)),
+            None => self.reactions.clear(),
+        }
+        self.reactions.len() != before
     }
 
     /// Plain text the author can edit here: the message box is one line.
@@ -186,6 +260,7 @@ impl From<Message> for Msg {
             images,
             files,
             embeds: message.embeds,
+            reactions: message.reactions.into_iter().map(Into::into).collect(),
             nonce: message.nonce,
             ..Self::blank(&message.author, message.id, message.id.unix_secs(), message.content)
         }
@@ -232,6 +307,39 @@ mod tests {
         let (url, w, h) = image_attachment(&attachment).unwrap();
         assert_eq!((w, h), (400., 150.));
         assert_eq!(url.as_ref(), "https://media/a.png?ex=1&width=800&height=300");
+    }
+
+    fn me() -> User {
+        serde_json::from_str(r#"{"id":"1","username":"me"}"#).unwrap()
+    }
+
+    #[test]
+    fn reactions_count_and_ignore_our_echo() {
+        let mut msg = Msg::pending(&me(), String::new(), "n".into(), None);
+        let thumbs = Emoji::unicode("👍");
+        assert!(msg.react(&thumbs, false, true, true));
+        // The gateway echo of our own reaction.
+        assert!(!msg.react(&thumbs, false, true, true));
+        assert!(msg.react(&thumbs, false, false, true));
+        assert_eq!((msg.reactions[0].normal, msg.reactions[0].me), (2, true));
+        assert!(msg.react(&thumbs, false, true, false));
+        assert!(!msg.react(&thumbs, false, true, false));
+        assert_eq!((msg.reactions[0].normal, msg.reactions[0].me), (1, false));
+        assert!(msg.react(&thumbs, false, false, false));
+        assert!(msg.reactions.is_empty());
+    }
+
+    #[test]
+    fn super_reactions_count_apart() {
+        let mut msg = Msg::pending(&me(), String::new(), "n".into(), None);
+        let heart = Emoji::unicode("❤️");
+        msg.react(&heart, false, false, true);
+        msg.react(&heart, true, false, true);
+        assert_eq!((msg.reactions[0].normal, msg.reactions[0].burst), (1, 1));
+        msg.react(&heart, false, false, false);
+        assert_eq!(msg.reactions.len(), 1);
+        assert!(msg.clear_reactions(Some(&heart)));
+        assert!(!msg.clear_reactions(None));
     }
 
     #[test]

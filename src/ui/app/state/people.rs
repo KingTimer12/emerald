@@ -154,6 +154,7 @@ mod tests {
             avatar: None,
             email: None,
             bot: false,
+            premium_type: None,
         }
     }
 

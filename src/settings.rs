@@ -41,6 +41,9 @@ pub struct Settings {
     /// Interface language as a Discord locale code; `None` follows the system.
     pub language: Option<String>,
     pub time_format: TimeFormat,
+    /// "Frequently Used" in the reaction picker, newest first: Unicode
+    /// emoji as text, custom ones as `name:id`.
+    pub recent_emojis: Vec<String>,
 }
 
 impl Default for Settings {
@@ -53,6 +56,7 @@ impl Default for Settings {
             show_members: true,
             language: None,
             time_format: TimeFormat::Auto,
+            recent_emojis: Vec::new(),
         }
     }
 }

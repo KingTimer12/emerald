@@ -152,6 +152,10 @@ pub struct Emerald {
     edit: Option<chat::Editing>,
     edit_input: Entity<TextInput>,
     message_menu: Option<chat::MessageMenu>,
+    reaction_picker: Option<chat::ReactionPicker>,
+    /// The reaction picker's search box, and its grid's scroll position.
+    emoji_query: Entity<TextInput>,
+    emoji_scroll: UniformListScrollHandle,
     /// Filters the DM list by name; enter opens the first match.
     dm_search: Entity<TextInput>,
     overlay: Option<Overlay>,
@@ -189,11 +193,19 @@ impl Emerald {
         });
         let member_query = cx.new(|cx| TextInput::new(t!("members.search"), cx).keep_on_submit().compact());
         let edit_input = cx.new(|cx| TextInput::new("", cx));
+        let emoji_query = cx.new(|cx| TextInput::new(t!("reaction.search"), cx).keep_on_submit().compact());
         let subscriptions = vec![
             cx.subscribe_in(&edit_input, window, |this, _, event: &Submitted, window, cx| {
                 this.save_edit(event.0.clone(), window, cx)
             }),
             cx.observe(&member_query, |this, _, cx| this.on_member_query(cx)),
+            cx.observe(&emoji_query, |this, _, cx| {
+                this.emoji_scroll = UniformListScrollHandle::new();
+                cx.notify();
+            }),
+            cx.subscribe_in(&emoji_query, window, |this, _, _: &Submitted, window, cx| {
+                this.pick_first_emoji(window, cx)
+            }),
             cx.subscribe(&composer.input, |this, _, event: &Submitted, cx| {
                 this.send(event.0.clone(), cx)
             }),
@@ -246,6 +258,9 @@ impl Emerald {
             edit: None,
             edit_input,
             message_menu: None,
+            reaction_picker: None,
+            emoji_query,
+            emoji_scroll: UniformListScrollHandle::new(),
             dm_search,
             overlay: None,
             busy: HashSet::new(),
@@ -341,6 +356,7 @@ impl Render for Emerald {
             None => None,
         };
         let menu = self.render_message_menu(cx);
+        let picker = self.render_reaction_picker(cx);
         div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
@@ -372,5 +388,6 @@ impl Render for Emerald {
             .child(self.render_user_panel(cx))
             .children(overlay)
             .children(menu)
+            .children(picker)
     }
 }

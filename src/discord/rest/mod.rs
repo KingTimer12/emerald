@@ -27,10 +27,10 @@ use error::{ErrorBody, Unavailable};
 use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
 
-use super::ReplyTo;
+use super::{ReactionSource, ReplyTo};
 use super::cache::Cache;
 use super::identity::{self, Identity};
-use super::model::{Channel, DISCORD_EPOCH_MS, Invite, Message, Profile, Snowflake, User};
+use super::model::{Channel, DISCORD_EPOCH_MS, Emoji, Invite, Message, Profile, Snowflake, User};
 
 const MAX_ATTEMPTS: u32 = 4;
 pub const HISTORY_PAGE: usize = 50;
@@ -297,6 +297,41 @@ impl Rest {
             Call::delete("/channels/{id}/messages/pins/{id}", path)
         };
         self.run(call.major(channel)).await
+    }
+
+    /// Our normal reaction, as the web client adds it: `type=0` and the
+    /// surface it came from as `location`.
+    pub async fn add_reaction(
+        &self,
+        channel: Snowflake,
+        message: Snowflake,
+        emoji: &Emoji,
+        source: ReactionSource,
+    ) -> Result<()> {
+        let path = format!(
+            "/channels/{channel}/messages/{message}/reactions/{}/@me?location={}&type=0",
+            encode_path(&emoji.route_key()),
+            encode_component(source.location()),
+        );
+        self.run(Call::put("/channels/{id}/messages/{id}/reactions/{emoji}/@me", path).major(channel))
+            .await
+    }
+
+    /// Removes our normal reaction through the typed route the web client uses.
+    pub async fn remove_reaction(
+        &self,
+        channel: Snowflake,
+        message: Snowflake,
+        emoji: &Emoji,
+        source: ReactionSource,
+    ) -> Result<()> {
+        let path = format!(
+            "/channels/{channel}/messages/{message}/reactions/{}/0/@me?location={}&burst=false",
+            encode_path(&emoji.route_key()),
+            encode_component(source.location()),
+        );
+        self.run(Call::delete("/channels/{id}/messages/{id}/reactions/{emoji}/{type}/@me", path).major(channel))
+            .await
     }
 
     /// Read receipt, as the web client sends when a channel is on screen.
@@ -574,6 +609,35 @@ pub fn nonce() -> String {
     (ms.saturating_sub(DISCORD_EPOCH_MS) << 22 | count).to_string()
 }
 
+/// Percent-encodes a path segment the way the browser's URL parser does
+/// when the web client puts raw text in a path: non-ASCII and the path
+/// percent-encode set, while `:` stays as is.
+fn encode_path(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_graphic() && !b"\"#<>?`{}/%".contains(&byte) {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+/// Percent-encodes a query value as `encodeURIComponent` does, which is
+/// how the web client's HTTP library writes query strings.
+fn encode_component(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&byte) {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 /// Extracts the invite code from what a user pastes: a bare code,
 /// `discord.gg/<code>`, or `discord.com/invite/<code>`, with or without
 /// scheme, trailing slash or query string.
@@ -589,7 +653,14 @@ pub fn invite_code(input: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::invite_code;
+    use super::{encode_component, encode_path, invite_code};
+
+    #[test]
+    fn reaction_routes_encode_like_the_browser() {
+        assert_eq!(encode_path("👍"), "%F0%9F%91%8D");
+        assert_eq!(encode_path("pepe:42"), "pepe:42");
+        assert_eq!(encode_component("Message Hover Bar"), "Message%20Hover%20Bar");
+    }
 
     #[test]
     fn invite_code_accepts_pasted_forms() {

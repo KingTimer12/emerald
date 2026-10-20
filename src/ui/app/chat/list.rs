@@ -228,7 +228,7 @@ impl Emerald {
                                 .font_weight(FontWeight::MEDIUM)
                                 .child(author),
                         )
-                        .child(self.message_body(msg, ix)),
+                        .child(self.message_body(msg, ix, cx)),
                 )
                 .children(toolbar)
                 .into_any_element()
@@ -243,7 +243,7 @@ impl Emerald {
             row.pl(px(72.))
                 .pr_4()
                 .py(px(2.))
-                .child(self.message_body(msg, ix))
+                .child(self.message_body(msg, ix, cx))
                 .children(toolbar)
                 .into_any_element()
         } else {
@@ -293,7 +293,7 @@ impl Emerald {
                                                         .child(msg.time.clone()),
                                                 ),
                                         )
-                                        .child(self.message_body(msg, ix)),
+                                        .child(self.message_body(msg, ix, cx)),
                                 ),
                         )
                         .children(toolbar),
@@ -361,7 +361,7 @@ impl Emerald {
             )
     }
 
-    fn message_body(&self, msg: &Msg, ix: usize) -> Div {
+    fn message_body(&self, msg: &Msg, ix: usize, cx: &mut Context<Self>) -> Div {
         div()
             .flex()
             .flex_col()
@@ -411,6 +411,7 @@ impl Emerald {
             }))
             .children(msg.embeds.iter().enumerate().filter_map(|(n, embed)| self.render_embed(embed, ix, n)))
             .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker)))
+            .children(self.render_reactions(msg, ix, cx))
     }
 
     fn render_sticker(&self, sticker: &Sticker) -> AnyElement {

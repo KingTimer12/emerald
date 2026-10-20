@@ -17,6 +17,9 @@ pub struct User {
     /// Bots and apps, tagged "APP" next to their name.
     #[serde(default)]
     pub bot: bool,
+    /// Nitro tier, 0 for none. Only present on the current user.
+    #[serde(default)]
+    pub premium_type: Option<u8>,
 }
 
 impl User {

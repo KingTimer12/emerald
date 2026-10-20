@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer};
 
-use super::{Member, Snowflake, User};
+use super::{Member, Reaction, Snowflake, User};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Attachment {
@@ -124,6 +124,8 @@ pub struct Message {
     pub referenced_message: Option<Box<Message>>,
     #[serde(default)]
     pub sticker_items: Vec<StickerItem>,
+    #[serde(default)]
+    pub reactions: Vec<Reaction>,
     /// Echo of the nonce the sender chose; matches our pending copy.
     #[serde(default, deserialize_with = "lenient_nonce")]
     pub nonce: Option<String>,

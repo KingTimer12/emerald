@@ -109,6 +109,20 @@ reply = "Responder"
 replying_to = "Respondendo para {name}"
 unpin = "Desafixar mensagem"
 
+[reaction]
+activities = "Atividades"
+add = "Adicionar reação"
+flags = "Bandeiras"
+food = "Alimentos"
+frequent = "Utilizados com frequência"
+nature = "Natureza"
+no_results = "Nenhum emoji encontrado"
+objects = "Objetos"
+people = "Pessoas"
+search = "Encontre o emoji perfeito"
+symbols = "Símbolos"
+travel = "Viagem"
+
 [activity]
 competing = "Competindo em {name}"
 listening = "Ouvindo {name}"

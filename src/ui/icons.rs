@@ -21,8 +21,9 @@ pub const MORE: &str = "icons/more.svg";
 pub const PIN: &str = "icons/pin.svg";
 pub const TRASH: &str = "icons/trash.svg";
 pub const COPY: &str = "icons/copy.svg";
+pub const REACTION: &str = "icons/reaction.svg";
 
-const ALL: [(&str, &[u8]); 15] = [
+const ALL: [(&str, &[u8]); 16] = [
     (FRIENDS, include_bytes!("../../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../../assets/icons/text.svg")),
@@ -38,6 +39,7 @@ const ALL: [(&str, &[u8]); 15] = [
     (PIN, include_bytes!("../../assets/icons/pin.svg")),
     (TRASH, include_bytes!("../../assets/icons/trash.svg")),
     (COPY, include_bytes!("../../assets/icons/copy.svg")),
+    (REACTION, include_bytes!("../../assets/icons/reaction.svg")),
 ];
 
 pub struct Icons;

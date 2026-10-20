@@ -16,7 +16,7 @@ pub use expiry::TtlCache;
 pub use history::{History, Log, MessageView};
 pub use member_search::MemberSearch;
 pub use members::MemberList;
-pub use msg::{Msg, Reply, Sticker};
+pub use msg::{Msg, Reacted, Reply, Sticker};
 pub use people::People;
 pub use reads::ReadStates;
 pub use spaces::{ChannelRow, DMS, Row, Space, Spaces};

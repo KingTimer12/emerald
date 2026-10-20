@@ -105,6 +105,11 @@ pub fn mentioned_hover() -> Rgba {
 }
 pub const MENTIONED_BAR: u32 = 0xf0b232;
 
+/// Background of a reaction we added: the brand color at 15%.
+pub fn reaction_mine() -> Rgba {
+    rgba(0x5865f226)
+}
+
 /// Inline code and spoiler background.
 pub fn code_bg() -> Rgba {
     rgba(0x1e1f2299)

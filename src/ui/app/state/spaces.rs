@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use gpui::SharedString;
 
 use super::super::super::icons;
-use crate::discord::model::{Channel, ChannelKind, Guild, Member, Role, Snowflake};
+use crate::discord::model::{Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake};
 use crate::discord::permissions::{self, GuildAccess};
 
 /// Pseudo-space id holding direct messages.
@@ -72,9 +72,19 @@ pub struct GuildInfo {
     requested: HashSet<Snowflake>,
     /// The current user's permissions per channel.
     permissions: HashMap<Snowflake, u64>,
+    emojis: Vec<GuildEmoji>,
 }
 
 impl GuildInfo {
+    /// Custom emoji uploaded here.
+    pub fn emojis(&self) -> &[GuildEmoji] {
+        &self.emojis
+    }
+
+    pub fn set_emojis(&mut self, emojis: Vec<GuildEmoji>) {
+        self.emojis = emojis;
+    }
+
     /// Display name and role color of a member, when known.
     pub fn member_style(&self, user: Snowflake) -> (Option<&str>, Option<u32>) {
         let Some(member) = self.members.get(&user) else { return (None, None) };
@@ -169,6 +179,7 @@ impl Space {
                 members: HashMap::new(),
                 requested: HashSet::new(),
                 permissions: HashMap::new(),
+                emojis: guild.emojis,
             }),
             channels: guild.channels,
             rows: Vec::new(),

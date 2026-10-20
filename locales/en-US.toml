@@ -110,6 +110,20 @@ reply = "Reply"
 replying_to = "Replying to {name}"
 unpin = "Unpin Message"
 
+[reaction]
+activities = "Activities"
+add = "Add Reaction"
+flags = "Flags"
+food = "Food"
+frequent = "Frequently Used"
+nature = "Nature"
+no_results = "No emoji found"
+objects = "Objects"
+people = "People"
+search = "Find the perfect emoji"
+symbols = "Symbols"
+travel = "Travel"
+
 [activity]
 competing = "Competing in {name}"
 listening = "Listening to {name}"

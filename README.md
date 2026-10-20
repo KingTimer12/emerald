@@ -43,6 +43,11 @@ CPU near zero when idle.
 - **Message actions** from a hover toolbar or right click: reply (with or without the
   ping), edit in place (Up edits your last message), pin, copy, delete with confirmation
   (Shift skips it).
+- **Reactions**: counts that follow the gateway live, super reactions shown apart, a click
+  on a chip to add or take back yours, and Discord's picker from the hover toolbar, the
+  context menu or the + after the chips: search, "Frequently Used" (whose first three also
+  sit on the toolbar), the server's custom emoji (every server's with Nitro) and the Unicode
+  categories.
 - **Discord markdown**: bold, italics, underline, strikethrough, code, headings, mentions,
   clickable links. Masked links always show their real host.
 - **Member list** loaded on demand: even in servers with millions of members, only the
@@ -51,7 +56,7 @@ CPU near zero when idle.
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, threads, forums, reactions, emoji images, uploads.
+Not there yet: voice, threads, forums, custom emoji inside message text, uploads.
 
 ## Requirements
 

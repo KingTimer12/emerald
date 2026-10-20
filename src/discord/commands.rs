@@ -48,6 +48,30 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
         Command::PinMessage { channel, message, pin } => {
             outcome(Action::Message, rest.pin_message(channel, message, pin).await)
         }
+        Command::React {
+            channel,
+            message,
+            emoji,
+            add,
+            source,
+        } => {
+            let result = if add {
+                rest.add_reaction(channel, message, &emoji, source).await
+            } else {
+                rest.remove_reaction(channel, message, &emoji, source).await
+            };
+            match result {
+                Ok(()) => return,
+                Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
+                Err(e) => NetEvent::ReactionFailed {
+                    channel,
+                    message,
+                    emoji,
+                    add,
+                    error: e.to_string(),
+                },
+            }
+        }
         Command::SendFriendRequest { username } => outcome(
             Action::FriendRequest,
             with_captcha!(|captcha| rest.send_friend_request(&username, captcha).await),

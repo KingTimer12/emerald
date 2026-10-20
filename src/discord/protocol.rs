@@ -1,8 +1,9 @@
 //! The messages between the UI and the network thread.
 
 use super::model::{
-    Channel, Guild, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete,
-    MessageUpdate, Profile, Relationship, RoleDelete, RoleUpdate, Snowflake, Status, TypingStart, User,
+    Channel, Emoji, Guild, GuildEmojisUpdate, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
+    MessageAck, MessageDelete, MessageUpdate, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
+    RoleDelete, RoleUpdate, Snowflake, Status, TypingStart, User,
 };
 
 /// A user-initiated REST action whose outcome the UI reports back.
@@ -15,6 +16,35 @@ pub enum Action {
     UpdateProfile,
     /// Editing, deleting or pinning a message.
     Message,
+}
+
+/// The gateway's reaction events.
+pub enum ReactionEvent {
+    Add(ReactionUpdate),
+    Remove(ReactionUpdate),
+    AddMany(ReactionAddMany),
+    /// Every reaction, or every reaction with one emoji, was removed.
+    Clear(ReactionClear),
+}
+
+/// The UI surface a reaction came from, sent as `location` like the web
+/// client does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReactionSource {
+    /// Clicking a reaction already under the message.
+    Message,
+    HoverBar,
+    Picker,
+}
+
+impl ReactionSource {
+    pub fn location(self) -> &'static str {
+        match self {
+            Self::Message => "Message",
+            Self::HoverBar => "Message Hover Bar",
+            Self::Picker => "Message Reaction Picker",
+        }
+    }
 }
 
 /// The account as READY describes it, when a session starts.
@@ -89,6 +119,16 @@ pub enum NetEvent {
     MessageCreate(Message),
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
+    Reaction(ReactionEvent),
+    /// Our reaction did not go through; the UI undoes it.
+    ReactionFailed {
+        channel: Snowflake,
+        message: Snowflake,
+        emoji: Emoji,
+        add: bool,
+        error: String,
+    },
+    GuildEmojis(GuildEmojisUpdate),
     TypingStart(TypingStart),
     Profile {
         /// The guild whose member profile was asked for, if any.
@@ -151,6 +191,15 @@ pub enum Command {
         channel: Snowflake,
         message: Snowflake,
         pin: bool,
+    },
+    /// Adds (`add`) or removes our normal reaction with `emoji`. The UI
+    /// shows it at once; the gateway echo then changes nothing.
+    React {
+        channel: Snowflake,
+        message: Snowflake,
+        emoji: Emoji,
+        add: bool,
+        source: ReactionSource,
     },
     SendFriendRequest {
         username: String,

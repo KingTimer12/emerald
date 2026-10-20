@@ -10,8 +10,9 @@ use super::super::super::icons::{self, icon};
 use super::super::super::theme;
 use super::super::state::{Msg, Reply};
 use super::super::{Emerald, Overlay, shown, widgets};
-use crate::discord::Command;
+use super::reactions::{QUICK_REACTIONS, emoji_label};
 use crate::discord::model::{MessageUpdate, Snowflake, message_kind};
+use crate::discord::{Command, ReactionSource};
 use crate::discord::permissions;
 
 /// The message being edited in place.
@@ -218,7 +219,8 @@ impl Emerald {
     /// Escape closes the innermost thing open: the menu, an overlay, the
     /// edit box, then the reply.
     pub(in super::super) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.message_menu.take().is_some() {
+        if self.close_reaction_picker(window, cx) {
+        } else if self.message_menu.take().is_some() {
             cx.notify();
         } else if self.overlay.is_some() {
             self.close_overlay(window, cx);
@@ -248,7 +250,14 @@ impl Emerald {
         }
         let rights = self.rights(channel, msg);
         let id = msg.id;
-        let open = self.message_menu.as_ref().is_some_and(|m| m.message == id);
+        let open = self.message_menu.as_ref().is_some_and(|m| m.message == id)
+            || self.reaction_picker.as_ref().is_some_and(|p| p.message == id);
+        let react = self.may_react(channel, msg, true);
+        let quick: Vec<_> = if react {
+            self.recent_emojis().take(QUICK_REACTIONS).collect()
+        } else {
+            Vec::new()
+        };
         let button = |name: &'static str, glyph: &'static str, tip: &'static str| {
             div()
                 .id((name, ix))
@@ -274,6 +283,30 @@ impl Emerald {
                 .border_color(theme::border())
                 .bg(rgb(theme::BASE_LOWER))
                 .when(!open, |bar| bar.invisible().group_hover(group, |s| s.visible()))
+                .children(quick.into_iter().enumerate().map(|(n, emoji)| {
+                    let label = emoji_label(&emoji);
+                    div()
+                        .id(("msg-quick", ix * QUICK_REACTIONS + n))
+                        .size(px(32.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_md()
+                        .cursor_pointer()
+                        .hover(|s| s.bg(theme::hover()))
+                        .tooltip(widgets::tooltip(label))
+                        .child(self.emoji_image(&emoji, 20.))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.toggle_reaction(channel, id, emoji.clone(), ReactionSource::HoverBar, cx)
+                        }))
+                }))
+                .when(react, |bar| {
+                    bar.child(button("msg-react", icons::REACTION, t!("reaction.add")).on_click(cx.listener(
+                        move |this, event: &gpui::ClickEvent, window, cx| {
+                            this.open_reaction_picker(channel, id, event.position(), window, cx)
+                        },
+                    )))
+                })
                 .when(rights.reply, |bar| {
                     bar.child(button("msg-reply", icons::REPLY, t!("message.reply")).on_click(cx.listener(
                         move |this, _, window, cx| this.start_reply(channel, id, window, cx),
@@ -329,6 +362,8 @@ impl Emerald {
                 .child(icon(glyph, 18., color))
         };
         let pin_label = if msg.pinned { t!("message.unpin") } else { t!("message.pin") };
+        let react = self.may_react(channel, msg, true);
+        let position = menu.position;
         let list = div()
             .id("message-menu")
             .w(px(220.))
@@ -345,6 +380,11 @@ impl Emerald {
                 this.message_menu = None;
                 cx.notify();
             }))
+            .when(react, |menu| {
+                menu.child(item("menu-react", t!("reaction.add"), icons::REACTION, false).on_click(cx.listener(
+                    move |this, _, window, cx| this.open_reaction_picker(channel, id, position, window, cx),
+                )))
+            })
             .when(rights.reply, |menu| {
                 menu.child(item("menu-reply", t!("message.reply"), icons::REPLY, false).on_click(cx.listener(
                     move |this, _, window, cx| this.start_reply(channel, id, window, cx),

@@ -183,6 +183,24 @@ impl History {
             .map(|m| m.id)
     }
 
+    /// Applies `change` to the message `id`, redrawing it when `change`
+    /// reports a difference.
+    pub fn update(
+        &mut self,
+        channel: Snowflake,
+        id: Snowflake,
+        view: Option<&dyn MessageView>,
+        change: impl FnOnce(&mut Msg) -> bool,
+    ) {
+        let Some(log) = self.logs.get_mut(&channel) else { return };
+        let Some(ix) = log.position(id) else { return };
+        if change(&mut log.messages[ix])
+            && let Some(view) = view
+        {
+            view.refresh(ix);
+        }
+    }
+
     /// Redraws the message `id` if it is in the log `view` shows.
     pub fn redraw(&self, channel: Snowflake, id: Snowflake, view: Option<&dyn MessageView>) {
         if let (Some((ix, _)), Some(view)) = (self.find(channel, id), view) {
@@ -346,6 +364,7 @@ mod tests {
             avatar: None,
             email: None,
             bot: false,
+            premium_type: None,
         }
     }
 

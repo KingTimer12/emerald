@@ -3,9 +3,12 @@
 
 mod actions;
 mod list;
+mod picker;
+mod reactions;
 mod rich;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
+pub(super) use picker::ReactionPicker;
 
 use gpui::{AnyElement, Context, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px, rgb};
 

@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use super::snowflake::bits;
-use super::{Channel, Snowflake, User};
+use super::{Channel, GuildEmoji, Snowflake, User};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Role {
@@ -128,6 +128,8 @@ pub struct Guild {
     /// GUILD_CREATE may list the current member here.
     #[serde(default)]
     pub members: Vec<Member>,
+    #[serde(default)]
+    pub emojis: Vec<GuildEmoji>,
     #[serde(default)]
     pub unavailable: bool,
 }
