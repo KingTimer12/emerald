@@ -96,7 +96,9 @@ impl Emerald {
                 self.connection.status = format!("Erro: {error}").into();
             }
             NetEvent::TypingStart(typing) => self.on_typing(typing, cx),
-            NetEvent::Profile(profile) => self.profiles.fill(profile.user.id, profile, Instant::now()),
+            NetEvent::Profile { guild, profile } => {
+                self.profiles.fill((profile.user.id, guild), profile, Instant::now())
+            }
             NetEvent::SendFailed {
                 channel,
                 nonce,
@@ -151,6 +153,8 @@ impl Emerald {
     }
 
     fn on_members(&mut self, chunk: MembersChunk) {
+        let found: Vec<_> = chunk.members.iter().filter_map(|m| m.id()).collect();
+        self.member_search.accept(chunk.nonce.as_deref(), found.into_iter());
         for member in chunk.members {
             if let Some(user) = &member.user {
                 self.people.remember_new(user);

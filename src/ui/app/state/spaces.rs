@@ -94,6 +94,18 @@ impl GuildInfo {
         self.roles.iter().find(|r| r.id == id)
     }
 
+    /// Nickname and roles of a member seen before.
+    pub fn member(&self, user: Snowflake) -> Option<&Member> {
+        self.members.get(&user)
+    }
+
+    /// The known roles among `ids`, highest first, as Discord lists them.
+    pub fn roles_of(&self, ids: &[Snowflake]) -> Vec<&Role> {
+        let mut roles: Vec<&Role> = self.roles.iter().filter(|r| ids.contains(&r.id)).collect();
+        roles.sort_by_key(|r| std::cmp::Reverse(r.position));
+        roles
+    }
+
     pub fn add_member(&mut self, user: Snowflake, member: Member) {
         self.members.insert(user, member);
     }
@@ -409,6 +421,10 @@ impl Spaces {
 
     pub fn dms_mut(&mut self) -> &mut Space {
         &mut self.list[0]
+    }
+
+    pub fn guild(&self, id: Snowflake) -> Option<&GuildInfo> {
+        self.list.iter().find(|s| s.id == id)?.guild.as_ref()
     }
 
     pub fn guild_mut(&mut self, id: Snowflake) -> Option<&mut GuildInfo> {

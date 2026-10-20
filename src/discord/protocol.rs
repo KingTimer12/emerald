@@ -73,7 +73,11 @@ pub enum NetEvent {
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
     TypingStart(TypingStart),
-    Profile(Profile),
+    Profile {
+        /// The guild whose member profile was asked for, if any.
+        guild: Option<Snowflake>,
+        profile: Profile,
+    },
     History {
         channel: Snowflake,
         before: Option<Snowflake>,
@@ -136,6 +140,13 @@ pub enum Command {
         guild: Snowflake,
         users: Vec<Snowflake>,
     },
+    /// Gateway op 8 with a query: members whose name starts with it.
+    /// `nonce` comes back on the chunk.
+    SearchMembers {
+        guild: Snowflake,
+        query: String,
+        nonce: String,
+    },
     /// Gateway op 37: what the web client sends on opening a guild, so the
     /// gateway delivers its typing and thread events, and with `members`
     /// the member list rows of a channel in ranges of 100.
@@ -151,8 +162,10 @@ pub enum Command {
     Typing {
         channel: Snowflake,
     },
+    /// With a `guild`, the profile as members of that guild see it.
     FetchProfile {
         user: Snowflake,
+        guild: Option<Snowflake>,
     },
     /// Downloads an avatar or sticker image.
     FetchAvatar {

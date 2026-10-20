@@ -108,7 +108,7 @@ impl Emerald {
                     ["Ocultar lista de membros", "Mostrar lista de membros"],
                     cx.listener(|this, _, _, cx| {
                         this.settings.show_members = !this.settings.show_members;
-                        this.sync_member_list();
+                        this.sync_member_list(cx);
                         this.save_settings(cx);
                     }),
                 )),

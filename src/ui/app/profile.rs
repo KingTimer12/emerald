@@ -21,15 +21,54 @@ struct Card {
     badges: Vec<(SharedString, String)>,
     /// Connected accounts as (service, account name).
     accounts: Vec<(String, String)>,
+    /// Their roles in the guild, highest first, as (name, color).
+    roles: Vec<(String, u32)>,
+    /// When they joined the guild, in Unix seconds.
+    joined: Option<i64>,
 }
 
 impl Emerald {
-    fn card(&self, user: Snowflake) -> Card {
+    /// The card of `user`, as members of `guild` see them when given.
+    fn card(&self, user: Snowflake, guild: Option<Snowflake>) -> Card {
         let known = self.people.user(user);
-        let profile = self.profiles.get(&user);
-        let details = profile.map(|p| &p.user_profile);
+        let profile = self.profiles.get(&(user, guild));
+        // Global badges and accounts come with the guild-less profile.
+        let global_profile = self.profiles.get(&(user, None));
+        let info = guild.and_then(|id| self.spaces.guild(id));
+        let membership = profile.and_then(|p| p.guild_member.as_ref());
+        let seen = info.and_then(|info| info.member(user));
+        // Guild-only bio and pronouns win over the global ones when set.
+        let local = profile.and_then(|p| p.guild_member_profile.as_ref());
+        let global = global_profile.or(profile).map(|p| &p.user_profile);
+        let pronouns = local
+            .and_then(|d| d.pronouns.clone())
+            .filter(|p| !p.is_empty())
+            .or_else(|| global.and_then(|d| d.pronouns.clone()).filter(|p| !p.is_empty()));
+        let bio = local
+            .and_then(|d| d.bio.clone())
+            .filter(|b| !b.trim().is_empty())
+            .or_else(|| global.and_then(|d| d.bio.clone()).filter(|b| !b.trim().is_empty()));
+        let nick = membership
+            .and_then(|m| m.nick.clone())
+            .or_else(|| seen.and_then(|m| m.nick.clone()));
+        let role_ids = membership.map(|m| m.roles.as_slice()).or(seen.map(|m| m.roles.as_slice()));
+        let roles = info
+            .zip(role_ids)
+            .map(|(info, ids)| {
+                info.roles_of(ids)
+                    .into_iter()
+                    .map(|r| (r.name.clone(), r.color))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let profile = global_profile.or(profile);
         Card {
-            name: known.map_or_else(|| user.to_string(), |u| u.display_name().to_owned()).into(),
+            name: nick
+                .or_else(|| known.map(|u| u.display_name().to_owned()))
+                .unwrap_or_else(|| user.to_string())
+                .into(),
+            roles,
+            joined: membership.and_then(|m| m.joined_secs()),
             username: known.map(|u| u.username.clone()).unwrap_or_default().into(),
             banner: profile
                 .and_then(|p| {
@@ -41,8 +80,8 @@ impl Emerald {
                 })
                 // Without a banner color Discord paints a neutral grey.
                 .unwrap_or(theme::INTERACTIVE_MUTED),
-            pronouns: details.and_then(|d| d.pronouns.clone()).filter(|p| !p.is_empty()),
-            bio: details.and_then(|d| d.bio.clone()).filter(|b| !b.trim().is_empty()),
+            pronouns,
+            bio,
             badges: profile.map_or_else(Vec::new, |p| {
                 p.badges
                     .iter()
@@ -101,7 +140,7 @@ impl Emerald {
     }
 
     pub(super) fn render_profile_panel(&self, user: Snowflake, cx: &mut Context<Self>) -> impl IntoElement {
-        let card = self.card(user);
+        let card = self.card(user, None);
         const BANNER: f32 = 120.;
         const AVATAR: f32 = 80.;
         const RING: f32 = 6.;
@@ -177,22 +216,38 @@ impl Emerald {
                             widgets::button("full-profile", "Ver Perfil Completo", ButtonKind::Secondary)
                                 .w_full()
                                 .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_profile(user, window, cx)
+                                    this.open_profile(user, None, window, cx)
                                 })),
                         ),
                     ),
             )
     }
 
-    pub(super) fn open_profile(&mut self, user: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
-        self.profile(user);
-        self.overlay = Some(Overlay::Profile(user));
+    pub(super) fn open_profile(
+        &mut self,
+        user: Snowflake,
+        guild: Option<Snowflake>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.profile(user, guild);
+        // Badges and connected accounts only come with the global profile.
+        if guild.is_some() {
+            self.profile(user, None);
+        }
+        self.overlay = Some(Overlay::Profile { user, guild });
         window.focus(&self.focus_handle);
         cx.notify();
     }
 
-    pub(super) fn render_profile_modal(&self, user: Snowflake, cx: &mut Context<Self>) -> impl IntoElement {
-        let card = self.card(user);
+    pub(super) fn render_profile_modal(
+        &self,
+        user: Snowflake,
+        guild: Option<Snowflake>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let card = self.card(user, guild);
+        let guild_name = guild.map(|id| self.spaces.iter().find(|s| s.id == id).map(|s| s.name.clone()).unwrap_or_default());
         const BANNER: f32 = 210.;
         const AVATAR: f32 = 120.;
         const RING: f32 = 8.;
@@ -222,6 +277,28 @@ impl Emerald {
                                 .text_color(rgb(theme::TEXT_STRONG))
                                 .child(name.clone()),
                         )
+                })),
+            )
+        });
+
+        let roles = (!card.roles.is_empty()).then(|| {
+            section(
+                "Cargos",
+                div().flex().flex_wrap().gap_1().children(card.roles.iter().map(|(name, color)| {
+                    // Roles without a color are drawn grey, like Discord does.
+                    let color = if *color == 0 { theme::INTERACTIVE_MUTED } else { *color };
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .px_2()
+                        .py(px(2.))
+                        .rounded_md()
+                        .bg(theme::hover())
+                        .text_size(px(12.))
+                        .text_color(rgb(theme::TEXT_DEFAULT))
+                        .child(div().size(px(10.)).flex_none().rounded_full().bg(rgb(color)))
+                        .child(name.clone())
                 })),
             )
         });
@@ -306,13 +383,24 @@ impl Emerald {
                             )
                             .child(div().w_full().h(px(1.)).bg(theme::border()))
                             .children(card.bio.clone().map(|bio| section("Sobre mim", text(bio))))
-                            .child(section(
-                                "Membro desde",
-                                text(time::short_date(user.unix_secs())),
-                            ))
+                            .child(section("Membro desde", member_since(user, &card, guild_name)))
+                            .children(roles)
                             .children(accounts),
                     ),
             )
+    }
+}
+
+/// Discord's join date, plus the guild's when the card is a member's.
+fn member_since(user: Snowflake, card: &Card, guild: Option<SharedString>) -> Div {
+    let discord = time::short_date(user.unix_secs());
+    match (guild, card.joined) {
+        (Some(guild), Some(joined)) => div()
+            .flex()
+            .flex_col()
+            .child(text(format!("Discord: {discord}")))
+            .child(text(format!("{guild}: {}", time::short_date(joined)))),
+        _ => text(discord),
     }
 }
 

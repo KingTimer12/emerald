@@ -57,6 +57,10 @@ pub struct MembersChunk {
     pub guild_id: Snowflake,
     #[serde(default)]
     pub members: Vec<Member>,
+    /// Echo of the request's nonce, which tells a search apart from the
+    /// author lookups.
+    #[serde(default)]
+    pub nonce: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

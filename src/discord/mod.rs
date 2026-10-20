@@ -58,6 +58,9 @@ pub fn spawn(
                         Command::RequestMembers { guild, users } => {
                             ops_tx.send(gateway::request_members(guild, &users)).ok();
                         }
+                        Command::SearchMembers { guild, query, nonce } => {
+                            ops_tx.send(gateway::search_members(guild, &query, &nonce)).ok();
+                        }
                         Command::SubscribeGuild { guild, members } => {
                             let members = members.as_ref().map(|(c, r)| (*c, r.as_slice()));
                             ops_tx.send(gateway::subscribe_guild(guild, members)).ok();

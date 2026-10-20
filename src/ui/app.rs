@@ -38,7 +38,7 @@ use friends::Friends;
 use images::Images;
 pub use outbox::Outbox;
 use settings::SettingsView;
-use state::{History, MemberList, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
+use state::{History, MemberList, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
 
 actions!(emerald_ui, [Dismiss]);
 
@@ -57,8 +57,8 @@ const PROFILE_MIN_WINDOW: f32 = 1100.;
 enum Overlay {
     AddServer(AddServer),
     Settings(SettingsView),
-    /// "Ver Perfil Completo" for this user.
-    Profile(Snowflake),
+    /// "Ver Perfil Completo" for this user, as members of `guild` see them.
+    Profile { user: Snowflake, guild: Option<Snowflake> },
 }
 
 /// Result line under a form, green on success and red on failure.
@@ -103,8 +103,8 @@ pub struct Emerald {
     connection: Connection,
     people: People,
     images: Images,
-    /// DM profiles, refetched after `PROFILE_TTL`.
-    profiles: TtlCache<Snowflake, Profile>,
+    /// Profiles, global or per guild, refetched after `PROFILE_TTL`.
+    profiles: TtlCache<(Snowflake, Option<Snowflake>), Profile>,
     spaces: Spaces,
     history: History,
     reads: ReadStates,
@@ -128,6 +128,9 @@ pub struct Emerald {
     /// A member list subscription waits out a scroll burst.
     members_resubscribe: bool,
     members_scroll: UniformListScrollHandle,
+    /// Search box above the member list, and what it found.
+    member_query: Entity<TextInput>,
+    member_search: MemberSearch,
     focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -146,7 +149,9 @@ impl Emerald {
                 .keep_on_submit()
                 .compact()
         });
+        let member_query = cx.new(|cx| TextInput::new("Pesquisar", cx).keep_on_submit().compact());
         let subscriptions = vec![
+            cx.observe(&member_query, |this, _, cx| this.on_member_query(cx)),
             cx.subscribe(&composer.input, |this, _, event: &Submitted, cx| {
                 this.send(event.0.clone(), cx)
             }),
@@ -199,6 +204,8 @@ impl Emerald {
             members: None,
             members_resubscribe: false,
             members_scroll: UniformListScrollHandle::new(),
+            member_query,
+            member_search: MemberSearch::default(),
             focus_handle: cx.focus_handle(),
             _subscriptions: subscriptions,
         }
@@ -275,7 +282,9 @@ impl Render for Emerald {
         let overlay = match &self.overlay {
             Some(Overlay::AddServer(modal)) => Some(self.render_add_server(modal, cx).into_any_element()),
             Some(Overlay::Settings(view)) => Some(self.render_settings(view, cx).into_any_element()),
-            Some(Overlay::Profile(user)) => Some(self.render_profile_modal(*user, cx).into_any_element()),
+            Some(Overlay::Profile { user, guild }) => {
+                Some(self.render_profile_modal(*user, *guild, cx).into_any_element())
+            }
             None => None,
         };
         div()

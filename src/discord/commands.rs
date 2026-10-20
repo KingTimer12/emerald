@@ -93,8 +93,8 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             }
             return;
         }
-        Command::FetchProfile { user } => match rest.profile(user).await {
-            Ok(profile) => NetEvent::Profile(profile),
+        Command::FetchProfile { user, guild } => match rest.profile(user, guild).await {
+            Ok(profile) => NetEvent::Profile { guild, profile },
             Err(e) => {
                 log::warn!("profile of {user}: {e:#}");
                 return;
@@ -115,7 +115,10 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             return;
         }
         // Routed to the gateway before spawning.
-        Command::SetStatus(_) | Command::RequestMembers { .. } | Command::SubscribeGuild { .. } => {
+        Command::SetStatus(_)
+        | Command::RequestMembers { .. }
+        | Command::SearchMembers { .. }
+        | Command::SubscribeGuild { .. } => {
             return;
         }
     };

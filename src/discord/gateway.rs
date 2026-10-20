@@ -405,6 +405,14 @@ pub fn request_members(guild: Snowflake, users: &[Snowflake]) -> serde_json::Val
     })
 }
 
+/// Op 8 with a name prefix, as the member search box sends it.
+pub fn search_members(guild: Snowflake, query: &str, nonce: &str) -> serde_json::Value {
+    json!({
+        "op": 8,
+        "d": { "guild_id": [guild.to_string()], "query": query, "limit": 100, "presences": false, "nonce": nonce },
+    })
+}
+
 /// Op 37, as the web client sends on opening a guild: typing, activity and
 /// thread events, plus the member list rows of `channel` in `ranges`.
 pub fn subscribe_guild(guild: Snowflake, channel: Option<(Snowflake, &[[usize; 2]])>) -> serde_json::Value {

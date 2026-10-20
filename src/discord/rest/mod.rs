@@ -248,10 +248,13 @@ impl Rest {
 
     /// The profile behind the DM side panel, with the same query the web
     /// client sends for a DM.
-    pub async fn profile(&self, user: Snowflake) -> Result<Profile> {
-        let path = format!(
+    pub async fn profile(&self, user: Snowflake, guild: Option<Snowflake>) -> Result<Profile> {
+        let mut path = format!(
             "/users/{user}/profile?with_mutual_guilds=false&with_mutual_friends=false&with_mutual_friends_count=false"
         );
+        if let Some(guild) = guild {
+            path.push_str(&format!("&guild_id={guild}"));
+        }
         self.fetch(Call::get("/users/{id}/profile", path)).await
     }
 

@@ -61,7 +61,7 @@ impl Emerald {
             format!("Conversar em #{name}")
         };
         if let Some(user) = user {
-            self.profile(user);
+            self.profile(user, None);
         }
         self.composer.open(placeholder, cx);
 
@@ -74,7 +74,7 @@ impl Emerald {
         if let Some(last) = self.newest_message(id) {
             self.ack(id, last, cx);
         }
-        self.sync_member_list();
+        self.sync_member_list(cx);
         window.focus(&self.composer.input.focus_handle(cx));
         cx.notify();
     }
@@ -180,9 +180,9 @@ impl Emerald {
 
     /// Requests the profile of `user` unless a recent copy is cached, like
     /// the web client; a stale copy stays on screen until the answer.
-    pub(super) fn profile(&mut self, user: Snowflake) {
-        if self.profiles.request(user, Instant::now()) {
-            self.net.post(Command::FetchProfile { user });
+    pub(super) fn profile(&mut self, user: Snowflake, guild: Option<Snowflake>) {
+        if self.profiles.request((user, guild), Instant::now()) {
+            self.net.post(Command::FetchProfile { user, guild });
         }
     }
 }

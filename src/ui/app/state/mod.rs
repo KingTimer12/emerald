@@ -4,6 +4,7 @@
 
 pub mod expiry;
 pub mod history;
+pub mod member_search;
 pub mod members;
 pub mod msg;
 pub mod people;
@@ -13,6 +14,7 @@ pub mod typing;
 
 pub use expiry::TtlCache;
 pub use history::{History, Log, MessageView};
+pub use member_search::MemberSearch;
 pub use members::MemberList;
 pub use msg::{Msg, Reply};
 pub use people::People;
