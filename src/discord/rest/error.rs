@@ -28,6 +28,18 @@ impl std::fmt::Display for Unauthorized {
 
 impl std::error::Error for Unauthorized {}
 
+/// Discord could not answer: a 5xx, or still rate limited after every retry.
+#[derive(Debug)]
+pub struct Unavailable(pub String);
+
+impl std::fmt::Display for Unavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Unavailable {}
+
 /// hCaptcha challenge from a 400 response. The user solves it in a webview
 /// (`webview::solve_captcha`); nothing here solves it automatically.
 #[derive(Clone, Debug, Serialize, Deserialize)]

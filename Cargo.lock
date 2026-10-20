@@ -1519,6 +1519,7 @@ dependencies = [
  "anyhow",
  "async-channel 2.5.0",
  "base64 0.22.1",
+ "bytes",
  "embed-resource",
  "env_logger",
  "flate2",

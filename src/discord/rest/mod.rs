@@ -1,7 +1,9 @@
 //! REST client for the Discord API and CDN. Every call goes through
-//! [`RateLimiter`], and errors come back as the typed failures in [`error`].
+//! [`RateLimiter`], GETs that opt in go through the [`microcache`], and
+//! errors come back as the typed failures in [`error`].
 
 mod error;
+mod microcache;
 mod ratelimit;
 
 use std::sync::Arc;
@@ -19,8 +21,10 @@ use tokio::time::Instant;
 
 use base64::Engine;
 
+use bytes::Bytes;
 pub use error::{CaptchaRequired, Challenge, Forbidden, Solution, Unauthorized};
-use error::ErrorBody;
+use error::{ErrorBody, Unavailable};
+use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
 
 use super::ReplyTo;
@@ -34,6 +38,12 @@ pub const HISTORY_PAGE: usize = 50;
 const CREATE_GUILD_TEMPLATE: &str = "2TffvPucqHkN";
 /// Major parameter for routes that are not scoped to a channel or guild.
 const NO_MAJOR: Snowflake = Snowflake(0);
+/// Profiles: the microcache's second, and a stale copy for ten minutes while
+/// a refresh is slow or failing.
+const PROFILE_CACHE: Policy = Policy {
+    fresh: Duration::from_secs(1),
+    stale: Duration::from_secs(600),
+};
 
 #[derive(Deserialize)]
 struct RateLimited {
@@ -49,6 +59,7 @@ struct Call<'a> {
     body: Option<serde_json::Value>,
     context: Option<String>,
     captcha: Option<&'a Solution>,
+    cache: Option<Policy>,
 }
 
 impl<'a> Call<'a> {
@@ -60,6 +71,7 @@ impl<'a> Call<'a> {
             body: None,
             context: None,
             captcha: None,
+            cache: None,
         }
     }
 
@@ -89,6 +101,13 @@ impl<'a> Call<'a> {
         self
     }
 
+    /// Serves a GET from the microcache under `policy`.
+    fn cached(mut self, policy: Policy) -> Self {
+        debug_assert_eq!(self.route.0, Method::GET);
+        self.cache = Some(policy);
+        self
+    }
+
     fn json(mut self, body: serde_json::Value) -> Self {
         self.body = Some(body);
         self
@@ -114,6 +133,7 @@ pub struct Rest {
     cdn: reqwest::Client,
     /// Where downloaded CDN images are kept; `None` disables the cache.
     image_cache: Option<std::path::PathBuf>,
+    micro: MicroCache,
     identity: Arc<Identity>,
     api: String,
     limits: RateLimiter,
@@ -151,6 +171,7 @@ impl Rest {
             http,
             cdn,
             image_cache: super::cache::dir(),
+            micro: MicroCache::default(),
             api: format!("https://discord.com/api/v{}", identity::API_VERSION),
             identity,
             limits: RateLimiter::default(),
@@ -195,7 +216,7 @@ impl Rest {
             path.push_str(&format!("&before={before}"));
         }
         let mut messages: Vec<Message> = self
-            .fetch(Call::get("/channels/{id}/messages", path).major(channel))
+            .fetch(Call::get("/channels/{id}/messages", path).major(channel).cached(Policy::MICRO))
             .await?;
         messages.reverse();
         Ok(messages)
@@ -295,7 +316,7 @@ impl Rest {
         if let Some(guild) = guild {
             path.push_str(&format!("&guild_id={guild}"));
         }
-        self.fetch(Call::get("/users/{id}/profile", path)).await
+        self.fetch(Call::get("/users/{id}/profile", path).cached(PROFILE_CACHE)).await
     }
 
     /// Revokes the token server-side, as the web client does on "Log Out".
@@ -346,10 +367,10 @@ impl Rest {
     /// the guild and channel it came from.
     pub async fn join_guild(&self, code: &str, captcha: Option<&Solution>) -> Result<()> {
         let invite: Invite = self
-            .fetch(Call::get(
-                "/invites/{code}",
-                format!("/invites/{code}?with_counts=true&with_expiration=true"),
-            ))
+            .fetch(
+                Call::get("/invites/{code}", format!("/invites/{code}?with_counts=true&with_expiration=true"))
+                    .cached(Policy::MICRO),
+            )
             .await?;
         let properties = json!({
             "location": "Join Guild",
@@ -385,16 +406,63 @@ impl Rest {
 
     /// Sends `call` and decodes the JSON answer.
     async fn fetch<T: DeserializeOwned>(&self, call: Call<'_>) -> Result<T> {
-        Ok(self.send(call).await?.json().await?)
+        match call.cache {
+            Some(policy) => Ok(serde_json::from_slice(&self.cached(&call, policy).await?)?),
+            None => Ok(self.send(&call).await?.json().await?),
+        }
     }
 
     /// Sends `call` for its effect, ignoring the body.
     async fn run(&self, call: Call<'_>) -> Result<()> {
-        self.send(call).await.map(drop)
+        self.send(&call).await.map(drop)
+    }
+
+    /// The answer to a GET, from the microcache when it has a usable copy.
+    async fn cached(&self, call: &Call<'_>, policy: Policy) -> Result<Bytes> {
+        loop {
+            match self.micro.lookup(&call.path, policy, call.major) {
+                Lookup::Hit(body) => return Ok(body),
+                Lookup::Wait(mut inflight) => {
+                    if let Ok(answer) = inflight.wait_for(Option::is_some).await
+                        && let Some(answer) = answer.clone()
+                    {
+                        return answer.map_err(anyhow::Error::msg);
+                    }
+                    // That request was cancelled: look again, and fetch if no one else is.
+                }
+                Lookup::Fetch(ticket) => return self.refresh(call, ticket).await,
+            }
+        }
+    }
+
+    async fn refresh(&self, call: &Call<'_>, ticket: Ticket<'_>) -> Result<Bytes> {
+        let result = async { Ok::<_, anyhow::Error>(self.send(call).await?.bytes().await?) }.await;
+        let error = match result {
+            Ok(body) => {
+                ticket.finish(body.clone());
+                return Ok(body);
+            }
+            Err(error) if is_transient(&error) => error,
+            Err(error) => {
+                ticket.share(Err(error.to_string()));
+                return Err(error);
+            }
+        };
+        match ticket.stale().cloned() {
+            Some(body) => {
+                log::info!("{} failed ({error}); serving a cached copy", call.route.1);
+                ticket.share(Ok(body.clone()));
+                Ok(body)
+            }
+            None => {
+                ticket.share(Err(error.to_string()));
+                Err(error)
+            }
+        }
     }
 
     /// Sends `call` within the rate limits, retrying after 429s.
-    async fn send(&self, call: Call<'_>) -> Result<Response> {
+    async fn send(&self, call: &Call<'_>) -> Result<Response> {
         let route = &call.route;
         for _ in 0..MAX_ATTEMPTS {
             let mut bucket = self.limits.acquire(route, call.major).await?;
@@ -450,12 +518,27 @@ impl Rest {
                     self.limits.note_invalid();
                     bail!(Forbidden(ErrorBody::read(response).await.message()));
                 }
-                status if status.is_success() => return Ok(response),
+                status if status.is_success() => {
+                    // A write makes what was read from the same channel or guild stale.
+                    if route.0 != Method::GET && call.major != NO_MAJOR {
+                        self.micro.invalidate(call.major);
+                    }
+                    return Ok(response);
+                }
+                status if status.is_server_error() => {
+                    bail!(Unavailable(ErrorBody::read(response).await.into_error(status).to_string()))
+                }
                 status => return Err(ErrorBody::read(response).await.into_error(status)),
             }
         }
-        bail!(t!("errors.rate_limited", route = format!("{} {}", route.0, route.1)))
+        bail!(Unavailable(t!("errors.rate_limited", route = format!("{} {}", route.0, route.1)).to_owned()))
     }
+}
+
+/// Failures worth answering from a stale copy: Discord or the network could
+/// not answer, as opposed to answering no.
+fn is_transient(error: &anyhow::Error) -> bool {
+    error.is::<Unavailable>() || error.is::<reqwest::Error>()
 }
 
 /// Snowflake-shaped nonce, like the web client's. The low bits carry a

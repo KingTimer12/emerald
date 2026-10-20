@@ -107,6 +107,12 @@ Two threads: the UI thread (gpui) and a network thread running a single-threaded
 runtime. They talk through messages: the UI sends `Command`s, the network answers with
 `NetEvent`s.
 
+GET requests that opt in go through a [microcache](https://blog.nginx.org/blog/benefits-of-microcaching-nginx):
+answers are reused for one second, identical requests in flight wait for the first one
+instead of going out again, an expired copy is served while it refreshes, and when Discord
+fails (network error, 5xx, rate limited) a recent copy stands in. Writing to a channel
+drops what was cached for it. On a burst, Discord sees one request instead of several.
+
 ```
 src/
 ├── main.rs              entry point, webview child modes, login cycle
@@ -121,7 +127,7 @@ src/
 │   ├── protocol.rs      Command, NetEvent, Snapshot: the UI ↔ network contract
 │   ├── commands.rs      runs each Command against the REST API
 │   ├── gateway.rs       zlib-stream WebSocket, resume, heartbeat, ops 8 and 37
-│   ├── rest/            HTTP client: `Call` builder, RateLimiter, typed errors
+│   ├── rest/            HTTP client: `Call` builder, RateLimiter, microcache, typed errors
 │   ├── model/           Discord payloads, only the fields in use
 │   ├── permissions.rs   role and overwrite permission algorithm
 │   ├── identity.rs      headers and super properties matching the web client

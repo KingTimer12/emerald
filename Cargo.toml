@@ -31,6 +31,7 @@ toml = { version = "1", default-features = false, features = ["parse", "serde", 
 velato = { version = "0.12", default-features = false }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
 image = { version = "0.25", default-features = false }
+bytes = "1"
 # Wipes the token from memory when it is dropped.
 zeroize = "1"
 
