@@ -1,0 +1,3 @@
+// Windows resources for the executable. gpui loads icon 1 for every window
+// and Explorer uses it for the .exe; regenerate emerald.ico from emerald.svg.
+1 ICON "emerald.ico"

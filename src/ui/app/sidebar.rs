@@ -116,6 +116,15 @@ impl Emerald {
                     .tooltip(widgets::tooltip(space.name.clone()))
                     .map(|icon| match image {
                         Some(image) => icon.child(img(image).size_full()),
+                        // Svg colors are not inherited, so hover is restated.
+                        None if space.is_dms() => icon.child(
+                            icons::icon(
+                                icons::EMERALD,
+                                24.,
+                                if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE },
+                            )
+                            .group_hover(group.clone(), |s| s.text_color(rgb(theme::TEXT_STRONG))),
+                        ),
                         None => icon.child(space.initials.clone()),
                     })
                     .on_click(cx.listener(move |this, _, window, cx| this.select_space(ix, window, cx))),

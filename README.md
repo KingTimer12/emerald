@@ -1,6 +1,6 @@
 # Emerald
 
-A native Discord client for macOS, written in Rust with [gpui](https://www.gpui.rs/).
+A native Discord client for macOS and Windows, written in Rust with [gpui](https://www.gpui.rs/).
 The interface follows the look of the official web client (in Brazilian Portuguese),
 and the app uses a fraction of an Electron client's memory: roughly 60 to 100 MB, with
 CPU near zero when idle.
@@ -11,8 +11,9 @@ CPU near zero when idle.
 
 ## What works
 
-- **Login** through Discord's own sign-in page in a native WKWebView, captcha included.
-  The token is kept in `~/.config/emerald/token`; logging out revokes it on the server.
+- **Login** through Discord's own sign-in page in a native webview (WKWebView on macOS,
+  WebView2 on Windows), captcha included. The token is kept in the config directory
+  (see [Files](#files)); logging out revokes it on the server.
 - **Friends**: Online, All and Pending tabs; add by username, accept, decline, remove.
 - **Direct messages**: list ordered by activity, search, history, sending with optimistic
   confirmation, typing indicators, a profile panel (badges, bio, connected accounts)
@@ -31,10 +32,13 @@ Not there yet: voice, threads, forums, reactions, emoji images, editing messages
 
 ## Requirements
 
-- macOS (login relies on WebKit and AppKit).
+- macOS or Windows 10/11.
 - A recent stable Rust toolchain (edition 2024).
-- No full Xcode install needed: Metal shaders are compiled at runtime
-  (`gpui` with `runtime_shaders`).
+- macOS: no full Xcode install needed, Metal shaders are compiled at runtime
+  (`gpui` with `runtime_shaders`). Login uses WebKit and AppKit.
+- Windows: the MSVC toolchain (Visual Studio Build Tools with the Windows SDK). Login
+  uses the Edge WebView2 runtime, which ships with Windows 11 and current Windows 10.
+  Release builds are GUI apps with no console window.
 
 ## Running
 
@@ -64,11 +68,12 @@ cargo test
 
 ## Files
 
-| Path | Contents |
-|---|---|
-| `~/.config/emerald/token` | Account token. Never share it. |
-| `~/.config/emerald/settings.json` | Preferences. |
-| `~/Library/Caches/emerald/cdn` | CDN image cache, capped at 200 MB. |
+| macOS | Windows | Contents |
+|---|---|---|
+| `~/.config/emerald/token` | `%APPDATA%\emerald\token` | Account token. Never share it. |
+| `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
+| `~/Library/Caches/emerald/cdn` | `%LOCALAPPDATA%\emerald\cdn` | CDN image cache, capped at 200 MB. |
+| | `%LOCALAPPDATA%\emerald\WebView2` | WebView2 browser profile; the login session itself is InPrivate. |
 
 ## Architecture
 
@@ -79,8 +84,12 @@ runtime. They talk through messages: the UI sends `Command`s, the network answer
 ```
 src/
 ├── main.rs              entry point, webview child modes, login cycle
+├── paths.rs             per-platform config and cache directories
 ├── settings.rs          JSON preferences
-├── webview.rs           login and captcha WKWebView (child process)
+├── webview/             login and captcha webview (child process)
+│   ├── mod.rs           shared scripts and flows
+│   ├── macos.rs         WKWebView backend
+│   └── webview2.rs      WebView2 backend (Windows)
 ├── discord/             everything that talks to Discord, no UI
 │   ├── protocol.rs      Command, NetEvent, Snapshot: the UI ↔ network contract
 │   ├── commands.rs      runs each Command against the REST API

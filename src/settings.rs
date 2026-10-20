@@ -1,5 +1,5 @@
 //! Local preferences, stored as JSON next to the token in
-//! `~/.config/emerald/settings.json`. Unknown or missing fields fall back to
+//! `settings.json` under `paths::config_dir`. Unknown or missing fields fall back to
 //! defaults, so older files keep loading.
 
 use std::path::PathBuf;
@@ -56,7 +56,7 @@ impl Settings {
 }
 
 fn path() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("HOME")?).join(".config/emerald/settings.json"))
+    Some(crate::paths::config_dir()?.join("settings.json"))
 }
 
 #[cfg(test)]

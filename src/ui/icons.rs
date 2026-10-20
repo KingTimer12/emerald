@@ -13,8 +13,10 @@ pub const ANNOUNCEMENT: &str = "icons/announcement.svg";
 pub const FORUM: &str = "icons/forum.svg";
 pub const STAGE: &str = "icons/stage.svg";
 pub const CHEVRON: &str = "icons/chevron.svg";
+/// App mark, an emerald cut seen from above; stands in for the DM space.
+pub const EMERALD: &str = "icons/emerald.svg";
 
-const ALL: [(&str, &[u8]); 8] = [
+const ALL: [(&str, &[u8]); 9] = [
     (FRIENDS, include_bytes!("../../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../../assets/icons/text.svg")),
@@ -23,6 +25,7 @@ const ALL: [(&str, &[u8]); 8] = [
     (FORUM, include_bytes!("../../assets/icons/forum.svg")),
     (STAGE, include_bytes!("../../assets/icons/stage.svg")),
     (CHEVRON, include_bytes!("../../assets/icons/chevron.svg")),
+    (EMERALD, include_bytes!("../../assets/icons/emerald.svg")),
 ];
 
 pub struct Icons;

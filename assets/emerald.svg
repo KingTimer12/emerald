@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Emerald cut seen from above: eight step facets around a flat table,
+       lit from the top left. Source of assets/emerald.ico. -->
+  <defs>
+    <linearGradient id="table" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="0.45" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#022c22" stroke-width="2" stroke-linejoin="round">
+    <!-- top, top-right, right, bottom-right, bottom, bottom-left, left, top-left -->
+    <path fill="#6ee7b7" d="M84 16H172L152 72H104Z"/>
+    <path fill="#34d399" d="M172 16L216 60L172 92L152 72Z"/>
+    <path fill="#10b981" d="M216 60V196L172 164V92Z"/>
+    <path fill="#047857" d="M216 196L172 240L152 184L172 164Z"/>
+    <path fill="#065f46" d="M172 240H84L104 184H152Z"/>
+    <path fill="#059669" d="M84 240L40 196L84 164L104 184Z"/>
+    <path fill="#34d399" d="M40 196V60L84 92V164Z"/>
+    <path fill="#a7f3d0" d="M40 60L84 16L104 72L84 92Z"/>
+    <path fill="url(#table)" d="M104 72H152L172 92V164L152 184H104L84 164V92Z"/>
+  </g>
+  <!-- Glint across the table. -->
+  <path fill="#ecfdf5" fill-opacity="0.55" d="M100 84H124L96 136V92Z"/>
+  <path fill="none" stroke="#022c22" stroke-width="8" stroke-linejoin="round"
+        d="M84 16H172L216 60V196L172 240H84L40 196V60Z"/>
+</svg>

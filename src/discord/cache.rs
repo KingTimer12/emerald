@@ -9,18 +9,9 @@ use std::time::SystemTime;
 const MAX_BYTES: u64 = 200 * 1024 * 1024;
 const PRUNE_TO: u64 = 150 * 1024 * 1024;
 
-/// `~/Library/Caches/emerald/cdn` on macOS, `$XDG_CACHE_HOME/emerald/cdn`
-/// (or `~/.cache/emerald/cdn`) elsewhere.
+/// `cdn` under the platform cache directory (see `paths::cache_dir`).
 pub fn dir() -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME")?);
-    let base = if cfg!(target_os = "macos") {
-        home.join("Library/Caches")
-    } else {
-        std::env::var_os("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".cache"))
-    };
-    Some(base.join("emerald/cdn"))
+    Some(crate::paths::cache_dir()?.join("cdn"))
 }
 
 /// File name for `url`: 64-bit FNV-1a, stable across builds and platforms.
