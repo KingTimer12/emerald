@@ -57,6 +57,8 @@ pub mod message_kind {
 pub mod sticker_format {
     pub const PNG: u8 = 1;
     pub const APNG: u8 = 2;
+    /// Vector animation, the format of Discord's own sticker packs.
+    pub const LOTTIE: u8 = 3;
     pub const GIF: u8 = 4;
 }
 
@@ -68,16 +70,21 @@ pub struct StickerItem {
 }
 
 impl StickerItem {
-    /// Image URL, or `None` for Lottie stickers, which are vector
-    /// animations this client cannot draw. APNG decodes as its first frame.
+    /// Where the sticker is downloaded from, or `None` for formats newer
+    /// than this client. APNG decodes as its first frame. Lottie files come
+    /// only from the CDN: the media proxy does not serve them.
     pub fn url(&self) -> Option<String> {
         let ext = match self.format_type {
             sticker_format::PNG | sticker_format::APNG => "png",
             sticker_format::GIF => "gif",
-            // Lottie (3) and formats newer than this client.
+            sticker_format::LOTTIE => return Some(format!("https://cdn.discordapp.com/stickers/{}.json", self.id)),
             _ => return None,
         };
         Some(format!("https://media.discordapp.net/stickers/{}.{ext}?size=160", self.id))
+    }
+
+    pub fn is_lottie(&self) -> bool {
+        self.format_type == sticker_format::LOTTIE
     }
 }
 
@@ -179,7 +186,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sticker_urls_skip_lottie() {
+    fn sticker_urls_by_format() {
         let sticker = |format_type| StickerItem {
             id: Snowflake(7),
             name: "wave".into(),
@@ -189,7 +196,11 @@ mod tests {
             sticker(sticker_format::GIF).url().as_deref(),
             Some("https://media.discordapp.net/stickers/7.gif?size=160")
         );
-        assert_eq!(sticker(3).url(), None);
+        assert_eq!(
+            sticker(sticker_format::LOTTIE).url().as_deref(),
+            Some("https://cdn.discordapp.com/stickers/7.json")
+        );
+        assert_eq!(sticker(9).url(), None);
     }
 
     #[test]

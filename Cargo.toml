@@ -26,6 +26,11 @@ env_logger = { version = "0.11", default-features = false }
 libc = "0.2"
 sys-locale = "0.3"
 toml = { version = "1", default-features = false, features = ["parse", "serde", "std"] }
+# Lottie stickers: velato reads the animation, vello_cpu draws each frame on
+# the CPU; both pure Rust. `image` is the one gpui already uses for frames.
+velato = { version = "0.12", default-features = false }
+vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
+image = { version = "0.25", default-features = false }
 
 # Login webview oficial (WKWebView nativo). Versões casadas com as que o gpui
 # já resolve, para o Cargo deduplicar e não gerar tipos objc2 incompatíveis.
@@ -61,12 +66,29 @@ windows-core = "0.62"
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3"
 
+# Debug builds still draw Lottie stickers at full speed: unoptimized, a
+# frame takes 50 ms instead of half a millisecond.
+[profile.dev.package.vello_cpu]
+opt-level = 3
+[profile.dev.package.vello_common]
+opt-level = 3
+[profile.dev.package.fearless_simd]
+opt-level = 3
+[profile.dev.package.velato]
+opt-level = 3
+[profile.dev.package.kurbo]
+opt-level = 3
+[profile.dev.package.peniko]
+opt-level = 3
+
 [profile.release]
 opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
-panic = "abort"
+# Unwinding, so a Lottie sticker velato cannot handle (it has todo!s for
+# some valid files) fails alone instead of taking the app down.
+panic = "unwind"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util", "macros", "rt"] }

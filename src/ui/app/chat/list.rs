@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use super::super::super::{icons, markdown, theme, time};
-use super::super::state::{Log, MessageView, Msg, Reply};
+use super::super::state::{Log, MessageView, Msg, Reply, Sticker};
 use super::super::{Emerald, widgets};
 use crate::discord::model::{Embed, message_kind};
 
@@ -410,12 +410,24 @@ impl Emerald {
                     )
             }))
             .children(msg.embeds.iter().enumerate().filter_map(|(n, embed)| self.render_embed(embed, ix, n)))
-            .children(msg.stickers.iter().map(|(name, url)| {
-                match url.as_ref().and_then(|url| self.avatar_image(url)) {
-                    Some(image) => img(image).size(px(STICKER_SIZE)).into_any_element(),
-                    // Lottie stickers, and images still downloading: a card
-                    // with the sticker's name in its place.
-                    None => div()
+            .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker)))
+    }
+
+    fn render_sticker(&self, sticker: &Sticker) -> AnyElement {
+        let url = sticker.url.as_deref();
+        let shown = match url {
+            Some(url) if sticker.lottie => self.images.animation(url, &*self.net).and_then(|player| {
+                self.animating.set(true);
+                let frame = player.frame(self.animation_clock.elapsed())?;
+                Some(img(frame).size(px(STICKER_SIZE)).into_any_element())
+            }),
+            Some(url) => self.avatar_image(url).map(|image| img(image).size(px(STICKER_SIZE)).into_any_element()),
+            None => None,
+        };
+        // Unknown formats, and stickers still downloading: a card with the
+        // sticker's name in its place.
+        shown.unwrap_or_else(|| {
+            div()
                         .size(px(STICKER_SIZE))
                         .rounded_lg()
                         .bg(theme::hover())
@@ -427,10 +439,9 @@ impl Emerald {
                         .text_size(px(14.))
                         .text_color(theme::muted())
                         .child(div().text_xs().child(t!("chat.sticker")))
-                        .child(div().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
-                        .into_any_element(),
-                }
-            }))
+                        .child(div().font_weight(FontWeight::SEMIBOLD).child(sticker.name.clone()))
+                        .into_any_element()
+        })
     }
 
     /// Text parts of a rich embed in a card with its color bar; embeds with

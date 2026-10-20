@@ -2,9 +2,10 @@
 //! network events to them ([`events`]) and draws them; each area of the
 //! window lives in its own module.
 
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod add_server;
 mod chat;
@@ -130,6 +131,12 @@ pub struct Emerald {
     connection: Connection,
     people: People,
     images: Images,
+    /// Animated stickers play on this clock, so copies of one stay in step.
+    animation_clock: Instant,
+    /// A row drawn this frame shows an animation, so another frame follows.
+    animating: Cell<bool>,
+    /// The next animation frame is already on its way.
+    frame_pending: bool,
     /// Profiles, global or per guild, refetched after `PROFILE_TTL`.
     profiles: TtlCache<(Snowflake, Option<Snowflake>), Profile>,
     spaces: Spaces,
@@ -224,6 +231,9 @@ impl Emerald {
             },
             people: People::default(),
             images: Images::default(),
+            animation_clock: Instant::now(),
+            animating: Cell::new(false),
+            frame_pending: false,
             profiles: TtlCache::new(PROFILE_TTL),
             spaces: Spaces::default(),
             history: History::default(),

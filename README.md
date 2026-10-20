@@ -20,8 +20,8 @@ CPU near zero when idle.
   and the full profile.
 - **Servers**: channels and collapsible categories, permissions computed the way Discord
   does (hidden channels, sending blocked without permission), nicknames and role colors
-  that follow live member and role changes, replies, images, embeds, stickers and system
-  messages.
+  that follow live member and role changes, replies, images, embeds, stickers (Discord's
+  animated ones too) and system messages.
 - **Message actions** from a hover toolbar or right click: reply (with or without the
   ping), edit in place (Up edits your last message), pin, copy, delete with confirmation
   (Shift skips it).

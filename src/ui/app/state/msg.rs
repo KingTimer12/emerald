@@ -19,8 +19,7 @@ pub struct Msg {
     pub content: SharedString,
     /// Local calendar day, for day separators.
     pub day: i32,
-    /// Sticker names with their image URL (`None` for Lottie).
-    pub stickers: Vec<(SharedString, Option<SharedString>)>,
+    pub stickers: Vec<Sticker>,
     /// `message_kind`; system kinds render as one muted line.
     pub kind: u8,
     /// Names of the users mentioned, for `<@id>` in the content.
@@ -40,6 +39,14 @@ pub struct Msg {
     pub nonce: Option<String>,
     /// Sent but not yet confirmed; drawn dimmed.
     pub pending: bool,
+}
+
+pub struct Sticker {
+    pub name: SharedString,
+    /// `None` for formats this client cannot draw.
+    pub url: Option<SharedString>,
+    /// A Lottie animation rather than an image.
+    pub lottie: bool,
 }
 
 /// The message a reply points at; `content` is `None` once it is deleted.
@@ -163,7 +170,11 @@ impl From<Message> for Msg {
             stickers: message
                 .sticker_items
                 .iter()
-                .map(|s| (s.name.clone().into(), s.url().map(Into::into)))
+                .map(|s| Sticker {
+                    name: s.name.clone().into(),
+                    url: s.url().map(Into::into),
+                    lottie: s.is_lottie(),
+                })
                 .collect(),
             kind: message.kind,
             mentions: mention_names(&message.mentions),

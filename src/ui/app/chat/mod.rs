@@ -9,7 +9,7 @@ pub(super) use actions::{Editing, MessageMenu, Replying};
 
 use gpui::{AnyElement, Context, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px, rgb};
 
-use super::super::{icons, theme};
+use super::super::{icons, lottie, theme};
 use super::{Emerald, widgets};
 use super::state::Msg;
 use crate::discord::model::Snowflake;
@@ -130,7 +130,13 @@ impl Emerald {
         } else {
             list(
                 self.messages.clone(),
-                cx.processor(|this, ix, _, cx| this.render_list_row(ix, cx)),
+                cx.processor(|this, ix, _, cx| {
+                    let row = this.render_list_row(ix, cx);
+                    if this.animating.take() {
+                        this.next_animation_frame(cx);
+                    }
+                    row
+                }),
             )
             .flex_1()
             .pb_4()
@@ -201,6 +207,29 @@ impl Emerald {
                     .when(wide && self.members.is_some(), |row| row.child(self.render_member_list(cx))),
             )
             .into_any_element()
+    }
+
+    /// Redraws when the next sticker frame is due, on the animation clock
+    /// so frames keep an even pace, freeing the frames that were replaced.
+    /// Runs only while a row with an animation is drawn.
+    fn next_animation_frame(&mut self, cx: &mut Context<Self>) {
+        if std::mem::replace(&mut self.frame_pending, true) {
+            return;
+        }
+        let elapsed = self.animation_clock.elapsed();
+        let wait = lottie::Player::next_tick(elapsed).saturating_sub(elapsed);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(wait).await;
+            this.update(cx, |this, cx| {
+                this.frame_pending = false;
+                for image in this.images.take_retired() {
+                    cx.drop_image(image, None);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// "Paulo is typing…", in the web client's wording.
