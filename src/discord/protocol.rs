@@ -164,6 +164,10 @@ pub enum NetEvent {
 pub struct Upload {
     pub name: String,
     pub bytes: Arc<[u8]>,
+    /// Hidden behind a click until the reader asks to see it.
+    pub spoiler: bool,
+    /// Alt text; empty for none.
+    pub description: String,
 }
 
 /// The message a send answers.

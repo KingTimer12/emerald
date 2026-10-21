@@ -30,8 +30,7 @@ pub struct Msg {
     /// The author changed the text after sending it.
     pub edited: bool,
     pub reply: Option<Reply>,
-    /// Image attachments as (thumbnail URL, width, height) in display pixels.
-    pub images: Vec<(SharedString, f32, f32)>,
+    pub images: Vec<Picture>,
     /// Other attachments, by file name.
     pub files: Vec<SharedString>,
     pub embeds: Vec<Embed>,
@@ -209,6 +208,18 @@ impl Msg {
     }
 }
 
+/// An image attachment, sized for display.
+#[derive(Clone, Debug)]
+pub struct Picture {
+    /// Thumbnail at twice the shown size.
+    pub url: SharedString,
+    pub width: f32,
+    pub height: f32,
+    pub spoiler: bool,
+    /// Alt text.
+    pub alt: Option<SharedString>,
+}
+
 /// The names of `users`, for the mentions in a message.
 pub fn mention_names(users: &[User]) -> Vec<(Snowflake, SharedString)> {
     users.iter().map(|u| (u.id, u.display_name().to_owned().into())).collect()
@@ -269,7 +280,7 @@ impl From<Message> for Msg {
 
 /// Thumbnail URL and display size for an image attachment. The media proxy
 /// resizes it, so only the shown pixels are downloaded.
-fn image_attachment(attachment: &Attachment) -> Option<(SharedString, f32, f32)> {
+fn image_attachment(attachment: &Attachment) -> Option<Picture> {
     let image = attachment
         .content_type
         .as_deref()
@@ -288,7 +299,13 @@ fn image_attachment(attachment: &Attachment) -> Option<(SharedString, f32, f32)>
     let (fetch_w, fetch_h) = ((w * 2.).min(width as f32) as u32, (h * 2.).min(height as f32) as u32);
     let separator = if proxy.contains('?') { '&' } else { '?' };
     let url = format!("{proxy}{separator}width={fetch_w}&height={fetch_h}");
-    Some((url.into(), w, h))
+    Some(Picture {
+        url: url.into(),
+        width: w,
+        height: h,
+        spoiler: attachment.spoiler(),
+        alt: attachment.description.clone().filter(|d| !d.trim().is_empty()).map(Into::into),
+    })
 }
 
 #[cfg(test)]
@@ -303,10 +320,24 @@ mod tests {
             content_type: Some("image/png".into()),
             width: Some(1600),
             height: Some(600),
+            description: Some("a cat".into()),
+            flags: 0,
         };
-        let (url, w, h) = image_attachment(&attachment).unwrap();
-        assert_eq!((w, h), (400., 150.));
-        assert_eq!(url.as_ref(), "https://media/a.png?ex=1&width=800&height=300");
+        let picture = image_attachment(&attachment).unwrap();
+        assert_eq!((picture.width, picture.height), (400., 150.));
+        assert_eq!(picture.url.as_ref(), "https://media/a.png?ex=1&width=800&height=300");
+        assert_eq!(picture.alt.as_ref().map(|a| a.as_ref()), Some("a cat"));
+        assert!(!picture.spoiler);
+    }
+
+    #[test]
+    fn spoilers_by_flag_or_name() {
+        let attachment: Attachment = serde_json::from_str(r#"{"filename":"a.png","flags":8}"#).unwrap();
+        assert!(attachment.spoiler());
+        let attachment: Attachment = serde_json::from_str(r#"{"filename":"SPOILER_a.png"}"#).unwrap();
+        assert!(attachment.spoiler());
+        let attachment: Attachment = serde_json::from_str(r#"{"filename":"a.png"}"#).unwrap();
+        assert!(!attachment.spoiler());
     }
 
     fn me() -> User {
@@ -350,6 +381,8 @@ mod tests {
             content_type: Some("application/zip".into()),
             width: None,
             height: None,
+            description: None,
+            flags: 0,
         };
         assert!(image_attachment(&attachment).is_none());
     }

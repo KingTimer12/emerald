@@ -64,6 +64,9 @@ enum Overlay {
     Profile { user: Snowflake, guild: Option<Snowflake> },
     /// "Delete Message", asking before it goes.
     DeleteMessage { channel: Snowflake, message: Snowflake },
+    /// "Modify Attachment" for the composer's file at `ix`; `spoiler` is the
+    /// switch as set so far.
+    EditAttachment { ix: usize, spoiler: bool },
 }
 
 /// Result line under a form, green on success and red on failure.
@@ -152,8 +155,12 @@ pub struct Emerald {
     /// The own message being edited in place, and its edit box.
     edit: Option<chat::Editing>,
     edit_input: Entity<TextInput>,
+    /// Alt text in "Modify Attachment".
+    alt_input: Entity<TextInput>,
     message_menu: Option<chat::MessageMenu>,
     reaction_picker: Option<chat::ReactionPicker>,
+    /// Spoiler images the user clicked open, by URL.
+    revealed: HashSet<SharedString>,
     /// The reaction picker's search box, and its grid's scroll position.
     emoji_query: Entity<TextInput>,
     emoji_scroll: UniformListScrollHandle,
@@ -194,8 +201,12 @@ impl Emerald {
         });
         let member_query = cx.new(|cx| TextInput::new(t!("members.search"), cx).keep_on_submit().compact());
         let edit_input = cx.new(|cx| TextInput::new("", cx));
+        let alt_input = cx.new(|cx| TextInput::new(t!("upload.description_placeholder"), cx).keep_on_submit().submit_empty());
         let emoji_query = cx.new(|cx| TextInput::new(t!("reaction.search"), cx).keep_on_submit().compact());
         let subscriptions = vec![
+            cx.subscribe_in(&alt_input, window, |this, _, _: &Submitted, window, cx| {
+                this.save_attachment(window, cx)
+            }),
             cx.subscribe_in(&edit_input, window, |this, _, event: &Submitted, window, cx| {
                 this.save_edit(event.0.clone(), window, cx)
             }),
@@ -261,8 +272,10 @@ impl Emerald {
             composer,
             edit: None,
             edit_input,
+            alt_input,
             message_menu: None,
             reaction_picker: None,
+            revealed: HashSet::new(),
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
             dm_search,
@@ -357,6 +370,7 @@ impl Render for Emerald {
             Some(Overlay::DeleteMessage { channel, message }) => {
                 Some(self.render_delete_modal(*channel, *message, cx).into_any_element())
             }
+            Some(Overlay::EditAttachment { ix, spoiler }) => self.render_attachment_modal(*ix, *spoiler, cx),
             None => None,
         };
         let menu = self.render_message_menu(cx);

@@ -41,8 +41,9 @@ CPU near zero when idle.
   that follow live member and role changes, replies, images, embeds, stickers (Discord's
   animated ones too) and system messages.
 - **Uploads**: up to 10 files per message from the + button, dragged onto the chat or
-  pasted, with image previews; sent the way the web client sends them, with the size
-  limit following Nitro and server boosts.
+  pasted, with image previews, alt text and spoilers; sent the way the web client sends
+  them, with the size limit following Nitro and server boosts. Spoiler images arrive
+  covered (and are not downloaded) until clicked; alt text shows on hover.
 - **Message actions** from a hover toolbar or right click: reply (with or without the
   ping), edit in place (Up edits your last message), pin, copy, delete with confirmation
   (Shift skips it).
@@ -60,7 +61,7 @@ CPU near zero when idle.
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, threads, forums, spoiler and alt text on uploads, animated custom emoji (shown still).
+Not there yet: voice, threads, forums, animated custom emoji (shown still).
 
 ## Requirements
 

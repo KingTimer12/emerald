@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use super::super::super::{icons, markdown, theme, time};
-use super::super::state::{Log, MessageView, Msg, Reply, Sticker};
+use super::super::state::{Log, MessageView, Msg, Picture, Reply, Sticker};
 use super::super::{Emerald, widgets};
 use crate::discord::model::{Embed, message_kind};
 
@@ -378,16 +378,7 @@ impl Emerald {
                     body.child(self.rich_text_noted(("content", ix), &msg.content, &msg.mentions, true, edited))
                 }
             })
-            .children(msg.images.iter().map(|(url, w, h)| {
-                let frame = div().size_full().rounded_lg().overflow_hidden();
-                div()
-                    .w(px(*w))
-                    .h(px(*h))
-                    .child(match self.avatar_image(url) {
-                        Some(image) => frame.child(img(image).size_full()),
-                        None => frame.bg(theme::hover()),
-                    })
-            }))
+            .children(msg.images.iter().enumerate().map(|(n, picture)| self.render_picture(picture, (ix, n), cx)))
             .children(msg.files.iter().map(|name| {
                 div()
                     .max_w(px(432.))
@@ -412,6 +403,56 @@ impl Emerald {
             .children(msg.embeds.iter().enumerate().filter_map(|(n, embed)| self.render_embed(embed, ix, n)))
             .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker)))
             .children(self.render_reactions(msg, ix, cx))
+    }
+
+    /// An image attachment. Spoilers stay covered, and are not even
+    /// downloaded, until clicked; alt text shows on hover and as a badge.
+    fn render_picture(&self, picture: &Picture, id: (usize, usize), cx: &mut Context<Self>) -> AnyElement {
+        let frame = div()
+            .id(SharedString::from(format!("picture-{}-{}", id.0, id.1)))
+            .relative()
+            .w(px(picture.width))
+            .h(px(picture.height))
+            .rounded_lg()
+            .overflow_hidden();
+        if picture.spoiler && !self.revealed.contains(&picture.url) {
+            let url = picture.url.clone();
+            return frame
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .bg(rgb(theme::BASE_LOWEST))
+                .child(spoiler_pill())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.revealed.insert(url.clone());
+                    cx.notify();
+                }))
+                .into_any_element();
+        }
+        let shown = match self.avatar_image(&picture.url) {
+            Some(image) => frame.child(img(image).size_full()),
+            None => frame.bg(theme::hover()),
+        };
+        match &picture.alt {
+            Some(alt) => shown
+                .tooltip(widgets::tooltip(alt.clone()))
+                .child(
+                    div()
+                        .absolute()
+                        .bottom(px(6.))
+                        .left(px(6.))
+                        .px_1()
+                        .rounded_sm()
+                        .bg(theme::scrim())
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(rgb(theme::TEXT_STRONG))
+                        .child(t!("chat.alt")),
+                )
+                .into_any_element(),
+            None => shown.into_any_element(),
+        }
     }
 
     fn render_sticker(&self, sticker: &Sticker) -> AnyElement {
@@ -542,4 +583,17 @@ fn day_separator(label: String) -> Div {
                 .child(label),
         )
         .child(line())
+}
+
+/// Discord's "SPOILER" label over hidden media.
+pub(in super::super) fn spoiler_pill() -> gpui::Div {
+    div()
+        .px_3()
+        .py_1()
+        .rounded_full()
+        .bg(theme::scrim())
+        .text_size(px(14.))
+        .font_weight(FontWeight::BOLD)
+        .text_color(rgb(theme::TEXT_STRONG))
+        .child(t!("chat.spoiler"))
 }

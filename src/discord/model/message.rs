@@ -13,6 +13,19 @@ pub struct Attachment {
     pub width: Option<u32>,
     #[serde(default)]
     pub height: Option<u32>,
+    /// Alt text.
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub flags: u64,
+}
+
+impl Attachment {
+    /// Sent as a spoiler: flagged, or named the way older clients mark it.
+    pub fn spoiler(&self) -> bool {
+        const IS_SPOILER: u64 = 1 << 3;
+        self.flags & IS_SPOILER != 0 || self.filename.starts_with("SPOILER_")
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

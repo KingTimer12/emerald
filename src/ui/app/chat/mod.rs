@@ -8,6 +8,7 @@ mod reactions;
 mod rich;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
+pub(super) use list::spoiler_pill;
 pub(super) use picker::ReactionPicker;
 
 use gpui::{

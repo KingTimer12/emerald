@@ -278,11 +278,19 @@ impl Rest {
                 .iter()
                 .enumerate()
                 .map(|(ix, file)| {
-                    json!({
+                    let mut attachment = json!({
                         "id": ix.to_string(),
                         "filename": file.filename,
                         "uploaded_filename": file.uploaded_filename,
-                    })
+                    });
+                    // Both are left out unless set, as the web client does.
+                    if !file.description.is_empty() {
+                        attachment["description"] = file.description.clone().into();
+                    }
+                    if file.spoiler {
+                        attachment["is_spoiler"] = true.into();
+                    }
+                    attachment
                 })
                 .collect();
             body["attachments"] = attachments.into();
@@ -350,6 +358,8 @@ impl Rest {
             uploaded.push(Uploaded {
                 filename: file.name.clone(),
                 uploaded_filename: target.upload_filename,
+                description: file.description.clone(),
+                spoiler: file.spoiler,
             });
         }
         Ok(uploaded)
@@ -738,6 +748,8 @@ pub fn invite_code(input: &str) -> Option<String> {
 pub struct Uploaded {
     filename: String,
     uploaded_filename: String,
+    description: String,
+    spoiler: bool,
 }
 
 #[derive(Deserialize)]
