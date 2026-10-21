@@ -1,5 +1,7 @@
 //! The messages between the UI and the network thread.
 
+use std::sync::Arc;
+
 use super::model::{
     Channel, Emoji, Guild, GuildEmojisUpdate, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
     MessageAck, MessageDelete, MessageUpdate, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
@@ -151,8 +153,17 @@ pub enum NetEvent {
         channel: Snowflake,
         nonce: String,
         content: String,
+        /// Handed back with the text, to try again.
+        files: Vec<Upload>,
         error: String,
     },
+}
+
+/// A file attached to a message, read into memory when it was picked.
+#[derive(Clone)]
+pub struct Upload {
+    pub name: String,
+    pub bytes: Arc<[u8]>,
 }
 
 /// The message a send answers.
@@ -174,6 +185,7 @@ pub enum Command {
         content: String,
         nonce: String,
         reply: Option<ReplyTo>,
+        files: Vec<Upload>,
     },
     /// The gateway echoes the outcome as MESSAGE_UPDATE.
     EditMessage {

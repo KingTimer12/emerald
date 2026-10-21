@@ -2,12 +2,13 @@
 
 use gpui::{AppContext, Context, Entity, SharedString};
 
+use super::attachments::Attachment;
 use super::chat::Replying;
 use super::state::Msg;
 use super::{Emerald, shown};
 use super::super::text_input::TextInput;
 use crate::discord::model::Snowflake;
-use crate::discord::{Command, ReplyTo, rest};
+use crate::discord::{Command, ReplyTo, Upload, rest};
 
 const MAX_MESSAGE_LEN: usize = 2000;
 
@@ -19,15 +20,18 @@ pub(super) struct Composer {
     pub error: Option<SharedString>,
     /// The message the next send answers.
     pub reply: Option<Replying>,
+    /// Files the next send carries.
+    pub attachments: Vec<Attachment>,
 }
 
 impl Composer {
     pub fn new(cx: &mut Context<Emerald>) -> Self {
         Self {
-            input: cx.new(|cx| TextInput::new(t!("composer.no_channel"), cx)),
+            input: cx.new(|cx| TextInput::new(t!("composer.no_channel"), cx).submit_empty()),
             draft: SharedString::default(),
             error: None,
             reply: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -35,17 +39,21 @@ impl Composer {
     pub fn open(&mut self, placeholder: String, cx: &mut Context<Emerald>) {
         self.error = None;
         self.reply = None;
+        self.attachments.clear();
         self.input
             .update(cx, |input, cx| input.set_placeholder(placeholder, cx));
     }
 
-    /// Puts `content` back in the box unless the user already typed more.
-    fn give_back(&self, content: String, cx: &mut Context<Emerald>) {
+    /// Puts `content` and `files` back unless the user already moved on.
+    fn give_back(&mut self, content: String, files: Vec<Upload>, cx: &mut Context<Emerald>) {
         self.input.update(cx, |input, cx| {
             if input.text().is_empty() {
                 input.set_text(content, cx);
             }
         });
+        if self.attachments.is_empty() {
+            self.attachments = files.into_iter().map(Attachment::new).collect();
+        }
     }
 }
 
@@ -56,7 +64,7 @@ impl Emerald {
             return;
         }
         let content = content.trim_end().to_owned();
-        if content.trim().is_empty() {
+        if content.trim().is_empty() && self.composer.attachments.is_empty() {
             return;
         }
         if content.chars().count() > MAX_MESSAGE_LEN {
@@ -70,11 +78,13 @@ impl Emerald {
         self.typing.sent();
         let nonce = rest::nonce();
         let reply = self.composer.reply.take().filter(|r| r.channel == channel);
+        let files: Vec<Upload> = self.composer.attachments.drain(..).map(|a| a.upload).collect();
         if let Some(me) = self.people.me() {
             let preview = reply.as_ref().map(|r| r.preview.clone());
             let view = shown(&self.messages, self.selected_channel, channel);
-            self.history
-                .add_pending(channel, Msg::pending(me, content.clone(), nonce.clone(), preview), view);
+            let mut pending = Msg::pending(me, content.clone(), nonce.clone(), preview);
+            pending.files = files.iter().map(|f| f.name.clone().into()).collect();
+            self.history.add_pending(channel, pending, view);
         }
         self.net.post(Command::Send {
             channel,
@@ -84,6 +94,7 @@ impl Emerald {
                 message: r.message,
                 mention: r.mention,
             }),
+            files,
         });
         cx.notify();
     }
@@ -115,6 +126,7 @@ impl Emerald {
         channel: Snowflake,
         nonce: &str,
         content: String,
+        files: Vec<Upload>,
         error: String,
         cx: &mut Context<Self>,
     ) {
@@ -122,7 +134,7 @@ impl Emerald {
         self.history.drop_pending(channel, nonce, view);
         if self.selected_channel == Some(channel) {
             self.composer.error = Some(error.into());
-            self.composer.give_back(content, cx);
+            self.composer.give_back(content, files, cx);
         }
     }
 

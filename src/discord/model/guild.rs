@@ -107,6 +107,8 @@ pub struct GuildProperties {
     pub icon: Option<String>,
     #[serde(default)]
     pub owner_id: Option<Snowflake>,
+    #[serde(default)]
+    pub features: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,6 +133,8 @@ pub struct Guild {
     #[serde(default)]
     pub emojis: Vec<GuildEmoji>,
     #[serde(default)]
+    pub features: Vec<String>,
+    #[serde(default)]
     pub unavailable: bool,
 }
 
@@ -140,6 +144,19 @@ impl Guild {
             .as_deref()
             .or(self.properties.as_ref().map(|p| p.name.as_str()))
             .unwrap_or("?")
+    }
+
+    /// The largest file a boost level lets members upload here, if any.
+    pub fn upload_limit(&self) -> Option<u64> {
+        let nested = self.properties.iter().flat_map(|p| &p.features);
+        let has = |name: &str| self.features.iter().chain(nested.clone()).any(|f| f == name);
+        if has("MAX_FILE_SIZE_100_MB") {
+            Some(100 * 1024 * 1024)
+        } else if has("MAX_FILE_SIZE_50_MB") {
+            Some(50 * 1024 * 1024)
+        } else {
+            None
+        }
     }
 
     pub fn icon_url(&self) -> Option<String> {
@@ -173,4 +190,22 @@ pub struct Invite {
     pub guild: Option<InviteGuild>,
     #[serde(default)]
     pub channel: Option<InviteChannel>,
+}
+
+#[cfg(test)]
+mod upload_tests {
+    use super::*;
+
+    #[test]
+    fn boost_features_raise_the_upload_limit() {
+        let guild: Guild = serde_json::from_str(
+            r#"{"id":"1","properties":{"name":"x","features":["MAX_FILE_SIZE_50_MB"]}}"#,
+        )
+        .unwrap();
+        assert_eq!(guild.upload_limit(), Some(50 * 1024 * 1024));
+        let guild: Guild = serde_json::from_str(r#"{"id":"1","features":["MAX_FILE_SIZE_100_MB"]}"#).unwrap();
+        assert_eq!(guild.upload_limit(), Some(100 * 1024 * 1024));
+        let guild: Guild = serde_json::from_str(r#"{"id":"1"}"#).unwrap();
+        assert_eq!(guild.upload_limit(), None);
+    }
 }

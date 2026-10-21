@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod add_server;
+mod attachments;
 mod chat;
 mod composer;
 mod events;
@@ -28,7 +29,7 @@ use gpui::{
     SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, px, relative, rgb,
 };
 
-use super::text_input::{Submitted, TextInput};
+use super::text_input::{PastedImage, Submitted, TextInput};
 use super::theme;
 use crate::discord::model::{Profile, Snowflake};
 use crate::discord::{Action, Command, Link};
@@ -208,6 +209,9 @@ impl Emerald {
             }),
             cx.subscribe(&composer.input, |this, _, event: &Submitted, cx| {
                 this.send(event.0.clone(), cx)
+            }),
+            cx.subscribe(&composer.input, |this, _, event: &PastedImage, cx| {
+                this.attach_pasted(&event.0, cx)
             }),
             cx.observe(&composer.input, |this, _, cx| this.on_draft_changed(cx)),
             cx.subscribe(&friends.input, |this, _, event: &Submitted, cx| {

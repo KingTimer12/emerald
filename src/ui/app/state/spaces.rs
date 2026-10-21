@@ -73,12 +73,18 @@ pub struct GuildInfo {
     /// The current user's permissions per channel.
     permissions: HashMap<Snowflake, u64>,
     emojis: Vec<GuildEmoji>,
+    /// Upload size the guild's boosts unlock.
+    upload_limit: Option<u64>,
 }
 
 impl GuildInfo {
     /// A role's guild-wide permissions; 0 for an unknown role.
     pub fn role_permissions(&self, role: Snowflake) -> u64 {
         self.roles.iter().find(|r| r.id == role).map_or(0, |r| r.permissions)
+    }
+
+    pub fn upload_limit(&self) -> Option<u64> {
+        self.upload_limit
     }
 
     /// Custom emoji uploaded here.
@@ -171,6 +177,7 @@ impl Space {
 
     pub fn guild(guild: Guild, me: Snowflake, my_roles: Vec<Snowflake>) -> Self {
         let name = guild.display_name().to_owned();
+        let upload_limit = guild.upload_limit();
         let mut space = Self {
             id: guild.id,
             initials: initials(&name).into(),
@@ -184,6 +191,7 @@ impl Space {
                 members: HashMap::new(),
                 requested: HashSet::new(),
                 permissions: HashMap::new(),
+                upload_limit,
                 emojis: guild.emojis,
             }),
             channels: guild.channels,

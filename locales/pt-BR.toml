@@ -69,6 +69,13 @@ no_channel = "Selecione um canal"
 no_permission = "Você não tem permissão para enviar mensagens neste canal."
 too_long = "Sua mensagem passou do limite de {max} caracteres."
 
+[upload]
+attach = "Enviar um arquivo"
+remove = "Remover anexo"
+too_large = "{name} é grande demais. O tamanho máximo de arquivo aqui é {max}."
+too_many = "Você só pode enviar {max} arquivos por vez."
+unreadable = "Não foi possível ler {name}."
+
 [chat]
 attachment = "Clique para ver o anexo"
 boost = "{author} impulsionou o servidor!"

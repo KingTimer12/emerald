@@ -57,6 +57,9 @@ pub fn bind_keys(cx: &mut App) {
 /// Emitted with the trimmed content when the user presses enter.
 pub struct Submitted(pub String);
 
+/// An image pasted while the input had focus; the owner may attach it.
+pub struct PastedImage(pub gpui::Image);
+
 pub struct TextInput {
     focus_handle: FocusHandle,
     content: SharedString,
@@ -72,9 +75,13 @@ pub struct TextInput {
     clear_on_submit: bool,
     /// Small single-line field, like the sidebar search.
     compact: bool,
+    /// Enter on an empty field still submits: the message box can send
+    /// attachments alone.
+    submit_empty: bool,
 }
 
 impl EventEmitter<Submitted> for TextInput {}
+impl EventEmitter<PastedImage> for TextInput {}
 
 impl TextInput {
     pub fn new(placeholder: impl Into<SharedString>, cx: &mut Context<Self>) -> Self {
@@ -90,7 +97,13 @@ impl TextInput {
             is_selecting: false,
             clear_on_submit: true,
             compact: false,
+            submit_empty: false,
         }
+    }
+
+    pub fn submit_empty(mut self) -> Self {
+        self.submit_empty = true;
+        self
     }
 
     pub fn keep_on_submit(mut self) -> Self {
@@ -126,7 +139,7 @@ impl TextInput {
             return;
         }
         let text = self.content.trim().to_owned();
-        if text.is_empty() {
+        if text.is_empty() && !self.submit_empty {
             return;
         }
         if self.clear_on_submit {
@@ -221,8 +234,13 @@ impl TextInput {
     }
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+        let Some(item) = cx.read_from_clipboard() else { return };
+        if let Some(text) = item.text() {
             self.replace_text_in_range(None, &text.replace("\n", " "), window, cx);
+        } else if let Some(gpui::ClipboardEntry::Image(image)) =
+            item.entries().iter().find(|e| matches!(e, gpui::ClipboardEntry::Image(_)))
+        {
+            cx.emit(PastedImage(image.clone()));
         }
     }
 

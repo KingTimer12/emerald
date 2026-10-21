@@ -10,7 +10,10 @@ mod rich;
 pub(super) use actions::{Editing, MessageMenu, Replying};
 pub(super) use picker::ReactionPicker;
 
-use gpui::{AnyElement, Context, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px, rgb};
+use gpui::{
+    AnyElement, Context, ExternalPaths, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px,
+    rgb,
+};
 
 use super::super::{icons, lottie, theme};
 use super::{Emerald, widgets};
@@ -166,7 +169,15 @@ impl Emerald {
                     .flex()
                     .flex_col()
                     .children(self.render_reply_bar(cx))
-                    .child(self.composer.input.clone()),
+                    .children(self.render_attachments(cx))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .children(self.render_attach_button(cx))
+                            .child(div().flex_1().min_w(px(0.)).child(self.composer.input.clone())),
+                    ),
             )
             // Typing indicator in the strip under the input, as on Discord.
             .child(
@@ -180,11 +191,14 @@ impl Emerald {
             );
 
         let column = div()
+            .id("chat-column")
             .flex()
             .flex_col()
             .flex_1()
             .min_w(px(0.))
             .h_full()
+            .drag_over::<ExternalPaths>(|style, _, _, _| style.bg(theme::hover()))
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.on_drop_files(paths, cx)))
             .child(body)
             .child(composer);
 

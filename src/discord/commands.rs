@@ -26,17 +26,30 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             content,
             nonce,
             reply,
-        } => match with_captcha!(|captcha| rest.send_message(channel, &content, &nonce, reply, captcha).await) {
-            // Usually the gateway echo arrives first; the UI drops the duplicate.
-            Ok(message) => NetEvent::MessageCreate(message),
-            Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
-            Err(e) => NetEvent::SendFailed {
-                channel,
-                nonce,
-                content,
-                error: e.to_string(),
-            },
-        },
+            files,
+        } => 'send: {
+            // Files go up once; a captcha retry only resends the message.
+            let uploaded = match rest.upload_files(channel, &files).await {
+                Ok(uploaded) => uploaded,
+                Err(e) if e.is::<rest::Unauthorized>() => break 'send NetEvent::AuthExpired,
+                Err(e) => {
+                    let error = e.to_string();
+                    break 'send NetEvent::SendFailed { channel, nonce, content, files, error };
+                }
+            };
+            match with_captcha!(|captcha| rest.send_message(channel, &content, &nonce, reply, &uploaded, captcha).await) {
+                // Usually the gateway echo arrives first; the UI drops the duplicate.
+                Ok(message) => NetEvent::MessageCreate(message),
+                Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
+                Err(e) => NetEvent::SendFailed {
+                    channel,
+                    nonce,
+                    content,
+                    files,
+                    error: e.to_string(),
+                },
+            }
+        }
         Command::EditMessage {
             channel,
             message,

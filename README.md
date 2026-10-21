@@ -40,6 +40,9 @@ CPU near zero when idle.
   does (hidden channels, sending blocked without permission), nicknames and role colors
   that follow live member and role changes, replies, images, embeds, stickers (Discord's
   animated ones too) and system messages.
+- **Uploads**: up to 10 files per message from the + button, dragged onto the chat or
+  pasted, with image previews; sent the way the web client sends them, with the size
+  limit following Nitro and server boosts.
 - **Message actions** from a hover toolbar or right click: reply (with or without the
   ping), edit in place (Up edits your last message), pin, copy, delete with confirmation
   (Shift skips it).
@@ -57,7 +60,7 @@ CPU near zero when idle.
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, threads, forums, uploads, animated custom emoji (shown still).
+Not there yet: voice, threads, forums, spoiler and alt text on uploads, animated custom emoji (shown still).
 
 ## Requirements
 

@@ -121,6 +121,10 @@ impl Emerald {
             && self.spaces.current().permissions(channel) & permissions::SEND_MESSAGES != 0
     }
 
+    pub(super) fn can_attach(&self, channel: Snowflake) -> bool {
+        self.can_send(channel) && self.spaces.current().permissions(channel) & permissions::ATTACH_FILES != 0
+    }
+
     /// Newest known message in `channel`: the loaded log, else the channel's
     /// `last_message_id`.
     fn newest_message(&self, channel: Snowflake) -> Option<Snowflake> {

@@ -137,8 +137,9 @@ impl Emerald {
                 channel,
                 nonce,
                 content,
+                files,
                 error,
-            } => self.on_send_failed(channel, &nonce, content, error, cx),
+            } => self.on_send_failed(channel, &nonce, content, files, error, cx),
         }
     }
 

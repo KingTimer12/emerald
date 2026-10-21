@@ -9,6 +9,7 @@ pub const ADD_REACTIONS: u64 = 1 << 6;
 pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const SEND_MESSAGES: u64 = 1 << 11;
 pub const MANAGE_MESSAGES: u64 = 1 << 13;
+pub const ATTACH_FILES: u64 = 1 << 15;
 pub const READ_MESSAGE_HISTORY: u64 = 1 << 16;
 /// Split off MANAGE_MESSAGES in 2025: pinning without moderating.
 pub const PIN_MESSAGES: u64 = 1 << 51;

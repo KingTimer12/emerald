@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 use reqwest::header::{
-    ACCEPT, ACCEPT_LANGUAGE, AUTHORIZATION, HeaderMap, HeaderValue, ORIGIN, REFERER, USER_AGENT,
+    ACCEPT, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, ORIGIN, REFERER, USER_AGENT,
 };
 use reqwest::{Method, Response, StatusCode};
 use serde::Deserialize;
@@ -27,7 +27,7 @@ use error::{ErrorBody, Unavailable};
 use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
 
-use super::{ReactionSource, ReplyTo};
+use super::{ReactionSource, ReplyTo, Upload};
 use super::cache::Cache;
 use super::identity::{self, Identity};
 use super::model::{Channel, DISCORD_EPOCH_MS, Emoji, Invite, Message, Profile, Snowflake, User};
@@ -133,6 +133,9 @@ pub struct Rest {
     http: reqwest::Client,
     /// Plain client for cdn.discordapp.com: no API headers, no auth.
     cdn: reqwest::Client,
+    /// Puts attachments to the storage URLs Discord hands out; never sends
+    /// the token, as the browser's cross-origin upload does not.
+    uploads: reqwest::Client,
     /// CDN images and kept responses on disk; `None` runs uncached.
     cache: Option<Arc<Cache>>,
     micro: MicroCache,
@@ -169,9 +172,27 @@ impl Rest {
             .pool_max_idle_per_host(2)
             .timeout(Duration::from_secs(20))
             .build()?;
+        let mut upload_headers = HeaderMap::new();
+        upload_headers.insert(ORIGIN, HeaderValue::from_static("https://discord.com"));
+        upload_headers.insert(REFERER, HeaderValue::from_static("https://discord.com/"));
+        upload_headers.insert("sec-ch-ua", HeaderValue::from_static(identity::SEC_CH_UA));
+        upload_headers.insert("sec-ch-ua-mobile", HeaderValue::from_static("?0"));
+        upload_headers.insert("sec-ch-ua-platform", HeaderValue::from_static(identity::SEC_CH_UA_PLATFORM));
+        upload_headers.insert("sec-fetch-dest", HeaderValue::from_static("empty"));
+        upload_headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
+        upload_headers.insert("sec-fetch-site", HeaderValue::from_static("cross-site"));
+        let uploads = reqwest::Client::builder()
+            .default_headers(upload_headers)
+            .user_agent(identity::USER_AGENT)
+            .pool_max_idle_per_host(1)
+            // Big files on slow links take long; only a stalled one fails.
+            .connect_timeout(Duration::from_secs(15))
+            .read_timeout(Duration::from_secs(120))
+            .build()?;
         Ok(Self {
             http,
             cdn,
+            uploads,
             cache,
             micro: MicroCache::default(),
             api: format!("https://discord.com/api/v{}", identity::API_VERSION),
@@ -241,6 +262,7 @@ impl Rest {
         content: &str,
         nonce: &str,
         reply: Option<ReplyTo>,
+        files: &[Uploaded],
         captcha: Option<&Solution>,
     ) -> Result<Message> {
         let mut body = json!({
@@ -250,6 +272,21 @@ impl Rest {
             "tts": false,
             "flags": 0,
         });
+        if !files.is_empty() {
+            // Ids are the files' places in this list, as the web client sends.
+            let attachments: Vec<_> = files
+                .iter()
+                .enumerate()
+                .map(|(ix, file)| {
+                    json!({
+                        "id": ix.to_string(),
+                        "filename": file.filename,
+                        "uploaded_filename": file.uploaded_filename,
+                    })
+                })
+                .collect();
+            body["attachments"] = attachments.into();
+        }
         if let Some(reply) = reply {
             body["message_reference"] = json!({
                 "channel_id": channel.to_string(),
@@ -270,6 +307,52 @@ impl Rest {
                 .captcha(captcha),
         )
         .await
+    }
+
+    /// Puts each file in Discord's storage, as the web client does: ask the
+    /// channel for an upload URL, then PUT the bytes there. The message then
+    /// names the files by their `uploaded_filename`.
+    pub async fn upload_files(&self, channel: Snowflake, files: &[Upload]) -> Result<Vec<Uploaded>> {
+        let mut uploaded = Vec::with_capacity(files.len());
+        for file in files {
+            let mut entry = json!({
+                "filename": file.name,
+                "file_size": file.bytes.len(),
+                "id": upload_id(),
+                "is_clip": false,
+            });
+            if let Some(mime) = mime_type(&file.name) {
+                entry["original_content_type"] = mime.into();
+            }
+            let answer: UploadUrls = self
+                .fetch(
+                    Call::post("/channels/{id}/attachments", format!("/channels/{channel}/attachments"))
+                        .major(channel)
+                        .json(json!({ "files": [entry] })),
+                )
+                .await?;
+            let Some(target) = answer.attachments.into_iter().next() else {
+                bail!("Discord gave no upload URL for {}", file.name);
+            };
+            if !target.upload_url.starts_with("https://") {
+                bail!("refusing a non-HTTPS upload URL for {}", file.name);
+            }
+            let response = self
+                .uploads
+                .put(&target.upload_url)
+                .header(CONTENT_TYPE, "application/octet-stream")
+                .body(reqwest::Body::from(bytes::Bytes::from_owner(file.bytes.clone())))
+                .send()
+                .await?;
+            if !response.status().is_success() {
+                bail!("uploading {} failed: {}", file.name, response.status());
+            }
+            uploaded.push(Uploaded {
+                filename: file.name.clone(),
+                uploaded_filename: target.upload_filename,
+            });
+        }
+        Ok(uploaded)
     }
 
     pub async fn edit_message(&self, channel: Snowflake, message: Snowflake, content: &str) -> Result<()> {
@@ -649,6 +732,54 @@ pub fn invite_code(input: &str) -> Option<String> {
         && code.len() <= 64
         && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     valid.then(|| code.to_owned())
+}
+
+/// A file already in Discord's storage, ready to name in a message.
+pub struct Uploaded {
+    filename: String,
+    uploaded_filename: String,
+}
+
+#[derive(Deserialize)]
+struct UploadUrls {
+    attachments: Vec<UploadUrl>,
+}
+
+#[derive(Deserialize)]
+struct UploadUrl {
+    upload_url: String,
+    upload_filename: String,
+}
+
+/// The web client numbers upload requests with lodash's `uniqueId`: a
+/// counter shared with the rest of the page, sent as a string.
+fn upload_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed).to_string()
+}
+
+/// The type a browser reports for a file, from its extension; unknown
+/// ones send none.
+fn mime_type(name: &str) -> Option<&'static str> {
+    let extension = name.rsplit_once('.')?.1.to_ascii_lowercase();
+    Some(match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "mp4" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "wav" => "audio/wav",
+        "txt" => "text/plain",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "json" => "application/json",
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
