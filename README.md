@@ -49,14 +49,15 @@ CPU near zero when idle.
   sit on the toolbar), the server's custom emoji (every server's with Nitro) and the Unicode
   categories.
 - **Discord markdown**: bold, italics, underline, strikethrough, code, headings, mentions,
-  clickable links. Masked links always show their real host.
+  clickable links, custom emoji drawn inline (large when a message is only emoji). Masked
+  links always show their real host.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
 - **Unread state** synced with other devices, with read receipts batched; mention counts
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, threads, forums, custom emoji inside message text, uploads.
+Not there yet: voice, threads, forums, uploads, animated custom emoji (shown still).
 
 ## Requirements
 

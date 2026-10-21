@@ -1,16 +1,21 @@
 //! Message text: Discord markdown turned into styled, clickable text.
+//! Custom emoji are painted over room kept for them in the text, since
+//! gpui text cannot hold images.
 
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, FontStyle, FontWeight, HighlightStyle, InteractiveText, SharedString, StrikethroughStyle,
-    StyledText, UnderlineStyle, prelude::*, px, rgb,
+    AnyElement, Bounds, FontStyle, FontWeight, HighlightStyle, InteractiveText, SharedString,
+    StrikethroughStyle, StyledText, TextLayout, UnderlineStyle, canvas, div, point, prelude::*, px, rgb, size,
 };
 
 use super::super::super::markdown::{self, Mention, Style};
 use super::super::super::theme;
 use super::super::Emerald;
-use crate::discord::model::Snowflake;
+use crate::discord::model::{Snowflake, custom_url};
+
+/// Emoji-only messages, as large as Discord draws them.
+const JUMBO: f32 = 48.;
 
 impl Emerald {
     /// Message text with markdown and mentions resolved against what this
@@ -22,11 +27,11 @@ impl Emerald {
         mentions: &[(Snowflake, SharedString)],
         clickable: bool,
     ) -> AnyElement {
-        self.rich_text_noted(id, content, mentions, clickable, None)
+        self.render_rich(id, content, mentions, clickable, None, false)
     }
 
-    /// [`Self::rich_text`] followed by a muted `note`, as "(edited)" trails
-    /// the text it marks.
+    /// A message's own text: [`Self::rich_text`] followed by a muted `note`,
+    /// as "(edited)" trails the text it marks, and large when only emoji.
     pub(super) fn rich_text_noted(
         &self,
         id: impl Into<gpui::ElementId>,
@@ -34,6 +39,18 @@ impl Emerald {
         mentions: &[(Snowflake, SharedString)],
         clickable: bool,
         note: Option<&str>,
+    ) -> AnyElement {
+        self.render_rich(id, content, mentions, clickable, note, true)
+    }
+
+    fn render_rich(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        content: &str,
+        mentions: &[(Snowflake, SharedString)],
+        clickable: bool,
+        note: Option<&str>,
+        may_jumbo: bool,
     ) -> AnyElement {
         let guild = self.spaces.current().info();
         let name = |mention: Mention| match mention {
@@ -52,6 +69,9 @@ impl Emerald {
                 .map_or_else(|| t!("chat.unknown_role").to_owned(), |r| r.name.clone()),
         };
         let mut rich = markdown::parse(content, &name);
+        let jumbo = may_jumbo && rich.jumbo();
+        // Large emoji keep their note at text size, beside them.
+        let (note, jumbo_note) = if jumbo { (None, note) } else { (note, None) };
         if let Some(note) = note {
             rich.text.push(' ');
             let start = rich.text.len();
@@ -60,14 +80,73 @@ impl Emerald {
         }
         let links = rich.links;
         let styled = StyledText::new(rich.text).with_highlights(flatten(&rich.spans));
-        if !clickable || links.is_empty() {
-            return styled.into_any_element();
+        let layout = styled.layout().clone();
+        let text = if !clickable || links.is_empty() {
+            styled.into_any_element()
+        } else {
+            let ranges = links.iter().map(|(range, _)| range.clone()).collect();
+            InteractiveText::new(id, styled)
+                .on_click(ranges, move |ix, _, cx| cx.open_url(&links[ix].1))
+                .into_any_element()
+        };
+        if rich.emojis.is_empty() && !jumbo {
+            return text;
         }
-        let ranges = links.iter().map(|(range, _)| range.clone()).collect();
-        InteractiveText::new(id, styled)
-            .on_click(ranges, move |ix, _, cx| cx.open_url(&links[ix].1))
-            .into_any_element()
+        let emojis: Vec<_> = rich
+            .emojis
+            .into_iter()
+            .filter_map(|(range, id)| Some((range, self.avatar_image(&custom_url(id))?)))
+            .collect();
+        let drawn = div()
+            .relative()
+            .when(jumbo, |text| text.text_size(px(JUMBO * 0.8)).line_height(px(JUMBO + 4.)))
+            .child(text)
+            .child(
+                canvas(
+                    move |_, window, cx| {
+                        emojis
+                            .into_iter()
+                            .filter_map(|(range, image)| {
+                                let bounds = emoji_bounds(&layout, range, jumbo)?;
+                                Some((bounds, image.use_render_image(window, cx)?))
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                    |_, emojis, window, _| {
+                        for (bounds, image) in emojis {
+                            if let Err(e) = window.paint_image(bounds, Default::default(), image, 0, false) {
+                                log::warn!("could not paint an emoji: {e}");
+                            }
+                        }
+                    },
+                )
+                .absolute()
+                .size_full(),
+            );
+        match jumbo_note {
+            Some(note) => div()
+                .flex()
+                .items_end()
+                .gap_1()
+                .child(drawn)
+                .child(div().pb_1().text_color(rgb(theme::TEXT_MUTED)).child(note.to_owned()))
+                .into_any_element(),
+            None => drawn.into_any_element(),
+        }
     }
+}
+
+/// Where the emoji kept at `range` goes: centred on its room, as tall as
+/// Discord draws it beside text of this line height.
+fn emoji_bounds(layout: &TextLayout, range: Range<usize>, jumbo: bool) -> Option<Bounds<gpui::Pixels>> {
+    let start = layout.position_for_index(range.start)?;
+    let end = layout.position_for_index(range.end)?;
+    let line = layout.line_height();
+    let side = if jumbo { px(JUMBO) } else { line * 1.1 };
+    // A room split by wrapping shows the emoji where it starts.
+    let room = if end.y == start.y { end.x - start.x } else { side };
+    let origin = point(start.x + (room - side) / 2., start.y + (line - side) / 2.);
+    Some(Bounds::new(origin, size(side, side)))
 }
 
 /// gpui wants highlights sorted and disjoint; nested markdown overlaps, so
@@ -124,6 +203,11 @@ fn highlight(style: Style) -> HighlightStyle {
         },
         Style::Link => HighlightStyle {
             color: Some(rgb(theme::LINK).into()),
+            ..Default::default()
+        },
+        // Colours blend, so only fading takes the text away.
+        Style::Hidden => HighlightStyle {
+            fade_out: Some(1.),
             ..Default::default()
         },
         Style::Muted => HighlightStyle {

@@ -1,7 +1,7 @@
 //! The subset of Discord markdown a message line can show with styled text:
 //! bold, italic, underline, strikethrough, inline and block code, spoilers,
-//! headings, links, and mentions resolved to names. Everything else stays
-//! literal, as Discord leaves unmatched markers.
+//! headings, links, mentions resolved to names, and custom emoji. Everything
+//! else stays literal, as Discord leaves unmatched markers.
 
 use std::ops::Range;
 
@@ -19,7 +19,16 @@ pub enum Style {
     Mention,
     /// Never parsed: for notes the view appends, like "(edited)".
     Muted,
+    /// Invisible text holding room for a custom emoji drawn over it.
+    Hidden,
 }
+
+/// Stands in for a custom emoji in the text so the line keeps room for its
+/// image. Letters, so a line never wraps inside it.
+pub const EMOJI_ROOM: &str = "Mn";
+
+/// Messages of only emoji show them large, as in Discord, up to this many.
+const JUMBO_MAX: usize = 30;
 
 /// What a `<…>` token refers to, for the caller to name.
 pub enum Mention {
@@ -33,6 +42,8 @@ pub struct Rich {
     pub spans: Vec<(Range<usize>, Style)>,
     /// Clickable ranges of `text` with the URL each opens.
     pub links: Vec<(Range<usize>, String)>,
+    /// Custom emoji: the room kept for each in `text`, and its id.
+    pub emojis: Vec<(Range<usize>, Snowflake)>,
 }
 
 impl Rich {
@@ -42,6 +53,59 @@ impl Rich {
         self.spans.push((start..self.text.len(), Style::Link));
         self.links.push((start..self.text.len(), url.to_owned()));
     }
+
+    fn emoji(&mut self, id: Snowflake) {
+        let start = self.text.len();
+        self.text.push_str(EMOJI_ROOM);
+        self.spans.push((start..self.text.len(), Style::Hidden));
+        self.emojis.push((start..self.text.len(), id));
+    }
+
+    /// Whether the text is nothing but emoji, few enough to show large.
+    pub fn jumbo(&self) -> bool {
+        let mut count = self.emojis.len();
+        let mut rest = self.text.as_str();
+        let mut last = 0;
+        for (range, _) in &self.emojis {
+            if !rest.is_char_boundary(range.start - last) {
+                return false;
+            }
+            let (before, _) = rest.split_at(range.start - last);
+            match unicode_emoji(before) {
+                Some(n) => count += n,
+                None => return false,
+            }
+            rest = &rest[range.end - last..];
+            last = range.end;
+        }
+        match unicode_emoji(rest) {
+            Some(n) => count += n,
+            None => return false,
+        }
+        (1..=JUMBO_MAX).contains(&count)
+    }
+}
+
+/// How many Unicode emoji `text` holds when it is only emoji and spaces.
+/// Pictographs start at U+1F000 or are older symbols turned emoji; joiners,
+/// variation selectors and skin tones only extend the one before.
+fn unicode_emoji(text: &str) -> Option<usize> {
+    let mut count = 0;
+    let mut joined = false;
+    for c in text.chars() {
+        match c {
+            c if c.is_whitespace() => joined = false,
+            '\u{200d}' => joined = true,
+            '\u{fe0f}' | '\u{20e3}' | '\u{1f3fb}'..='\u{1f3ff}' | '\u{e0020}'..='\u{e007f}' => {}
+            c if !c.is_alphanumeric() && (c as u32 >= 0x1f000 || ('\u{2190}'..='\u{2bff}').contains(&c)) => {
+                if !std::mem::take(&mut joined) {
+                    count += 1;
+                }
+            }
+            _ => return None,
+        }
+    }
+    Some(count)
 }
 
 /// `https://…` or `http://…` up to whitespace.
@@ -80,6 +144,7 @@ pub fn parse(source: &str, name: &dyn Fn(Mention) -> String) -> Rich {
         text: String::with_capacity(source.len()),
         spans: Vec::new(),
         links: Vec::new(),
+        emojis: Vec::new(),
     };
     for (ix, line) in source.split('\n').enumerate() {
         if ix > 0 {
@@ -152,12 +217,15 @@ fn inline(line: &str, name: &dyn Fn(Mention) -> String, rich: &mut Rich) {
                     continue;
                 }
             }
-            if let Some((text, len, styled)) = mention(rest, name) {
+            if let Some((id, len)) = custom_emoji(rest) {
+                rich.emoji(id);
+                rest = &rest[len..];
+                continue;
+            }
+            if let Some((text, len)) = mention(rest, name) {
                 let start = rich.text.len();
                 rich.text.push_str(&text);
-                if styled {
-                    rich.spans.push((start..rich.text.len(), Style::Mention));
-                }
+                rich.spans.push((start..rich.text.len(), Style::Mention));
                 rest = &rest[len..];
                 continue;
             }
@@ -197,27 +265,32 @@ fn inline(line: &str, name: &dyn Fn(Mention) -> String, rich: &mut Rich) {
     }
 }
 
-/// `<@id>`, `<@!id>`, `<#id>`, `<@&id>`, `<:name:id>` and `<a:name:id>`,
-/// as the shown text, the source length consumed, and whether it is a
-/// mention (styled) rather than an emoji (plain).
-fn mention(source: &str, name: &dyn Fn(Mention) -> String) -> Option<(String, usize, bool)> {
+/// `<@id>`, `<@!id>`, `<#id>` and `<@&id>`, as the shown text and the
+/// source length consumed.
+fn mention(source: &str, name: &dyn Fn(Mention) -> String) -> Option<(String, usize)> {
     let end = source.find('>')?;
     let inner = &source[1..end];
     let id = |s: &str| s.parse().ok().map(Snowflake);
-    let (text, styled) = if let Some(rest) = inner.strip_prefix("@&") {
-        (format!("@{}", name(Mention::Role(id(rest)?))), true)
+    let text = if let Some(rest) = inner.strip_prefix("@&") {
+        format!("@{}", name(Mention::Role(id(rest)?)))
     } else if let Some(rest) = inner.strip_prefix('@') {
-        (format!("@{}", name(Mention::User(id(rest.trim_start_matches('!'))?))), true)
-    } else if let Some(rest) = inner.strip_prefix('#') {
-        (format!("#{}", name(Mention::Channel(id(rest)?))), true)
+        format!("@{}", name(Mention::User(id(rest.trim_start_matches('!'))?)))
     } else {
-        // Custom emoji: shown by name, since inline images are not drawn.
-        let rest = inner.strip_prefix("a:").or(inner.strip_prefix(':'))?;
-        let (emoji, emoji_id) = rest.split_once(':')?;
-        id(emoji_id)?;
-        (format!(":{emoji}:"), false)
+        format!("#{}", name(Mention::Channel(id(inner.strip_prefix('#')?)?)))
     };
-    Some((text, end + 1, styled))
+    Some((text, end + 1))
+}
+
+/// `<:name:id>` or `<a:name:id>`, as the emoji id and the source length.
+fn custom_emoji(source: &str) -> Option<(Snowflake, usize)> {
+    let end = source.find('>')?;
+    let inner = &source[1..end];
+    let rest = inner.strip_prefix("a:").or(inner.strip_prefix(':'))?;
+    let (name, id) = rest.split_once(':')?;
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    Some((Snowflake(id.parse().ok()?), end + 1))
 }
 
 #[cfg(test)]
@@ -266,10 +339,27 @@ mod tests {
 
     #[test]
     fn mentions_emoji_and_links() {
-        let (text, spans) = spans("<@!5> <#6> <@&7> <:wave:8> https://x.io/a b");
-        assert_eq!(text, "@user5 #chan6 @role7 :wave: https://x.io/a b");
+        let rich = parse("<@!5> <#6> <@&7> <:wave:8> https://x.io/a b", &names);
+        assert_eq!(rich.text, format!("@user5 #chan6 @role7 {EMOJI_ROOM} https://x.io/a b"));
+        let start = rich.text.find(EMOJI_ROOM).unwrap();
+        assert_eq!(rich.emojis, vec![(start..start + EMOJI_ROOM.len(), Snowflake(8))]);
+        let (_, spans) = spans("<@!5> <#6> <@&7> <:wave:8> https://x.io/a b");
         assert_eq!(spans[0], ("@user5".into(), Style::Mention));
-        assert_eq!(spans[3], ("https://x.io/a".into(), Style::Link));
+        assert_eq!(spans[3], (EMOJI_ROOM.into(), Style::Hidden));
+        assert_eq!(spans[4], ("https://x.io/a".into(), Style::Link));
+    }
+
+    #[test]
+    fn emoji_only_messages_are_jumbo() {
+        let jumbo = |source| parse(source, &names).jumbo();
+        assert!(jumbo("<:a:1> <a:b:2>"));
+        assert!(jumbo("👍 <:a:1> 👨‍👩‍👧 ❤️"));
+        assert!(!jumbo("oi <:a:1>"));
+        assert!(!jumbo(""));
+        let many = "<:a:1>".repeat(31);
+        assert!(!jumbo(&many));
+        assert!(!jumbo("<:bad name:1>"));
+        assert_eq!(unicode_emoji("👨‍👩‍👧 👍🏽"), Some(2));
     }
 
     #[test]
