@@ -285,10 +285,17 @@ impl Emerald {
     /// "Paulo is typing…", in the web client's wording.
     fn typing_text(&self) -> Option<StyledText> {
         let channel = self.selected_channel?;
+        // Nicknames first, as the web client names typists in guilds.
+        let guild = self.spaces.current().info();
         let names: Vec<&str> = self
             .typing
             .who(channel)
-            .map(|user| self.people.display_name(user).unwrap_or(t!("common.someone")))
+            .map(|user| {
+                guild
+                    .and_then(|g| g.member_style(user).0)
+                    .or_else(|| self.people.display_name(user))
+                    .unwrap_or(t!("common.someone"))
+            })
             .collect();
         let (text, bold): (String, Vec<std::ops::Range<usize>>) = match names.as_slice() {
             [] => return None,

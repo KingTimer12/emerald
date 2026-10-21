@@ -306,6 +306,15 @@ impl Emerald {
         if self.people.is_me(typing.user_id) {
             return;
         }
+        // Guild typists are often strangers; their member names them.
+        if let (Some(guild), Some(mut member)) = (typing.guild_id, typing.member) {
+            if let Some(user) = member.user.take() {
+                self.people.remember_new(&user);
+            }
+            if let Some(info) = self.spaces.guild_mut(guild) {
+                info.add_member(typing.user_id, member);
+            }
+        }
         self.typing.start(typing.channel_id, typing.user_id, Instant::now());
         // Redraw when it expires so the indicator goes away on its own.
         cx.spawn(async move |this, cx| {

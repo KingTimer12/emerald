@@ -200,6 +200,11 @@ pub struct MessageAck {
 pub struct TypingStart {
     pub channel_id: Snowflake,
     pub user_id: Snowflake,
+    /// In guilds: the typist's member, with their user and nickname.
+    #[serde(default)]
+    pub guild_id: Option<Snowflake>,
+    #[serde(default)]
+    pub member: Option<Member>,
 }
 
 #[cfg(test)]
