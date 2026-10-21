@@ -67,6 +67,8 @@ enum Overlay {
     /// "Modify Attachment" for the composer's file at `ix`; `spoiler` is the
     /// switch as set so far.
     EditAttachment { ix: usize, spoiler: bool },
+    CreateThread(chat::NewThread),
+    CreatePost(chat::NewPost),
 }
 
 /// Result line under a form, green on success and red on failure.
@@ -374,6 +376,8 @@ impl Render for Emerald {
                 Some(self.render_delete_modal(*channel, *message, cx).into_any_element())
             }
             Some(Overlay::EditAttachment { ix, spoiler }) => self.render_attachment_modal(*ix, *spoiler, cx),
+            Some(Overlay::CreateThread(modal)) => Some(self.render_thread_modal(modal, cx)),
+            Some(Overlay::CreatePost(modal)) => Some(self.render_post_modal(modal, cx)),
             None => None,
         };
         let menu = self.render_message_menu(cx);

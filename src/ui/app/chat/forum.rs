@@ -9,9 +9,9 @@ use gpui::{AnyElement, Context, FontWeight, ListAlignment, ListState, SharedStri
 
 use super::super::super::icons::{self, icon};
 use super::super::super::{theme, time};
-use super::super::Emerald;
+use super::super::{Emerald, widgets};
 use super::super::state::Msg;
-use crate::discord::model::{Channel, Message, Snowflake};
+use crate::discord::model::{Channel, ChannelKind, Message, Snowflake};
 use crate::discord::{Command, ThreadPage};
 
 /// First messages asked for at once, as the web client batches them.
@@ -138,7 +138,7 @@ impl Emerald {
         if state.list.item_count() != count + 1 {
             state.list.reset(count + 1);
         }
-        list(
+        let posts = list(
             state.list.clone(),
             cx.processor(move |this, ix: usize, _, cx| {
                 if ix >= this.forum_posts(forum).len() {
@@ -151,8 +151,26 @@ impl Emerald {
         )
         .flex_1()
         .px_4()
-        .py_2()
-        .into_any_element()
+        .py_2();
+        // Media channels take posts with files, which this form has none of.
+        let postable = self.can_send(forum)
+            && self.spaces.current().channels().iter().any(|c| c.id == forum && c.kind == ChannelKind::FORUM);
+        div()
+            .flex_1()
+            .min_h(px(0.))
+            .flex()
+            .flex_col()
+            .when(postable, |column| {
+                column.child(
+                    div().flex().justify_end().px_4().pt_3().child(
+                        widgets::button("new-post", t!("forum.new_post"), widgets::ButtonKind::Brand)
+                            .h(px(32.))
+                            .on_click(cx.listener(move |this, _, window, cx| this.open_create_post(forum, window, cx))),
+                    ),
+                )
+            })
+            .child(posts)
+            .into_any_element()
     }
 
     fn render_forum_end(&self, forum: Snowflake) -> gpui::Div {

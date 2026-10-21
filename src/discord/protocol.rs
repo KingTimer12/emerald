@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::model::{
-    Channel, Emoji, Guild, GuildEmojisUpdate, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
+    Channel, ChannelKind, Emoji, Guild, GuildEmojisUpdate, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
     MessageAck, MessageDelete, MessageUpdate, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
     RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry, ThreadMembersUpdate, TypingStart,
     User,
@@ -19,6 +19,10 @@ pub enum Action {
     UpdateProfile,
     /// Editing, deleting or pinning a message.
     Message,
+    /// Starting a thread or a forum post.
+    CreateThread,
+    /// Joining or leaving a thread.
+    ThreadMembership,
 }
 
 /// The gateway's reaction events.
@@ -124,6 +128,14 @@ pub enum NetEvent {
     /// We joined a thread, or our membership changed.
     ThreadJoined(ThreadMemberEntry),
     ThreadMembers(ThreadMembersUpdate),
+    /// Answer to `Command::CreateThread` or `Command::CreatePost`: the new
+    /// thread, to open.
+    ThreadCreated(Channel),
+    /// Answer to `Command::ThreadMembership`, before the gateway says so.
+    ThreadMembership {
+        thread: Snowflake,
+        joined: bool,
+    },
     MessageCreate(Message),
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
@@ -224,6 +236,26 @@ pub enum Command {
         nonce: String,
         reply: Option<ReplyTo>,
         files: Vec<Upload>,
+    },
+    /// Starts a thread in `parent`, from `message` when given.
+    CreateThread {
+        parent: Snowflake,
+        message: Option<Snowflake>,
+        name: String,
+        kind: ChannelKind,
+        auto_archive: u32,
+    },
+    /// Starts a post in `forum`, its first message holding `content`.
+    CreatePost {
+        forum: Snowflake,
+        name: String,
+        tags: Vec<Snowflake>,
+        content: String,
+        auto_archive: u32,
+    },
+    ThreadMembership {
+        thread: Snowflake,
+        join: bool,
     },
     /// The gateway echoes the outcome as MESSAGE_UPDATE.
     EditMessage {

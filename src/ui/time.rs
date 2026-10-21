@@ -61,6 +61,23 @@ pub fn now_secs() -> i64 {
         .map_or(0, |d| d.as_secs() as i64)
 }
 
+/// `secs` as Discord writes timestamps, in UTC: "2025-01-02T14:05:00+00:00".
+pub fn iso_utc(secs: i64) -> String {
+    // Days to civil date, after Howard Hinnant's algorithm.
+    let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    let (hour, minute, second) = (rest / 3600, rest / 60 % 60, rest % 60);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}+00:00")
+}
+
 /// "Today at 14:05", "Yesterday at 14:05" or "02/01/2025 14:05", in the
 /// interface language.
 pub fn header(secs: i64) -> String {
@@ -152,4 +169,16 @@ pub fn short_date(secs: i64) -> String {
         let month = crate::i18n::text(SHORT_MONTHS[(at.month - 1) as usize]);
         t!("time.short_date", day = at.day, month = month, year = at.year)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn iso_dates_match_discord() {
+        assert_eq!(iso_utc(0), "1970-01-01T00:00:00+00:00");
+        assert_eq!(iso_utc(1_735_826_700), "2025-01-02T14:05:00+00:00");
+        assert_eq!(iso_utc(951_782_400), "2000-02-29T00:00:00+00:00");
+    }
 }

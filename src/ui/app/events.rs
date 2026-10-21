@@ -112,6 +112,11 @@ impl Emerald {
                 }
                 self.refresh_composer(cx);
             }
+            NetEvent::ThreadCreated(thread) => self.on_thread_created(thread, window, cx),
+            NetEvent::ThreadMembership { thread, joined } => {
+                self.on_thread_membership(thread, joined);
+                self.refresh_composer(cx);
+            }
             NetEvent::ForumPosts { forum, first } => self.on_forum_posts(forum, first),
             NetEvent::ArchivedPosts { forum, offset, page } => self.on_archived_posts(forum, offset, page),
             NetEvent::MessageCreate(message) => self.on_message(message, cx),
@@ -362,6 +367,16 @@ impl Emerald {
                 }
             },
             Action::Message => {
+                if let Err(error) = result {
+                    self.composer.error = Some(error.into());
+                }
+            }
+            Action::CreateThread => {
+                if let Err(error) = result {
+                    self.creating_thread_failed(error);
+                }
+            }
+            Action::ThreadMembership => {
                 if let Err(error) = result {
                     self.composer.error = Some(error.into());
                 }

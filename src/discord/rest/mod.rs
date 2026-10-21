@@ -31,7 +31,7 @@ use ratelimit::{RateLimiter, Route};
 use super::{ReactionSource, ReplyTo, Upload};
 use super::cache::Cache;
 use super::identity::{self, Identity};
-use super::model::{Channel, DISCORD_EPOCH_MS, Emoji, Invite, Message, Profile, Snowflake, User};
+use super::model::{Channel, ChannelKind, DISCORD_EPOCH_MS, Emoji, Invite, Message, Profile, Snowflake, User};
 
 const MAX_ATTEMPTS: u32 = 4;
 pub const HISTORY_PAGE: usize = 50;
@@ -392,6 +392,70 @@ impl Rest {
             });
         }
         Ok(uploaded)
+    }
+
+    /// A thread in `parent`, started from `message` when given, as the web
+    /// client's "Create Thread" sends it.
+    pub async fn create_thread(
+        &self,
+        parent: Snowflake,
+        message: Option<Snowflake>,
+        name: &str,
+        kind: ChannelKind,
+        auto_archive: u32,
+        captcha: Option<&Solution>,
+    ) -> Result<Channel> {
+        let call = match message {
+            Some(message) => Call::post(
+                "/channels/{id}/messages/{id}/threads",
+                format!("/channels/{parent}/messages/{message}/threads"),
+            ),
+            None => Call::post("/channels/{id}/threads", format!("/channels/{parent}/threads")),
+        };
+        self.fetch(
+            call.major(parent)
+                .json(json!({
+                    "name": name,
+                    "type": kind.0,
+                    "auto_archive_duration": auto_archive,
+                    "location": "Create Thread Sidebar",
+                }))
+                .captcha(captcha),
+        )
+        .await
+    }
+
+    /// A forum post: the thread and its first message in one request.
+    pub async fn create_post(
+        &self,
+        forum: Snowflake,
+        name: &str,
+        tags: &[Snowflake],
+        content: &str,
+        auto_archive: u32,
+        captcha: Option<&Solution>,
+    ) -> Result<Channel> {
+        let tags: Vec<String> = tags.iter().map(ToString::to_string).collect();
+        self.fetch(
+            Call::post("/channels/{id}/threads", format!("/channels/{forum}/threads?use_nested_fields=true"))
+                .major(forum)
+                .json(json!({
+                    "name": name,
+                    "auto_archive_duration": auto_archive,
+                    "applied_tags": tags,
+                    "message": { "content": content },
+                }))
+                .captcha(captcha),
+        )
+        .await
+    }
+
+    /// Joins or leaves `thread`.
+    pub async fn thread_membership(&self, thread: Snowflake, join: bool) -> Result<()> {
+        let path = format!("/channels/{thread}/thread-members/@me?location=Thread%20Header");
+        let route = "/channels/{id}/thread-members/@me";
+        let call = if join { Call::post(route, path) } else { Call::delete(route, path) };
+        self.run(call.major(thread)).await
     }
 
     pub async fn edit_message(&self, channel: Snowflake, message: Snowflake, content: &str) -> Result<()> {

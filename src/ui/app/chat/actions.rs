@@ -364,6 +364,7 @@ impl Emerald {
         };
         let pin_label = if msg.pinned { t!("message.unpin") } else { t!("message.pin") };
         let react = self.may_react(channel, msg, true);
+        let thread = self.may_start_thread(channel, msg);
         let position = menu.position;
         let list = div()
             .id("message-menu")
@@ -389,6 +390,11 @@ impl Emerald {
             .when(rights.reply, |menu| {
                 menu.child(item("menu-reply", t!("message.reply"), icons::REPLY, false).on_click(cx.listener(
                     move |this, _, window, cx| this.start_reply(channel, id, window, cx),
+                )))
+            })
+            .when(thread, |menu| {
+                menu.child(item("menu-thread", t!("thread.create"), icons::THREAD, false).on_click(cx.listener(
+                    move |this, _, window, cx| this.open_create_thread(channel, Some(id), window, cx),
                 )))
             })
             .when(rights.edit, |menu| {

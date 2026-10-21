@@ -94,9 +94,17 @@ pub struct Channel {
     /// Forums: 0 lists by latest activity, 1 by creation.
     #[serde(default)]
     pub default_sort_order: Option<u8>,
+    /// Minutes of quiet before a new thread here archives itself.
+    #[serde(default)]
+    pub default_auto_archive_duration: Option<u32>,
     #[serde(default)]
     pub flags: u64,
 }
+
+/// Channel flag on forums that refuse untagged posts.
+const REQUIRE_TAG: u64 = 1 << 4;
+/// Archive delay of new threads when the parent sets none, in minutes.
+pub const DEFAULT_AUTO_ARCHIVE: u32 = 3 * 24 * 60;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ThreadMetadata {
@@ -121,6 +129,9 @@ pub struct ForumTag {
     /// Unicode emoji only; custom ones are not drawn on tags.
     #[serde(default)]
     pub emoji_name: Option<String>,
+    /// Only those who manage threads may apply it.
+    #[serde(default)]
+    pub moderated: bool,
 }
 
 /// THREAD_LIST_SYNC: active threads of a guild, after op 37 asks for them.
@@ -182,6 +193,11 @@ impl Channel {
     /// A thread that is not archived; archived ones leave the sidebar.
     pub fn is_active_thread(&self) -> bool {
         self.kind.is_thread() && !self.thread_metadata.as_ref().is_some_and(|m| m.archived)
+    }
+
+    /// A forum whose posts must carry a tag.
+    pub fn requires_tag(&self) -> bool {
+        self.flags & REQUIRE_TAG != 0
     }
 
     pub fn is_locked(&self) -> bool {

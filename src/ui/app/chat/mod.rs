@@ -7,11 +7,13 @@ mod list;
 mod picker;
 mod reactions;
 mod rich;
+mod threads;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
 pub(super) use forum::Forum;
 pub(super) use list::spoiler_pill;
 pub(super) use picker::ReactionPicker;
+pub(super) use threads::{NewPost, NewThread};
 
 use gpui::{
     AnyElement, Context, ExternalPaths, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px,
@@ -129,6 +131,7 @@ impl Emerald {
             })
             // Right-aligned toggle: the DM profile or the guild member list.
             .when(!has_topic, |d| d.child(div().flex_1()))
+            .children(self.render_membership_button(cx))
             .map(|d| match (user, self.selected_channel) {
                 (Some(_), _) => d.child(header_toggle(
                     "toggle-profile",

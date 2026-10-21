@@ -77,6 +77,36 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 },
             }
         }
+        Command::CreateThread {
+            parent,
+            message,
+            name,
+            kind,
+            auto_archive,
+        } => match with_captcha!(|captcha| rest
+            .create_thread(parent, message, &name, kind, auto_archive, captcha)
+            .await)
+        {
+            Ok(thread) => NetEvent::ThreadCreated(thread),
+            Err(e) => failure(Action::CreateThread, e),
+        },
+        Command::CreatePost {
+            forum,
+            name,
+            tags,
+            content,
+            auto_archive,
+        } => match with_captcha!(|captcha| rest
+            .create_post(forum, &name, &tags, &content, auto_archive, captcha)
+            .await)
+        {
+            Ok(post) => NetEvent::ThreadCreated(post),
+            Err(e) => failure(Action::CreateThread, e),
+        },
+        Command::ThreadMembership { thread, join } => match rest.thread_membership(thread, join).await {
+            Ok(()) => NetEvent::ThreadMembership { thread, joined: join },
+            Err(e) => failure(Action::ThreadMembership, e),
+        },
         Command::EditMessage {
             channel,
             message,

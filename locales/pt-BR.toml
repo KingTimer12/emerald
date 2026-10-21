@@ -70,6 +70,13 @@ no_permission = "Você não tem permissão para enviar mensagens neste canal."
 too_long = "Sua mensagem passou do limite de {max} caracteres."
 
 [thread]
+create = "Criar thread"
+create_button = "Criar"
+default_name = "Nova thread"
+join = "Entrar na thread"
+leave = "Sair da thread"
+name = "NOME DA THREAD"
+name_placeholder = "Nova thread"
 messages = "{count} mensagens"
 
 [upload]
@@ -87,6 +94,16 @@ too_many = "Você só pode enviar {max} arquivos por vez."
 unreadable = "Não foi possível ler {name}."
 
 [forum]
+content = "MENSAGEM"
+content_placeholder = "Escreva a primeira mensagem"
+new_post = "Novo post"
+post_button = "Publicar"
+tag_required = "Este fórum exige uma tag em todo post."
+tags = "TAGS"
+title = "TÍTULO DO POST"
+title_placeholder = "Título"
+title_required = "Dê um título ao post."
+content_required = "Escreva a primeira mensagem do post."
 empty = "Ainda não há posts aqui."
 pinned = "Fixado"
 
