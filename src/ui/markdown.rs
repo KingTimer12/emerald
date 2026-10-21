@@ -29,6 +29,10 @@ pub const EMOJI_ROOM: &str = "Mn";
 
 /// Messages of only emoji show them large, as in Discord, up to this many.
 const JUMBO_MAX: usize = 30;
+/// Custom emoji drawn as images per message; later ones show as `:name:`.
+/// Each distinct one is an image to fetch and keep, and a message can name
+/// hundreds, enough for a few on screen to churn the whole image cache.
+const MAX_EMOJI_IMAGES: usize = 30;
 
 /// What a `<…>` token refers to, for the caller to name.
 pub enum Mention {
@@ -217,8 +221,12 @@ fn inline(line: &str, name: &dyn Fn(Mention) -> String, rich: &mut Rich) {
                     continue;
                 }
             }
-            if let Some((id, len)) = custom_emoji(rest) {
-                rich.emoji(id);
+            if let Some((name, id, len)) = custom_emoji(rest) {
+                if rich.emojis.len() < MAX_EMOJI_IMAGES {
+                    rich.emoji(id);
+                } else {
+                    rich.text.push_str(&format!(":{name}:"));
+                }
                 rest = &rest[len..];
                 continue;
             }
@@ -281,8 +289,8 @@ fn mention(source: &str, name: &dyn Fn(Mention) -> String) -> Option<(String, us
     Some((text, end + 1))
 }
 
-/// `<:name:id>` or `<a:name:id>`, as the emoji id and the source length.
-fn custom_emoji(source: &str) -> Option<(Snowflake, usize)> {
+/// `<:name:id>` or `<a:name:id>`, as the name, id and source length.
+fn custom_emoji(source: &str) -> Option<(&str, Snowflake, usize)> {
     let end = source.find('>')?;
     let inner = &source[1..end];
     let rest = inner.strip_prefix("a:").or(inner.strip_prefix(':'))?;
@@ -290,7 +298,7 @@ fn custom_emoji(source: &str) -> Option<(Snowflake, usize)> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return None;
     }
-    Some((Snowflake(id.parse().ok()?), end + 1))
+    Some((name, Snowflake(id.parse().ok()?), end + 1))
 }
 
 #[cfg(test)]
@@ -359,6 +367,14 @@ mod tests {
         let many = "<:a:1>".repeat(31);
         assert!(!jumbo(&many));
         assert!(!jumbo("<:bad name:1>"));
+    }
+
+    #[test]
+    fn emoji_images_are_capped_per_message() {
+        let source: String = (0..40).map(|n| format!("<:e{n}:{n}>")).collect();
+        let rich = parse(&source, &names);
+        assert_eq!(rich.emojis.len(), MAX_EMOJI_IMAGES);
+        assert!(rich.text.ends_with(":e39:"));
         assert_eq!(unicode_emoji("👨‍👩‍👧 👍🏽"), Some(2));
     }
 
