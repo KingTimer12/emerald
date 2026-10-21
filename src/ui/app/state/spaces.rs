@@ -7,7 +7,9 @@ use std::collections::{HashMap, HashSet};
 use gpui::SharedString;
 
 use super::super::super::icons;
-use crate::discord::model::{Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake};
+use crate::discord::model::{
+    Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake, ThreadListSync, ThreadMember,
+};
 use crate::discord::permissions::{self, GuildAccess};
 
 /// Pseudo-space id holding direct messages.
@@ -54,6 +56,7 @@ fn channel_icon(kind: ChannelKind) -> &'static str {
         ChannelKind::STAGE => icons::STAGE,
         ChannelKind::FORUM | ChannelKind::MEDIA => icons::FORUM,
         ChannelKind::GROUP_DM => icons::FRIENDS,
+        kind if kind.is_thread() => icons::THREAD,
         _ => icons::TEXT,
     }
 }
@@ -152,10 +155,13 @@ pub struct Space {
     pub name: SharedString,
     pub initials: SharedString,
     pub icon_url: Option<SharedString>,
+    /// Threads among them, under their parent's id.
     channels: Vec<Channel>,
     rows: Vec<Row>,
     /// `None` for the DM space.
     guild: Option<GuildInfo>,
+    /// The open thread, listed under its parent even when not joined.
+    shown_thread: Option<Snowflake>,
 }
 
 impl Space {
@@ -170,6 +176,7 @@ impl Space {
             channels,
             rows: Vec::new(),
             guild: None,
+            shown_thread: None,
         };
         space.rebuild();
         space
@@ -196,7 +203,12 @@ impl Space {
             }),
             channels: guild.channels,
             rows: Vec::new(),
+            shown_thread: None,
         };
+        for mut thread in guild.threads {
+            thread.guild_id = Some(space.id);
+            space.channels.push(thread);
+        }
         space.rebuild();
         space
     }
@@ -313,10 +325,62 @@ impl Space {
         self.rebuild();
     }
 
-    pub fn upsert_channel(&mut self, channel: Channel) {
-        self.channels.retain(|c| c.id != channel.id);
+    pub fn upsert_channel(&mut self, mut channel: Channel) {
+        if let Some(old) = self.channels.iter().position(|c| c.id == channel.id) {
+            let old = self.channels.swap_remove(old);
+            // THREAD_UPDATE leaves out our membership; it has not changed.
+            if channel.kind.is_thread() && channel.member.is_none() {
+                channel.member = old.member;
+            }
+        }
         self.channels.push(channel);
         self.rebuild();
+    }
+
+    /// THREAD_LIST_SYNC: the active threads, with our memberships.
+    pub fn sync_threads(&mut self, sync: ThreadListSync) {
+        for mut thread in sync.threads {
+            thread.guild_id = Some(self.id);
+            if let Some(member) = sync.members.iter().find(|m| m.id == thread.id) {
+                thread.member = Some(member.member());
+            }
+            if let Some(old) = self.channels.iter().position(|c| c.id == thread.id) {
+                let old = self.channels.swap_remove(old);
+                thread.member = thread.member.or(old.member);
+            }
+            self.channels.push(thread);
+        }
+        self.rebuild();
+    }
+
+    /// Threads loaded from a search, such as archived forum posts; ones
+    /// already known keep our membership.
+    pub fn add_threads(&mut self, threads: Vec<Channel>) {
+        for mut thread in threads {
+            thread.guild_id = Some(self.id);
+            if let Some(old) = self.channels.iter().position(|c| c.id == thread.id) {
+                let old = self.channels.swap_remove(old);
+                thread.member = thread.member.or(old.member);
+            }
+            self.channels.push(thread);
+        }
+        self.rebuild();
+    }
+
+    /// We joined `thread` (`Some`) or left it.
+    pub fn set_thread_member(&mut self, thread: Snowflake, member: Option<ThreadMember>) {
+        if let Some(found) = self.channels.iter_mut().find(|c| c.id == thread) {
+            found.member = member;
+            self.rebuild();
+        }
+    }
+
+    /// Lists `thread` under its parent while it is open.
+    pub fn show_thread(&mut self, thread: Option<Snowflake>) {
+        if self.shown_thread != thread {
+            self.shown_thread = thread;
+            self.rebuild();
+        }
     }
 
     pub fn remove_channel(&mut self, id: Snowflake) {
@@ -363,9 +427,45 @@ impl Space {
         guild.permissions = self
             .channels
             .iter()
+            .filter(|c| !c.kind.is_thread())
             .map(|c| (c.id, access.channel(&c.permission_overwrites)))
             .collect();
+        for thread in self.channels.iter().filter(|c| c.kind.is_thread()) {
+            let parent = thread.parent_id.and_then(|p| guild.permissions.get(&p)).copied().unwrap_or(0);
+            let private = thread.kind == ChannelKind::PRIVATE_THREAD;
+            let allowed = permissions::thread(parent, private, thread.member.is_some(), thread.is_locked());
+            guild.permissions.insert(thread.id, allowed);
+        }
         let permissions = &guild.permissions;
+        // Under a text channel: the active threads we joined, newest join
+        // first, and the open one first of all, as the web client lists them.
+        let shown = self.shown_thread;
+        let threads = |parent: Snowflake| {
+            let mut threads: Vec<&Channel> = self
+                .channels
+                .iter()
+                .filter(|c| c.parent_id == Some(parent) && c.is_active_thread())
+                .filter(|c| c.member.is_some() || Some(c.id) == shown)
+                .filter(|c| permissions.get(&c.id).is_some_and(|p| p & permissions::VIEW_CHANNEL != 0))
+                .collect();
+            threads.sort_by(|a, b| {
+                let joined = |c: &Channel| c.member.as_ref().and_then(|m| m.join_timestamp.clone());
+                (Some(b.id) == shown).cmp(&(Some(a.id) == shown)).then_with(|| joined(b).cmp(&joined(a)))
+            });
+            threads
+        };
+        let with_threads = |channels: Vec<&Channel>| {
+            channels
+                .into_iter()
+                .flat_map(|c| {
+                    let nested = if c.kind.is_forum() { Vec::new() } else { threads(c.id) };
+                    // Threads fold away with their parent's category.
+                    let nested = nested.into_iter().map(|t| ChannelRow { parent: c.parent_id, ..ChannelRow::new(t) });
+                    std::iter::once(ChannelRow::new(c)).chain(nested).collect::<Vec<_>>()
+                })
+                .map(Row::Channel)
+                .collect::<Vec<_>>()
+        };
         let visible = |c: &&Channel| {
             c.kind.is_listed() && permissions.get(&c.id).is_some_and(|p| p & permissions::VIEW_CHANNEL != 0)
         };
@@ -382,9 +482,8 @@ impl Space {
             children
         };
 
-        let loose = children(None);
-        self.rows
-            .extend(loose.into_iter().map(|c| Row::Channel(ChannelRow::new(c))));
+        let loose = with_threads(children(None));
+        self.rows.extend(loose);
         let mut categories: Vec<_> = self
             .channels
             .iter()
@@ -402,8 +501,7 @@ impl Space {
                 id: Some(category.id),
                 title: title.into(),
             });
-            self.rows
-                .extend(children.into_iter().map(|c| Row::Channel(ChannelRow::new(c))));
+            self.rows.extend(with_threads(children));
         }
     }
 }

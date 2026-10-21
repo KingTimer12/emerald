@@ -134,6 +134,9 @@ pub struct Guild {
     pub emojis: Vec<GuildEmoji>,
     #[serde(default)]
     pub features: Vec<String>,
+    /// Active threads the user can see, when the gateway sends them.
+    #[serde(default)]
+    pub threads: Vec<Channel>,
     #[serde(default)]
     pub unavailable: bool,
 }

@@ -37,10 +37,14 @@ impl Emerald {
     pub(super) fn sync_member_list(&mut self, cx: &mut Context<Self>) {
         let space = self.spaces.current();
         let channel = self.selected_channel.filter(|_| self.settings.show_members && !space.is_dms());
-        let Some(channel) = channel else {
+        let Some(mut channel) = channel else {
             self.members.close();
             return;
         };
+        // A thread shows its parent channel's list.
+        if let Some(parent) = space.channels().iter().find(|c| c.id == channel && c.kind.is_thread()).and_then(|c| c.parent_id) {
+            channel = parent;
+        }
         let overwrites = space
             .channels()
             .iter()

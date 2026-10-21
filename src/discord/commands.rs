@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use super::protocol::{Action, Command, NetEvent};
+use super::protocol::{Action, Command, NetEvent, ThreadPage};
 use super::rest;
 
 pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Sender<NetEvent>) {
@@ -21,6 +21,33 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 error: e.to_string(),
             },
         },
+        Command::ForumPosts { forum, threads } => match rest.forum_posts(forum, &threads).await {
+            Ok(first) => NetEvent::ForumPosts { forum, first },
+            Err(e) => {
+                log::warn!("forum posts of {forum}: {e:#}");
+                NetEvent::ForumPosts { forum, first: Vec::new() }
+            }
+        },
+        Command::ArchivedPosts { forum, offset } => {
+            let page = rest
+                .archived_posts(forum, offset)
+                .await
+                .map_err(|e| log::warn!("archived posts of {forum}: {e:#}"))
+                .ok()
+                .map(|mut search| {
+                    for thread in &mut search.threads {
+                        if let Some(member) = search.members.iter().find(|m| m.id == thread.id) {
+                            thread.member = Some(member.member());
+                        }
+                    }
+                    ThreadPage {
+                        threads: search.threads,
+                        first: search.first_messages,
+                        has_more: search.has_more,
+                    }
+                });
+            NetEvent::ArchivedPosts { forum, offset, page }
+        }
         Command::Send {
             channel,
             content,

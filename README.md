@@ -40,6 +40,10 @@ CPU near zero when idle.
   does (hidden channels, sending blocked without permission), nicknames and role colors
   that follow live member and role changes, replies, images, embeds, stickers (Discord's
   animated ones too) and system messages.
+- **Threads and forums**: joined threads under their channel (and the open one), a chip
+  on the message that started a thread, permissions derived from the parent the way
+  Discord does; forums list their posts as cards with tags, the opening message, its
+  image and the message count, paging in archived posts as you scroll.
 - **Uploads**: up to 10 files per message from the + button, dragged onto the chat or
   pasted, with image previews, alt text and spoilers; sent the way the web client sends
   them, with the size limit following Nitro and server boosts. Spoiler images arrive
@@ -61,7 +65,7 @@ CPU near zero when idle.
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, threads, forums, animated custom emoji (shown still).
+Not there yet: voice, creating threads and forum posts, animated custom emoji (shown still).
 
 ## Requirements
 

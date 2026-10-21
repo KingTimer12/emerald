@@ -3,7 +3,7 @@
 //! window lives in its own module.
 
 use std::cell::Cell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -159,6 +159,8 @@ pub struct Emerald {
     alt_input: Entity<TextInput>,
     message_menu: Option<chat::MessageMenu>,
     reaction_picker: Option<chat::ReactionPicker>,
+    /// Forums opened this session, by channel.
+    forums: HashMap<Snowflake, chat::Forum>,
     /// Spoiler images the user clicked open, by URL.
     revealed: HashSet<SharedString>,
     /// The reaction picker's search box, and its grid's scroll position.
@@ -276,6 +278,7 @@ impl Emerald {
             message_menu: None,
             reaction_picker: None,
             revealed: HashSet::new(),
+            forums: HashMap::new(),
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
             dm_search,

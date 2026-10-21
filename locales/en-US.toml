@@ -70,6 +70,9 @@ no_channel = "Select a channel"
 no_permission = "You do not have permission to send messages in this channel."
 too_long = "Your message is over the {max} character limit."
 
+[thread]
+messages = "{count} messages"
+
 [upload]
 description = "DESCRIPTION (ALT TEXT)"
 description_hint = "Describe the image for people who can't see it."
@@ -83,6 +86,10 @@ remove = "Remove Attachment"
 too_large = "{name} is too large. The max file size here is {max}."
 too_many = "You can only upload {max} files at a time."
 unreadable = "Could not read {name}."
+
+[forum]
+empty = "There are no posts here yet."
+pinned = "Pinned"
 
 [chat]
 alt = "ALT"

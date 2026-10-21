@@ -102,7 +102,11 @@ impl Emerald {
     /// The words in the message box for `channel`, as the web client puts them.
     pub(super) fn composer_placeholder(&self, channel: Snowflake) -> String {
         let space = self.spaces.current();
-        let name = space.row(channel).map_or_else(SharedString::default, |row| row.name.clone());
+        // Forum posts have no sidebar row; their name is the thread's.
+        let name = space.row(channel).map(|row| row.name.clone()).unwrap_or_else(|| {
+            let thread = space.channels().iter().find(|c| c.id == channel);
+            thread.and_then(|c| c.name.clone()).unwrap_or_default().into()
+        });
         if !self.can_send(channel) {
             t!("composer.no_permission").to_owned()
         } else if space.is_dms() {

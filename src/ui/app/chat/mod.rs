@@ -2,12 +2,14 @@
 //! separators, composer with the typing indicator, and the DM profile panel.
 
 mod actions;
+mod forum;
 mod list;
 mod picker;
 mod reactions;
 mod rich;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
+pub(super) use forum::Forum;
 pub(super) use list::spoiler_pill;
 pub(super) use picker::ReactionPicker;
 
@@ -28,9 +30,23 @@ impl Emerald {
         }
         let space = self.spaces.current();
         let row = self.selected_channel.and_then(|id| space.row(id));
-        let (icon, title, user) = row.map_or(("", SharedString::default(), None), |row| {
-            (row.icon, row.name.clone(), row.user)
-        });
+        let opened = self.selected_channel.and_then(|id| space.channels().iter().find(|c| c.id == id));
+        let (icon, title, user) = match (row, opened) {
+            (Some(row), _) => (row.icon, row.name.clone(), row.user),
+            // Forum posts have no sidebar row.
+            (None, Some(channel)) if channel.kind.is_thread() => {
+                (icons::THREAD, channel.name.clone().unwrap_or_default().into(), None)
+            }
+            _ => ("", SharedString::default(), None),
+        };
+        let forum = opened.filter(|c| c.kind.is_forum()).map(|c| c.id);
+        // A thread names its parent first, as the web client's header does.
+        let parent: Option<SharedString> = opened
+            .filter(|c| c.kind.is_thread())
+            .and_then(|c| c.parent_id)
+            .and_then(|p| space.channels().iter().find(|c| c.id == p))
+            .and_then(|p| p.name.clone())
+            .map(Into::into);
         let loading = self
             .selected_channel
             .and_then(|id| self.history.get(id))
@@ -63,6 +79,19 @@ impl Emerald {
                 }
                 None => header,
             })
+            .children(parent.map(|parent| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .flex_none()
+                    .text_color(rgb(theme::TEXT_MUTED))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(parent)
+                    .child(icons::icon(icons::CHEVRON, 12., theme::TEXT_MUTED).with_transformation(
+                        gpui::Transformation::rotate(gpui::radians(-std::f32::consts::FRAC_PI_2)),
+                    ))
+            }))
             .child(
                 div()
                     .flex_none()
@@ -134,6 +163,8 @@ impl Emerald {
                 .text_color(theme::muted())
                 .child(t!("chat.pick_channel"))
                 .into_any_element()
+        } else if let Some(forum) = forum {
+            self.render_forum(forum, cx)
         } else {
             list(
                 self.messages.clone(),
@@ -201,7 +232,8 @@ impl Emerald {
             .drag_over::<ExternalPaths>(|style, _, _, _| style.bg(theme::hover()))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.on_drop_files(paths, cx)))
             .child(body)
-            .child(composer);
+            // Posts are made from the forum's own form, not the message box.
+            .when(forum.is_none(), |column| column.child(composer));
 
         div()
             .flex()

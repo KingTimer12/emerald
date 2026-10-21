@@ -8,7 +8,7 @@ use gpui::{App, Context, Focusable, Window};
 use super::Emerald;
 use super::state::Row;
 use crate::discord::Command;
-use crate::discord::model::Snowflake;
+use crate::discord::model::{Channel, Snowflake};
 use crate::discord::permissions;
 
 /// Read receipts wait this long so a burst of messages sends one.
@@ -46,6 +46,11 @@ impl Emerald {
         self.selected_channel = Some(id);
         self.spaces.remember_channel(id);
         self.reads.seen(id);
+        let kind = self.spaces.channel(id).map(|c| c.kind).unwrap_or_default();
+        let current = self.spaces.current().id;
+        if let Some(space) = self.spaces.get_mut(current) {
+            space.show_thread(kind.is_thread().then_some(id));
+        }
 
         let space = self.spaces.current();
         let readable = space.permissions(id) & permissions::READ_MESSAGE_HISTORY != 0;
@@ -60,6 +65,12 @@ impl Emerald {
         }
         self.composer.open(placeholder, cx);
 
+        if kind.is_forum() {
+            self.open_forum(id, cx);
+            self.sync_member_list(cx);
+            cx.notify();
+            return;
+        }
         if self.history.open(id, readable, &self.messages) {
             self.net.post(Command::History {
                 channel: id,
@@ -72,6 +83,18 @@ impl Emerald {
         self.sync_member_list(cx);
         window.focus(&self.composer.input.focus_handle(cx));
         cx.notify();
+    }
+
+    /// Opens `thread`, learning it first when it is archived or new.
+    pub(super) fn open_thread(&mut self, thread: Channel, window: &mut Window, cx: &mut Context<Self>) {
+        let id = thread.id;
+        let current = self.spaces.current().id;
+        if let Some(space) = self.spaces.get_mut(current)
+            && !space.channels().iter().any(|c| c.id == id)
+        {
+            space.add_threads(vec![thread]);
+        }
+        self.select_channel(id, window, cx);
     }
 
     /// Enter in the DM search: opens the first match and clears the search.

@@ -23,7 +23,8 @@ use super::identity::{self, Identity};
 use super::model::{
     Channel, Guild, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
     Presence, ReactionAddMany, ReactionClear, ReactionUpdate, Ready, ReadySupplemental, Relationship,
-    RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status, TypingStart, User, GuildEmojisUpdate,
+    RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry,
+    ThreadMembersUpdate, TypingStart, User, GuildEmojisUpdate,
 };
 
 /// Raw gateway payloads from the UI (op 8, op 37), sent once a session is up.
@@ -352,12 +353,25 @@ fn dispatch(
             _ => return,
         },
         // An update replaces the channel, which a create also does.
-        "CHANNEL_CREATE" | "CHANNEL_UPDATE" => match parse::<Channel>(kind, data) {
+        "CHANNEL_CREATE" | "CHANNEL_UPDATE" | "THREAD_CREATE" | "THREAD_UPDATE" => match parse::<Channel>(kind, data) {
             Some(c) => NetEvent::ChannelCreate(c),
             None => return,
         },
-        "CHANNEL_DELETE" => match parse::<Channel>(kind, data) {
+        "CHANNEL_DELETE" | "THREAD_DELETE" => match parse::<Channel>(kind, data) {
             Some(c) => NetEvent::ChannelDelete(c),
+            None => return,
+        },
+        "THREAD_LIST_SYNC" => match parse::<ThreadListSync>(kind, data) {
+            Some(sync) => NetEvent::ThreadListSync(sync),
+            None => return,
+        },
+        // Only ever about the current user.
+        "THREAD_MEMBER_UPDATE" => match parse::<ThreadMemberEntry>(kind, data) {
+            Some(member) => NetEvent::ThreadJoined(member),
+            None => return,
+        },
+        "THREAD_MEMBERS_UPDATE" => match parse::<ThreadMembersUpdate>(kind, data) {
+            Some(update) => NetEvent::ThreadMembers(update),
             None => return,
         },
         "MESSAGE_CREATE" => match parse::<Message>(kind, data) {

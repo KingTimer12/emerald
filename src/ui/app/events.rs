@@ -88,6 +88,32 @@ impl Emerald {
                 let view = shown(&self.messages, self.selected_channel, channel.id);
                 self.history.forget(channel.id, view);
             }
+            NetEvent::ThreadListSync(sync) => {
+                if let Some(space) = self.spaces.get_mut(sync.guild_id) {
+                    space.sync_threads(sync);
+                }
+                self.refresh_composer(cx);
+            }
+            NetEvent::ThreadJoined(entry) => {
+                let guild = entry.guild_id.unwrap_or(DMS);
+                if let Some(space) = self.spaces.get_mut(guild) {
+                    space.set_thread_member(entry.id, Some(entry.member()));
+                }
+                self.refresh_composer(cx);
+            }
+            NetEvent::ThreadMembers(update) => {
+                let me = self.people.my_id();
+                let joined = update.added_members.iter().find(|m| m.user_id == Some(me)).map(|m| m.member());
+                let left = update.removed_member_ids.contains(&me);
+                if let Some(space) = self.spaces.get_mut(update.guild_id)
+                    && (joined.is_some() || left)
+                {
+                    space.set_thread_member(update.id, joined);
+                }
+                self.refresh_composer(cx);
+            }
+            NetEvent::ForumPosts { forum, first } => self.on_forum_posts(forum, first),
+            NetEvent::ArchivedPosts { forum, offset, page } => self.on_archived_posts(forum, offset, page),
             NetEvent::MessageCreate(message) => self.on_message(message, cx),
             NetEvent::MessageUpdate(update) => {
                 let view = shown(&self.messages, self.selected_channel, update.channel_id);

@@ -9,7 +9,7 @@ use gpui::{
 use super::super::super::{icons, markdown, theme, time};
 use super::super::state::{Log, MessageView, Msg, Picture, Reply, Sticker};
 use super::super::{Emerald, widgets};
-use crate::discord::model::{Embed, message_kind};
+use crate::discord::model::{Channel, Embed, message_kind};
 
 /// Rows above the messages: the channel intro once the whole history is
 /// loaded, an empty spacer before that.
@@ -402,7 +402,42 @@ impl Emerald {
             }))
             .children(msg.embeds.iter().enumerate().filter_map(|(n, embed)| self.render_embed(embed, ix, n)))
             .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker)))
+            .children(msg.thread.as_ref().map(|thread| self.render_thread_chip(thread, ix, cx)))
             .children(self.render_reactions(msg, ix, cx))
+    }
+
+    /// Under a message that started a thread: its name and how many
+    /// messages it has, opening it on click.
+    fn render_thread_chip(&self, thread: &Channel, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        // The live copy, kept current by THREAD_UPDATE, over the one the
+        // message carried when it loaded.
+        let live = self.spaces.current().channels().iter().find(|c| c.id == thread.id);
+        let count = live.and_then(|c| c.message_count).or(thread.message_count).unwrap_or(0);
+        let name: SharedString = live.unwrap_or(thread).name.clone().unwrap_or_default().into();
+        let opened = thread.clone();
+        div()
+            .id(("thread-chip", ix))
+            .max_w(px(432.))
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .py_2()
+            .rounded_lg()
+            .cursor_pointer()
+            .bg(rgb(theme::BASE_LOW))
+            .hover(|s| s.bg(rgb(theme::SURFACE_HIGH)))
+            .child(icons::icon(icons::THREAD, 18., theme::INTERACTIVE))
+            .child(div().min_w(px(0.)).truncate().font_weight(FontWeight::SEMIBOLD).child(name))
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(px(14.))
+                    .text_color(rgb(theme::LINK))
+                    .child(t!("thread.messages", count = count)),
+            )
+            .on_click(cx.listener(move |this, _, window, cx| this.open_thread(opened.clone(), window, cx)))
+            .into_any_element()
     }
 
     /// An image attachment. Spoilers stay covered, and are not even

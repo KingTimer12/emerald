@@ -11,8 +11,26 @@ pub const SEND_MESSAGES: u64 = 1 << 11;
 pub const MANAGE_MESSAGES: u64 = 1 << 13;
 pub const ATTACH_FILES: u64 = 1 << 15;
 pub const READ_MESSAGE_HISTORY: u64 = 1 << 16;
+pub const MANAGE_THREADS: u64 = 1 << 34;
+pub const SEND_MESSAGES_IN_THREADS: u64 = 1 << 38;
 /// Split off MANAGE_MESSAGES in 2025: pinning without moderating.
 pub const PIN_MESSAGES: u64 = 1 << 51;
+
+/// A thread's permissions from its parent's, as the web client derives
+/// them: private threads are closed to those who neither joined nor
+/// manage threads, and sending there takes Send Messages in Threads, which
+/// a lock takes away from all but thread managers.
+pub fn thread(parent: u64, private: bool, joined: bool, locked: bool) -> u64 {
+    if private && !joined && parent & MANAGE_THREADS == 0 {
+        return 0;
+    }
+    let manages = parent & MANAGE_THREADS != 0;
+    if parent & SEND_MESSAGES_IN_THREADS != 0 && (!locked || manages) {
+        parent | SEND_MESSAGES
+    } else {
+        parent & !SEND_MESSAGES
+    }
+}
 
 /// Everything a guild needs to resolve the current user's permissions.
 pub struct GuildAccess<'a> {
@@ -73,6 +91,17 @@ impl GuildAccess<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn threads_follow_their_parent() {
+        let talk = VIEW_CHANNEL | SEND_MESSAGES_IN_THREADS;
+        assert_ne!(thread(talk, false, false, false) & SEND_MESSAGES, 0);
+        assert_eq!(thread(talk | SEND_MESSAGES, false, false, true) & SEND_MESSAGES, 0);
+        assert_ne!(thread(talk | MANAGE_THREADS, false, false, true) & SEND_MESSAGES, 0);
+        assert_eq!(thread(VIEW_CHANNEL | SEND_MESSAGES, false, false, false) & SEND_MESSAGES, 0);
+        assert_eq!(thread(talk, true, false, false), 0);
+        assert_ne!(thread(talk, true, true, false), 0);
+    }
 
     const GUILD: Snowflake = Snowflake(1);
     const ME: Snowflake = Snowflake(2);

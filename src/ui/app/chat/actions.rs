@@ -143,6 +143,7 @@ impl Emerald {
             mentions: None,
             mention_roles: None,
             mention_everyone: None,
+            thread: None,
         };
         let view = shown(&self.messages, self.selected_channel, channel);
         self.history.edit(update, view);

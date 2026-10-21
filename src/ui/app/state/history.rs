@@ -161,6 +161,9 @@ impl History {
         if let Some(everyone) = update.mention_everyone {
             msg.mention_everyone = everyone;
         }
+        if let Some(thread) = update.thread {
+            msg.thread = Some(*thread);
+        }
         if let Some(v) = view {
             v.refresh(ix);
         }

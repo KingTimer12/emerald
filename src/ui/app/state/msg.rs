@@ -3,7 +3,7 @@
 use gpui::SharedString;
 
 use super::super::super::time;
-use crate::discord::model::{Attachment, Embed, Emoji, Message, Reaction, Snowflake, User, message_kind};
+use crate::discord::model::{Attachment, Channel, Embed, Emoji, Message, Reaction, Snowflake, User, message_kind};
 
 /// Largest size an attached image is shown at, as in the web client.
 const IMAGE_MAX: (f32, f32) = (400., 300.);
@@ -34,6 +34,8 @@ pub struct Msg {
     /// Other attachments, by file name.
     pub files: Vec<SharedString>,
     pub embeds: Vec<Embed>,
+    /// The thread this message started.
+    pub thread: Option<Channel>,
     /// In the order they were first added, as Discord shows them.
     pub reactions: Vec<Reacted>,
     /// Set on our own sends until the server confirms them.
@@ -137,6 +139,7 @@ impl Msg {
             images: Vec::new(),
             files: Vec::new(),
             embeds: Vec::new(),
+            thread: None,
             reactions: Vec::new(),
             nonce: None,
             pending: false,
@@ -271,6 +274,7 @@ impl From<Message> for Msg {
             images,
             files,
             embeds: message.embeds,
+            thread: message.thread.map(|t| *t),
             reactions: message.reactions.into_iter().map(Into::into).collect(),
             nonce: message.nonce,
             ..Self::blank(&message.author, message.id, message.id.unix_secs(), message.content)

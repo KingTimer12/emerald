@@ -135,6 +135,9 @@ pub struct Message {
     /// The message this one replies to; `None` inside or when deleted.
     #[serde(default)]
     pub referenced_message: Option<Box<Message>>,
+    /// The thread this message started.
+    #[serde(default)]
+    pub thread: Option<Box<super::Channel>>,
     #[serde(default)]
     pub sticker_items: Vec<StickerItem>,
     #[serde(default)]
@@ -173,6 +176,9 @@ pub struct MessageUpdate {
     pub mention_roles: Option<Vec<Snowflake>>,
     #[serde(default)]
     pub mention_everyone: Option<bool>,
+    /// Set when a thread was started from the message.
+    #[serde(default)]
+    pub thread: Option<Box<super::Channel>>,
 }
 
 #[derive(Debug, Deserialize)]

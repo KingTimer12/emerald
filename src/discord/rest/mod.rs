@@ -254,6 +254,34 @@ impl Rest {
         Ok(messages)
     }
 
+    /// The first message of each forum post in `threads`, at most 10 at a
+    /// time as the web client asks.
+    pub async fn forum_posts(&self, forum: Snowflake, threads: &[Snowflake]) -> Result<Vec<(Snowflake, Message)>> {
+        let ids: Vec<String> = threads.iter().map(ToString::to_string).collect();
+        let data: PostData = self
+            .fetch(
+                Call::post("/channels/{id}/post-data", format!("/channels/{forum}/post-data"))
+                    .major(forum)
+                    .json(json!({ "thread_ids": ids })),
+            )
+            .await?;
+        Ok(data
+            .threads
+            .into_iter()
+            .filter_map(|(id, post)| Some((Snowflake(id.parse().ok()?), post.first_message?)))
+            .collect())
+    }
+
+    /// A page of a forum's archived posts, newest activity first.
+    pub async fn archived_posts(&self, forum: Snowflake, offset: usize) -> Result<ThreadSearch> {
+        let path = format!(
+            "/channels/{forum}/threads/search?archived=true&sort_by=last_message_time&sort_order=desc\
+             &limit={FORUM_PAGE}&tag_setting=match_some&offset={offset}"
+        );
+        self.fetch(Call::get("/channels/{id}/threads/search", path).major(forum).cached(Policy::MICRO))
+            .await
+    }
+
     /// `nonce` comes back on the MESSAGE_CREATE echo, which is how the UI
     /// swaps its pending copy for the real message.
     pub async fn send_message(
@@ -742,6 +770,34 @@ pub fn invite_code(input: &str) -> Option<String> {
         && code.len() <= 64
         && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     valid.then(|| code.to_owned())
+}
+
+/// Archived forum posts per page, as the web client loads them.
+pub const FORUM_PAGE: usize = 25;
+
+#[derive(Deserialize)]
+struct PostData {
+    #[serde(default)]
+    threads: std::collections::HashMap<String, Post>,
+}
+
+#[derive(Deserialize)]
+struct Post {
+    #[serde(default)]
+    first_message: Option<Message>,
+}
+
+#[derive(Deserialize)]
+pub struct ThreadSearch {
+    #[serde(default)]
+    pub threads: Vec<Channel>,
+    /// Our memberships among `threads`.
+    #[serde(default)]
+    pub members: Vec<super::model::ThreadMemberEntry>,
+    #[serde(default)]
+    pub first_messages: Vec<Message>,
+    #[serde(default)]
+    pub has_more: bool,
 }
 
 /// A file already in Discord's storage, ready to name in a message.

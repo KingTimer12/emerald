@@ -298,6 +298,7 @@ impl Emerald {
                 let user = *user;
                 let glyph = *glyph;
                 let opens = kind.is_openable();
+                let thread = kind.is_thread();
                 let selected = self.selected_channel == Some(id) && !self.friends_open;
                 let unread = self.reads.is_unread(id);
                 let mentions = self.reads.mentions(id);
@@ -333,6 +334,20 @@ impl Emerald {
                         )
                     })
                     .map(|r| match user {
+                        // Threads hang under their channel, without an icon,
+                        // from a line like the web client's.
+                        _ if thread => r.w_auto().ml(px(26.)).text_size(px(15.)).child(
+                            div()
+                                .absolute()
+                                .left(px(-14.))
+                                .top(px(-6.))
+                                .w(px(12.))
+                                .h(px(22.))
+                                .border_l_1()
+                                .border_b_1()
+                                .rounded_bl(px(8.))
+                                .border_color(rgb(theme::INTERACTIVE_MUTED)),
+                        ),
                         Some(user) => r.gap_3().child(widgets::avatar(
                             name,
                             user,

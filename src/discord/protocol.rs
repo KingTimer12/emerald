@@ -5,7 +5,8 @@ use std::sync::Arc;
 use super::model::{
     Channel, Emoji, Guild, GuildEmojisUpdate, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
     MessageAck, MessageDelete, MessageUpdate, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
-    RoleDelete, RoleUpdate, Snowflake, Status, TypingStart, User,
+    RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry, ThreadMembersUpdate, TypingStart,
+    User,
 };
 
 /// A user-initiated REST action whose outcome the UI reports back.
@@ -116,8 +117,13 @@ pub enum NetEvent {
     },
     GuildCreate(Guild),
     GuildDelete(Snowflake),
+    /// Also threads, created or updated.
     ChannelCreate(Channel),
     ChannelDelete(Channel),
+    ThreadListSync(ThreadListSync),
+    /// We joined a thread, or our membership changed.
+    ThreadJoined(ThreadMemberEntry),
+    ThreadMembers(ThreadMembersUpdate),
     MessageCreate(Message),
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
@@ -147,6 +153,17 @@ pub enum NetEvent {
         forbidden: bool,
         error: String,
     },
+    /// First messages of forum posts; those left out have none.
+    ForumPosts {
+        forum: Snowflake,
+        first: Vec<(Snowflake, Message)>,
+    },
+    ArchivedPosts {
+        forum: Snowflake,
+        offset: usize,
+        /// `None` when the request failed.
+        page: Option<ThreadPage>,
+    },
     /// The message with `nonce` was not sent; `content` lets the UI give
     /// the text back to the user.
     SendFailed {
@@ -157,6 +174,13 @@ pub enum NetEvent {
         files: Vec<Upload>,
         error: String,
     },
+}
+
+/// Archived forum posts, with our memberships and their first messages.
+pub struct ThreadPage {
+    pub threads: Vec<Channel>,
+    pub first: Vec<Message>,
+    pub has_more: bool,
 }
 
 /// A file attached to a message, read into memory when it was picked.
@@ -183,6 +207,16 @@ pub enum Command {
     History {
         channel: Snowflake,
         before: Option<Snowflake>,
+    },
+    /// First messages of these posts of `forum`.
+    ForumPosts {
+        forum: Snowflake,
+        threads: Vec<Snowflake>,
+    },
+    /// The page of archived posts of `forum` starting at `offset`.
+    ArchivedPosts {
+        forum: Snowflake,
+        offset: usize,
     },
     Send {
         channel: Snowflake,

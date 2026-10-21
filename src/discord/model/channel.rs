@@ -14,13 +14,28 @@ impl ChannelKind {
     pub const GROUP_DM: Self = Self(3);
     pub const CATEGORY: Self = Self(4);
     pub const ANNOUNCEMENT: Self = Self(5);
+    pub const ANNOUNCEMENT_THREAD: Self = Self(10);
+    pub const PUBLIC_THREAD: Self = Self(11);
+    pub const PRIVATE_THREAD: Self = Self(12);
     pub const STAGE: Self = Self(13);
     pub const FORUM: Self = Self(15);
     pub const MEDIA: Self = Self(16);
 
-    /// Text channels the chat can open; voice, stage and forum are listed only.
+    /// Channels the chat can open: text ones and threads show messages,
+    /// forums their posts; voice and stage are listed only.
     pub fn is_openable(self) -> bool {
-        matches!(self, Self::GUILD_TEXT | Self::ANNOUNCEMENT | Self::DM | Self::GROUP_DM)
+        self.is_thread()
+            || self.is_forum()
+            || matches!(self, Self::GUILD_TEXT | Self::ANNOUNCEMENT | Self::DM | Self::GROUP_DM)
+    }
+
+    pub fn is_thread(self) -> bool {
+        matches!(self, Self::ANNOUNCEMENT_THREAD | Self::PUBLIC_THREAD | Self::PRIVATE_THREAD)
+    }
+
+    /// Forum and media channels hold only posts, each a thread.
+    pub fn is_forum(self) -> bool {
+        matches!(self, Self::FORUM | Self::MEDIA)
     }
 
     pub fn is_private(self) -> bool {
@@ -64,6 +79,92 @@ pub struct Channel {
     pub permission_overwrites: Vec<Overwrite>,
     #[serde(default)]
     pub topic: Option<String>,
+    /// Threads: their state, and ours in them when we joined.
+    #[serde(default)]
+    pub thread_metadata: Option<ThreadMetadata>,
+    #[serde(default)]
+    pub member: Option<ThreadMember>,
+    #[serde(default)]
+    pub message_count: Option<u32>,
+    /// Forum posts: the tags given, from the forum's `available_tags`.
+    #[serde(default)]
+    pub applied_tags: Vec<Snowflake>,
+    #[serde(default)]
+    pub available_tags: Vec<ForumTag>,
+    /// Forums: 0 lists by latest activity, 1 by creation.
+    #[serde(default)]
+    pub default_sort_order: Option<u8>,
+    #[serde(default)]
+    pub flags: u64,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct ThreadMetadata {
+    #[serde(default)]
+    pub archived: bool,
+    #[serde(default)]
+    pub locked: bool,
+}
+
+/// The current user's membership of a thread.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct ThreadMember {
+    #[serde(default)]
+    pub join_timestamp: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ForumTag {
+    pub id: Snowflake,
+    #[serde(default)]
+    pub name: String,
+    /// Unicode emoji only; custom ones are not drawn on tags.
+    #[serde(default)]
+    pub emoji_name: Option<String>,
+}
+
+/// THREAD_LIST_SYNC: active threads of a guild, after op 37 asks for them.
+#[derive(Debug, Deserialize)]
+pub struct ThreadListSync {
+    pub guild_id: Snowflake,
+    #[serde(default)]
+    pub threads: Vec<Channel>,
+    /// Our memberships among `threads`.
+    #[serde(default)]
+    pub members: Vec<ThreadMemberEntry>,
+}
+
+/// THREAD_MEMBER_UPDATE, and the entries of THREAD_LIST_SYNC and
+/// THREAD_MEMBERS_UPDATE.
+#[derive(Debug, Deserialize)]
+pub struct ThreadMemberEntry {
+    /// The thread.
+    pub id: Snowflake,
+    #[serde(default)]
+    pub guild_id: Option<Snowflake>,
+    #[serde(default)]
+    pub user_id: Option<Snowflake>,
+    #[serde(default)]
+    pub join_timestamp: Option<String>,
+}
+
+impl ThreadMemberEntry {
+    pub fn member(&self) -> ThreadMember {
+        ThreadMember {
+            join_timestamp: self.join_timestamp.clone(),
+        }
+    }
+}
+
+/// THREAD_MEMBERS_UPDATE: who joined or left a thread.
+#[derive(Debug, Deserialize)]
+pub struct ThreadMembersUpdate {
+    pub id: Snowflake,
+    pub guild_id: Snowflake,
+    #[serde(default)]
+    pub added_members: Vec<ThreadMemberEntry>,
+    #[serde(default)]
+    pub removed_member_ids: Vec<Snowflake>,
 }
 
 impl Channel {
@@ -76,6 +177,15 @@ impl Channel {
             .first()
             .copied()
             .or(self.recipients.first().map(|u| u.id))
+    }
+
+    /// A thread that is not archived; archived ones leave the sidebar.
+    pub fn is_active_thread(&self) -> bool {
+        self.kind.is_thread() && !self.thread_metadata.as_ref().is_some_and(|m| m.archived)
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.thread_metadata.as_ref().is_some_and(|m| m.locked)
     }
 
     /// Where the activity sort puts it: its newest message, else when it
