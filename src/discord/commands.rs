@@ -18,13 +18,13 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             Err(e) => NetEvent::HistoryFailed {
                 channel,
                 forbidden: e.is::<rest::Forbidden>(),
-                error: e.to_string(),
+                error: rest::describe(&e),
             },
         },
         Command::ForumPosts { forum, threads } => match rest.forum_posts(forum, &threads).await {
             Ok(first) => NetEvent::ForumPosts { forum, first },
             Err(e) => {
-                log::warn!("forum posts of {forum}: {e:#}");
+                tracing::warn!("forum posts of {forum}: {e:#}");
                 NetEvent::ForumPosts { forum, first: Vec::new() }
             }
         },
@@ -32,7 +32,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             let page = rest
                 .archived_posts(forum, offset)
                 .await
-                .map_err(|e| log::warn!("archived posts of {forum}: {e:#}"))
+                .map_err(|e| tracing::warn!("archived posts of {forum}: {e:#}"))
                 .ok()
                 .map(|mut search| {
                     for thread in &mut search.threads {
@@ -60,7 +60,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 Ok(uploaded) => uploaded,
                 Err(e) if e.is::<rest::Unauthorized>() => break 'send NetEvent::AuthExpired,
                 Err(e) => {
-                    let error = e.to_string();
+                    let error = rest::describe(&e);
                     break 'send NetEvent::SendFailed { channel, nonce, content, files, error };
                 }
             };
@@ -73,7 +73,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                     nonce,
                     content,
                     files,
-                    error: e.to_string(),
+                    error: rest::describe(&e),
                 },
             }
         }
@@ -108,7 +108,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                     message,
                     emoji,
                     add,
-                    error: e.to_string(),
+                    error: rest::describe(&e),
                 },
             }
         }
@@ -137,7 +137,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 select: false,
             },
             Err(e) => {
-                log::warn!("background DM with {user}: {e:#}");
+                tracing::warn!("background DM with {user}: {e:#}");
                 return;
             }
         },
@@ -159,20 +159,20 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
         Command::LogOut => NetEvent::LoggedOut {
             // A token the server already rejects needs no revocation.
             error: match rest.logout().await {
-                Err(e) if !e.is::<rest::Unauthorized>() => Some(e.to_string()),
+                Err(e) if !e.is::<rest::Unauthorized>() => Some(format!("{e:#}")),
                 _ => None,
             },
         },
         Command::Typing { channel } => {
             if let Err(e) = rest.typing(channel).await {
-                log::debug!("typing in {channel}: {e:#}");
+                tracing::debug!("typing in {channel}: {e:#}");
             }
             return;
         }
         Command::FetchProfile { user, guild } => match rest.profile(user, guild).await {
             Ok(profile) => NetEvent::Profile { guild, profile },
             Err(e) => {
-                log::warn!("profile of {user}: {e:#}");
+                tracing::warn!("profile of {user}: {e:#}");
                 return;
             }
         },
@@ -180,13 +180,13 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             let bytes = rest
                 .cdn_image(&url)
                 .await
-                .map_err(|e| log::warn!("avatar {url}: {e:#}"))
+                .map_err(|e| tracing::warn!("avatar {url}: {e:#}"))
                 .ok();
             NetEvent::Avatar { url, bytes }
         }
         Command::Ack { channel, message } => {
             if let Err(e) = rest.ack(channel, message).await {
-                log::debug!("ack {channel}/{message}: {e:#}");
+                tracing::debug!("ack {channel}/{message}: {e:#}");
             }
             return;
         }
@@ -250,6 +250,6 @@ fn failure(action: Action, error: anyhow::Error) -> NetEvent {
     }
     NetEvent::ActionFailed {
         action,
-        error: error.to_string(),
+        error: rest::describe(&error),
     }
 }

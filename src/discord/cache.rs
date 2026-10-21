@@ -41,13 +41,13 @@ impl Cache {
             std::fs::remove_dir_all(&legacy).ok();
         }
         if let Err(e) = create_private_dir(&dir) {
-            log::warn!("cache disabled: {e}");
+            tracing::warn!("cache disabled: {e}");
             return None;
         }
         match Self::open(&dir.join("cache.sqlite")) {
             Ok(cache) => Some(cache),
             Err(e) => {
-                log::warn!("cache disabled: {e}");
+                tracing::warn!("cache disabled: {e}");
                 None
             }
         }
@@ -108,7 +108,7 @@ impl Cache {
             .query_row("SELECT bytes FROM images WHERE key = ?1", [&key], |row| row.get(0))
             .optional()
             .unwrap_or_else(|e| {
-                log::warn!("image cache read: {e}");
+                tracing::warn!("image cache read: {e}");
                 None
             })?;
         let now = unix_now();
@@ -126,7 +126,7 @@ impl Cache {
             "INSERT OR REPLACE INTO images (key, bytes, used) VALUES (?1, ?2, ?3)",
             params![image_key(url), bytes, unix_now()],
         ) {
-            log::warn!("image cache write: {e}");
+            tracing::warn!("image cache write: {e}");
         }
     }
 
@@ -150,7 +150,7 @@ impl Cache {
             "INSERT OR REPLACE INTO responses (account, key, body, fetched) VALUES (?1, ?2, ?3, ?4)",
             params![account as i64, key, body, unix_now()],
         ) {
-            log::warn!("response cache write: {e}");
+            tracing::warn!("response cache write: {e}");
         }
     }
 
@@ -158,7 +158,7 @@ impl Cache {
     pub fn clear_responses(&self) {
         let db = self.db.lock().unwrap();
         if let Err(e) = db.execute("DELETE FROM responses", []) {
-            log::warn!("response cache clear: {e}");
+            tracing::warn!("response cache clear: {e}");
         }
     }
 
@@ -182,7 +182,7 @@ impl Cache {
             })
             .and_then(|_| db.execute_batch("PRAGMA incremental_vacuum;"));
         if let Err(e) = result {
-            log::warn!("cache prune: {e}");
+            tracing::warn!("cache prune: {e}");
         }
     }
 }

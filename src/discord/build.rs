@@ -28,12 +28,12 @@ pub async fn current(accept_language: &str) -> u64 {
             if let Some(path) = cache_path()
                 && let Err(e) = write(&path, number)
             {
-                log::warn!("could not cache build number: {e}");
+                tracing::warn!("could not cache build number: {e}");
             }
             number.max(FALLBACK)
         }
         Err(e) => {
-            log::warn!("could not read the current build number: {e}");
+            tracing::warn!("could not read the current build number: {e}");
             cache_path()
                 .and_then(|path| std::fs::read_to_string(path).ok())
                 .and_then(|text| text.trim().parse().ok())

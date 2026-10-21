@@ -133,7 +133,7 @@ impl Identity {
     pub fn replace_token(&self, token: String) {
         let Some(token) = Token::new(token) else { return };
         if let Err(e) = token::save(&token) {
-            log::error!("could not persist rotated token: {e}");
+            tracing::error!("could not persist rotated token: {e}");
         }
         *self.token.write().unwrap() = Arc::new(token);
     }

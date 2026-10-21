@@ -40,13 +40,25 @@ impl std::fmt::Debug for Token {
 /// processes do not inherit it), else the stored token.
 ///
 /// Call it before any other thread starts: it edits the environment.
+/// A token handed over in `DISCORD_TOKEN`, taken out of the environment so
+/// child processes never see it. Must run while the process is still
+/// single-threaded, as removing an environment variable requires.
+pub fn take_env() -> Option<Token> {
+    let token = std::env::var("DISCORD_TOKEN").ok().and_then(Token::new)?;
+    // SAFETY: main calls this first, before any other thread starts.
+    unsafe { std::env::remove_var("DISCORD_TOKEN") };
+    Some(token)
+}
+
+/// The stored token, if the user signed in before.
 pub fn load() -> Option<Token> {
-    if let Some(token) = std::env::var("DISCORD_TOKEN").ok().and_then(Token::new) {
-        // SAFETY: main calls this while the process is still single-threaded.
-        unsafe { std::env::remove_var("DISCORD_TOKEN") };
-        return Some(token);
+    let store = Store::default();
+    let token = store.load();
+    match &token {
+        Some(_) => tracing::info!("token loaded from the {}", store.name()),
+        None => tracing::info!("no stored token"),
     }
-    Store::default().load()
+    token
 }
 
 pub fn save(token: &Token) -> std::io::Result<()> {
@@ -89,13 +101,16 @@ impl Store {
         match os::read(service) {
             Ok(Some(token)) => return Some(token),
             Ok(None) => {}
-            Err(e) => log::error!("could not read the token from the {}: {e}", self.name()),
+            Err(e) => tracing::error!("could not read the token from the {}: {e}", self.name()),
         }
         // A token saved by an older build: move it into the credential store.
         let token = self.read_file()?;
         match os::write(service, &token) {
-            Ok(()) => self.remove_file(),
-            Err(e) => log::error!("could not move the token to the {}: {e}", self.name()),
+            Ok(()) => {
+                tracing::info!("moved the token from its file into the {}", self.name());
+                self.remove_file()
+            }
+            Err(e) => tracing::error!("could not move the token to the {}: {e}", self.name()),
         }
         Some(token)
     }
@@ -111,7 +126,7 @@ impl Store {
         if let Some(service) = self.secure
             && let Err(e) = os::delete(service)
         {
-            log::error!("could not delete the token from the {}: {e}", self.name());
+            tracing::error!("could not delete the token from the {}: {e}", self.name());
         }
         self.remove_file();
     }
@@ -125,7 +140,7 @@ impl Store {
         match std::fs::remove_file(path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => log::error!("could not delete {}: {e}", path.display()),
+            Err(e) => tracing::error!("could not delete {}: {e}", path.display()),
         }
     }
 

@@ -64,9 +64,7 @@ pub(super) fn show(
     match run(title, page, user_script, size) {
         Ok(message) => message,
         Err(e) => {
-            eprintln!(
-                "could not open WebView2 (is the Edge WebView2 runtime installed?): {e:?}"
-            );
+            tracing::error!("could not open WebView2 (is the Edge WebView2 runtime installed?): {e:?}");
             None
         }
     }

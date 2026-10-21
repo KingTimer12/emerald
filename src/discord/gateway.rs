@@ -86,6 +86,7 @@ pub async fn run(
         let mut ready = false;
         let link = if session.is_some() { Link::Resuming } else { Link::Connecting };
         events.try_send(NetEvent::Status(link)).ok();
+        tracing::info!(resume = session.is_some(), "gateway: connecting");
 
         let outcome = connect(
             &url,
@@ -99,22 +100,23 @@ pub async fn run(
         )
         .await
             .unwrap_or_else(|e| {
-                log::warn!("gateway: {e:#}");
+                tracing::warn!("gateway: {e:#}");
                 Outcome::Resume
             });
 
         match outcome {
+            // `close_outcome` logged why, in English; `reason` is translated.
             Outcome::Fatal(reason) => {
-                log::error!("gateway: {reason}");
                 events.try_send(NetEvent::Fatal(reason)).ok();
                 return;
             }
             Outcome::AuthFailed => {
-                log::warn!("gateway: token rejected (4004)");
+                tracing::warn!("gateway: token rejected (4004)");
                 events.try_send(NetEvent::AuthExpired).ok();
                 return;
             }
             Outcome::Fresh => {
+                tracing::info!("gateway: starting a new session");
                 session = None;
                 seq = None;
             }
@@ -124,6 +126,7 @@ pub async fn run(
         failures = if ready { 0 } else { failures + 1 };
         let delay = Duration::from_secs(1u64 << failures.min(6)).min(Duration::from_secs(60))
             + jitter(Duration::from_secs(2));
+        tracing::info!(attempt = failures, "gateway: reconnecting in {}s", delay.as_secs());
         events
             .try_send(NetEvent::Status(Link::Reconnecting(delay.as_secs())))
             .ok();
@@ -169,6 +172,7 @@ async fn connect(
         let payload: Payload = serde_json::from_str(text)?;
         if payload.op == 10 {
             let hello: Hello = serde_json::from_str(payload.d.context("hello without d")?.get())?;
+            tracing::debug!(interval_ms = hello.heartbeat_interval, "gateway: hello");
             break Duration::from_millis(hello.heartbeat_interval);
         }
     };
@@ -220,13 +224,17 @@ async fn connect(
             _ = heartbeat.tick() => {
                 if !acked {
                     // Zombied connection: no ACK since the last beat.
+                    tracing::warn!("gateway: no heartbeat ACK, reconnecting");
                     return Ok(Outcome::Resume);
                 }
                 acked = false;
                 tx.send(WsMessage::Text(json!({ "op": 1, "d": *seq }).to_string().into())).await?;
             }
             frame = rx.next() => {
-                let Some(frame) = frame else { return Ok(Outcome::Resume) };
+                let Some(frame) = frame else {
+                    tracing::info!("gateway: connection ended");
+                    return Ok(Outcome::Resume);
+                };
                 match frame? {
                     WsMessage::Binary(bytes) => {
                         let Some(text) = inflater.push(&bytes)? else { continue };
@@ -239,9 +247,13 @@ async fn connect(
                             1 => {
                                 tx.send(WsMessage::Text(json!({ "op": 1, "d": *seq }).to_string().into())).await?;
                             }
-                            7 => return Ok(Outcome::Resume),
+                            7 => {
+                                tracing::info!("gateway: Discord asked to reconnect");
+                                return Ok(Outcome::Resume);
+                            }
                             9 => {
                                 let resumable = payload.d.is_some_and(|d| d.get() == "true");
+                                tracing::warn!(resumable, "gateway: invalid session");
                                 sleep(Duration::from_secs(1) + jitter(Duration::from_secs(4))).await;
                                 return Ok(if resumable { Outcome::Resume } else { Outcome::Fresh });
                             }
@@ -250,7 +262,9 @@ async fn connect(
                         }
                     }
                     WsMessage::Close(frame) => {
-                        return Ok(close_outcome(frame.map(|f| u16::from(f.code))));
+                        let code = frame.map(|f| u16::from(f.code));
+                        tracing::info!(?code, "gateway: closed by Discord");
+                        return Ok(close_outcome(code));
                     }
                     _ => {}
                 }
@@ -262,7 +276,10 @@ async fn connect(
 fn close_outcome(code: Option<u16>) -> Outcome {
     match code {
         Some(4004) => Outcome::AuthFailed,
-        Some(code @ 4010..=4014) => Outcome::Fatal(t!("connection.refused", code = code)),
+        Some(code @ 4010..=4014) => {
+            tracing::error!(code, "gateway: Discord refused the session for good");
+            Outcome::Fatal(t!("connection.refused", code = code))
+        }
         Some(4007 | 4009) => Outcome::Fresh,
         _ => Outcome::Resume,
     }
@@ -284,7 +301,7 @@ fn dispatch(
             if let Some(token) = r.auth_token {
                 identity.replace_token(token);
             }
-            log::info!(
+            tracing::info!(
                 "READY: {} guilds, {} private channels, {} users, {} relationships",
                 r.guilds.len(),
                 r.private_channels.len(),
@@ -341,6 +358,7 @@ fn dispatch(
             None => return,
         },
         "RESUMED" => {
+            tracing::info!("gateway: resumed");
             *ready = true;
             NetEvent::Status(Link::Connected)
         }
@@ -479,7 +497,7 @@ fn friend_presences(presences: Vec<Presence>) -> Vec<(super::model::Snowflake, S
 
 fn parse<T: DeserializeOwned>(kind: &str, data: &str) -> Option<T> {
     serde_json::from_str(data)
-        .map_err(|e| log::warn!("skipping malformed {kind}: {e}"))
+        .map_err(|e| tracing::warn!("skipping malformed {kind}: {e}"))
         .ok()
 }
 

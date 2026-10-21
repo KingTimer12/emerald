@@ -86,7 +86,7 @@ impl MemberList {
             if self.synced || !from_top {
                 return false;
             }
-            log::debug!("member list id {} is {}", self.id, update.id);
+            tracing::debug!("member list id {} is {}", self.id, update.id);
             self.id = update.id;
         }
         self.synced = true;

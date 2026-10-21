@@ -96,7 +96,7 @@ Useful environment variables:
 | `DISCORD_TOKEN` | Use this token instead of the stored one. It is removed from the environment once read. |
 | `EMERALD_LOCALE` | Locale sent to Discord, when it should differ from the interface language. |
 | `EMERALD_BUILD_NUMBER` | Force a `client_build_number`. Normally it is read at startup from `discord.com/app`, as the web client loads it, and cached for offline starts. |
-| `RUST_LOG=emerald=debug` | Verbose logs. |
+| `EMERALD_LOG=emerald=debug` | Log filter, in `tracing`'s directive syntax (`RUST_LOG` works too). The default is `warn,emerald=info`. |
 
 Tests:
 
@@ -113,6 +113,7 @@ cargo test
 | `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
 | `~/Library/Caches/emerald/cache.sqlite` | `%LOCALAPPDATA%\emerald\cache.sqlite` | SQLite cache, readable only by you: CDN images (capped at 200 MB, least recently used out first) and the last profiles fetched, cleared on sign-out. |
 | `~/Library/Caches/emerald/build_number` | `%LOCALAPPDATA%\emerald\build_number` | Last web client build number seen. |
+| `~/Library/Logs/Emerald/emerald.YYYY-MM-DD.log` | `%LOCALAPPDATA%\emerald\logs\…` | One log per day, the last 7 kept, in a folder only you can read. They start with the version, platform and folders in use; they never hold the token, and name people and channels only by id. |
 | | `%LOCALAPPDATA%\emerald\WebView2` | WebView2 browser profile; the login session itself is InPrivate. |
 
 ## Architecture
@@ -131,7 +132,8 @@ drops what was cached for it. On a burst, Discord sees one request instead of se
 src/
 ├── main.rs              entry point, webview child modes, login cycle
 ├── i18n.rs              interface text per language, the `t!` macro
-├── paths.rs             per-platform config and cache directories
+├── logging.rs           tracing to stderr and a daily log file, panics included
+├── paths.rs             per-platform config, cache and log directories
 ├── settings.rs          JSON preferences
 ├── webview/             login and captcha webview (child process)
 │   ├── mod.rs           shared scripts and flows

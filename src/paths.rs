@@ -28,6 +28,20 @@ pub fn cache_dir() -> Option<PathBuf> {
     Some(base.join("emerald"))
 }
 
+/// Log files: `~/Library/Logs/Emerald` on macOS, `%LOCALAPPDATA%\emerald\logs`
+/// on Windows, `$XDG_STATE_HOME/emerald/logs` (or `~/.local/state/…`)
+/// elsewhere.
+pub fn log_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "macos") {
+        Some(env("HOME")?.join("Library/Logs/Emerald"))
+    } else if cfg!(windows) {
+        Some(env("LOCALAPPDATA")?.join("emerald").join("logs"))
+    } else {
+        let state = env("XDG_STATE_HOME").or_else(|| Some(env("HOME")?.join(".local/state")))?;
+        Some(state.join("emerald").join("logs"))
+    }
+}
+
 fn env(name: &str) -> Option<PathBuf> {
     std::env::var_os(name)
         .filter(|value| !value.is_empty())

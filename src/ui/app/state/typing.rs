@@ -1,4 +1,4 @@
-//! "… está digitando": who types where, and our own throttled signal.
+//! "… is typing": who types where, and our own throttled signal.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

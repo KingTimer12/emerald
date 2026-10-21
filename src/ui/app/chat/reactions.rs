@@ -105,7 +105,7 @@ impl Emerald {
         recent.insert(0, key);
         recent.truncate(RECENT_EMOJI);
         if let Err(e) = self.settings.save() {
-            log::error!("could not save settings: {e}");
+            tracing::error!("could not save settings: {e}");
         }
     }
 

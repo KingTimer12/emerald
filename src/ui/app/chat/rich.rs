@@ -115,7 +115,7 @@ impl Emerald {
                     |_, emojis, window, _| {
                         for (bounds, image) in emojis {
                             if let Err(e) = window.paint_image(bounds, Default::default(), image, 0, false) {
-                                log::warn!("could not paint an emoji: {e}");
+                                tracing::warn!("could not paint an emoji: {e}");
                             }
                         }
                     },

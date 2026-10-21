@@ -100,9 +100,9 @@ impl Player {
     /// it is not one, or has no frames to show.
     pub fn new(bytes: &[u8], size: u16) -> Option<Self> {
         let composition = catch_unwind(|| Composition::from_slice(bytes))
-            .map_err(|_| log::warn!("lottie: velato cannot read this animation"))
+            .map_err(|_| tracing::warn!("lottie: velato cannot read this animation"))
             .ok()?
-            .map_err(|e| log::warn!("lottie: {e}"))
+            .map_err(|e| tracing::warn!("lottie: {e}"))
             .ok()?;
         let length = composition.frames.end - composition.frames.start;
         if !(length > 0. && composition.frame_rate > 0. && composition.width > 0 && composition.height > 0) {
@@ -187,7 +187,7 @@ impl Shared {
     /// BGRA, which is what gpui uploads; `None` if velato panicked on it.
     fn draw(&self, tick: u64) -> Option<Arc<RenderImage>> {
         catch_unwind(AssertUnwindSafe(|| self.draw_unguarded(tick)))
-            .map_err(|_| log::warn!("lottie: velato failed on frame {tick}"))
+            .map_err(|_| tracing::warn!("lottie: velato failed on frame {tick}"))
             .ok()
     }
 

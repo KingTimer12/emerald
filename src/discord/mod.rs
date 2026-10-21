@@ -42,7 +42,7 @@ pub fn spawn(
             runtime.block_on(async move {
                 let accept_language = identity::accept_language(&identity::locale());
                 let build_number = build::current(&accept_language).await;
-                log::info!("client build {build_number}");
+                tracing::info!("client build {build_number}");
                 let identity = Arc::new(identity::Identity::new(token, build_number));
                 let cache = tokio::task::spawn_blocking(|| {
                     let cache = cache::Cache::open_default()?;

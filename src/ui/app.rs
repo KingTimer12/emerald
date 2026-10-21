@@ -340,7 +340,7 @@ impl Emerald {
 
     fn save_settings(&mut self, cx: &mut Context<Self>) {
         if let Err(e) = self.settings.save() {
-            log::error!("could not save settings: {e}");
+            tracing::error!("could not save settings: {e}");
         }
         cx.notify();
     }

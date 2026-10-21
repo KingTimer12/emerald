@@ -1,5 +1,6 @@
 //! Typed REST failures the network layer reacts to, and the captcha
-//! round trip.
+//! round trip. Their `Display` is English, for logs; [`describe`] words
+//! them for the user, in the interface language.
 
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -10,7 +11,7 @@ pub struct Forbidden(pub Option<String>);
 
 impl std::fmt::Display for Forbidden {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.as_deref().unwrap_or(t!("errors.forbidden")))
+        f.write_str("forbidden (403)")
     }
 }
 
@@ -22,7 +23,7 @@ pub struct Unauthorized;
 
 impl std::fmt::Display for Unauthorized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(t!("errors.unauthorized"))
+        f.write_str("unauthorized (401)")
     }
 }
 
@@ -39,6 +40,82 @@ impl std::fmt::Display for Unavailable {
 }
 
 impl std::error::Error for Unavailable {}
+
+/// Still rate limited on `route` after every retry.
+#[derive(Debug)]
+pub struct StillLimited(pub String);
+
+impl std::fmt::Display for StillLimited {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "still rate limited on {} after retrying", self.0)
+    }
+}
+
+impl std::error::Error for StillLimited {}
+
+/// A 4xx Discord explained; `message` is in the user's language, as Discord
+/// localizes it through `X-Discord-Locale`.
+#[derive(Debug)]
+pub struct Refused {
+    pub status: reqwest::StatusCode,
+    pub message: Option<String>,
+}
+
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HTTP {}", self.status)
+    }
+}
+
+impl std::error::Error for Refused {}
+
+/// Failures the client words itself.
+#[derive(Debug)]
+pub enum Local {
+    CaptchaRejected,
+    ImageTooLarge,
+    /// Too many failed requests lately: Discord would ban the IP for a while.
+    InvalidRequests,
+}
+
+impl std::fmt::Display for Local {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::CaptchaRejected => "the captcha answer was rejected",
+            Self::ImageTooLarge => "image too large",
+            Self::InvalidRequests => "too many failed requests; pausing to avoid a temporary ban",
+        })
+    }
+}
+
+impl std::error::Error for Local {}
+
+/// `error` worded for the user: typed failures in the interface language,
+/// Discord's own (already localized) reasons as given, and anything else
+/// as it is.
+pub fn describe(error: &anyhow::Error) -> String {
+    if let Some(Forbidden(message)) = error.downcast_ref() {
+        return message.clone().unwrap_or_else(|| t!("errors.forbidden").to_owned());
+    }
+    if error.is::<Unauthorized>() {
+        return t!("errors.unauthorized").to_owned();
+    }
+    if error.is::<CaptchaRequired>() {
+        return t!("errors.captcha_incomplete").to_owned();
+    }
+    if let Some(StillLimited(route)) = error.downcast_ref() {
+        return t!("errors.rate_limited", route = route);
+    }
+    if let Some(refused) = error.downcast_ref::<Refused>() {
+        return refused.message.clone().unwrap_or_else(|| refused.to_string());
+    }
+    match error.downcast_ref::<Local>() {
+        Some(Local::CaptchaRejected) => t!("errors.captcha_rejected").to_owned(),
+        Some(Local::ImageTooLarge) => t!("errors.image_too_large").to_owned(),
+        Some(Local::InvalidRequests) => t!("errors.invalid_requests").to_owned(),
+        None => error.to_string(),
+    }
+}
 
 /// hCaptcha challenge from a 400 response. The user solves it in a webview
 /// (`webview::solve_captcha`); nothing here solves it automatically.
@@ -74,7 +151,7 @@ pub struct CaptchaRequired(pub Challenge);
 
 impl std::fmt::Display for CaptchaRequired {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(t!("errors.captcha_incomplete"))
+        f.write_str("captcha required")
     }
 }
 
@@ -119,11 +196,12 @@ impl ErrorBody {
             .into();
         }
         if self.captcha_key.is_some() {
-            return anyhow::anyhow!(t!("errors.captcha_rejected"));
+            return Local::CaptchaRejected.into();
         }
-        match self.message {
-            Some(message) => anyhow::anyhow!("{message}"),
-            None => anyhow::anyhow!("HTTP {status}"),
+        Refused {
+            status,
+            message: self.message,
         }
+        .into()
     }
 }

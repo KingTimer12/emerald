@@ -22,7 +22,8 @@ use tokio::time::Instant;
 use base64::Engine;
 
 use bytes::Bytes;
-pub use error::{CaptchaRequired, Challenge, Forbidden, Solution, Unauthorized};
+pub use error::{CaptchaRequired, Challenge, Forbidden, Solution, Unauthorized, describe};
+use error::{Local, StillLimited};
 use error::{ErrorBody, Unavailable};
 use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
@@ -229,11 +230,11 @@ impl Rest {
         const MAX_BYTES: usize = 2 * 1024 * 1024;
         let response = self.cdn.get(url).send().await?.error_for_status()?;
         if response.content_length().is_some_and(|len| len as usize > MAX_BYTES) {
-            bail!(t!("errors.image_too_large"));
+            bail!(Local::ImageTooLarge);
         }
         let bytes = response.bytes().await?;
         if bytes.len() > MAX_BYTES {
-            bail!(t!("errors.image_too_large"));
+            bail!(Local::ImageTooLarge);
         }
         Ok(bytes.to_vec())
     }
@@ -628,7 +629,7 @@ impl Rest {
         }
         match stand_in {
             Some(body) => {
-                log::info!("{} failed ({error}); serving a cached copy", call.route.1);
+                tracing::info!("{} failed ({error}); serving a cached copy", call.route.1);
                 ticket.share(Ok(body.clone()));
                 Ok(body)
             }
@@ -680,7 +681,7 @@ impl Rest {
                         .await
                         .map_or(1.0, |r| r.retry_after);
                     let until = Instant::now() + Duration::from_secs_f64(retry_after.max(0.0));
-                    log::warn!("429 on {} {}, retry in {retry_after}s (global: {global})", route.0, route.1);
+                    tracing::warn!("429 on {} {}, retry in {retry_after}s (global: {global})", route.0, route.1);
                     self.limits.note_invalid();
                     if global {
                         self.limits.block_global(until);
@@ -709,14 +710,14 @@ impl Rest {
                 status => return Err(ErrorBody::read(response).await.into_error(status)),
             }
         }
-        bail!(Unavailable(t!("errors.rate_limited", route = format!("{} {}", route.0, route.1)).to_owned()))
+        bail!(StillLimited(format!("{} {}", route.0, route.1)))
     }
 }
 
 /// Failures worth answering from a stale copy: Discord or the network could
 /// not answer, as opposed to answering no.
 fn is_transient(error: &anyhow::Error) -> bool {
-    error.is::<Unavailable>() || error.is::<reqwest::Error>()
+    error.is::<Unavailable>() || error.is::<StillLimited>() || error.is::<reqwest::Error>()
 }
 
 /// Snowflake-shaped nonce, like the web client's. The low bits carry a

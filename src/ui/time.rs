@@ -61,7 +61,7 @@ pub fn now_secs() -> i64 {
         .map_or(0, |d| d.as_secs() as i64)
 }
 
-/// "Hoje às 14:05", "Ontem às 14:05" or "02/01/2025 14:05", in the
+/// "Today at 14:05", "Yesterday at 14:05" or "02/01/2025 14:05", in the
 /// interface language.
 pub fn header(secs: i64) -> String {
     let Some(at) = local(secs) else { return String::new() };

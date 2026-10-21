@@ -20,8 +20,6 @@ uuid = { version = "1", features = ["v4"] }
 async-channel = "2"
 unicode-segmentation = "1"
 anyhow = "1"
-log = "0.4"
-env_logger = { version = "0.11", default-features = false }
 # localtime_r / localtime_s, for message timestamps in the user's timezone.
 libc = "0.2"
 sys-locale = "0.3"
@@ -37,9 +35,12 @@ bytes = "1"
 # Wipes the token from memory when it is dropped.
 zeroize = "1"
 emojis = "0.9.1"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Login webview oficial (WKWebView nativo). Versões casadas com as que o gpui
-# já resolve, para o Cargo deduplicar e não gerar tipos objc2 incompatíveis.
+# The official login page in a native WKWebView. Versions match the ones gpui
+# already resolves, so Cargo deduplicates them and objc2 types stay compatible.
 [target.'cfg(target_os = "macos")'.dependencies]
 # Token in the login Keychain.
 security-framework = "3"
@@ -58,8 +59,8 @@ objc2-web-kit = { version = "0.3", features = [
     "WKFrameInfo", "WKSecurityOrigin",
 ] }
 
-# Login webview no Windows: WebView2 (Edge/Chromium), o mesmo runtime que
-# o Windows 11 já traz. Versões casadas com o webview2-com.
+# The login page on Windows: WebView2 (Edge/Chromium), the runtime Windows 11
+# already ships. Versions match webview2-com's.
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
 windows = { version = "0.62", features = [
@@ -78,15 +79,7 @@ embed-resource = "3"
 # frame takes 50 ms instead of half a millisecond.
 [profile.dev.package.vello_cpu]
 opt-level = 3
-[profile.dev.package.vello_common]
-opt-level = 3
-[profile.dev.package.fearless_simd]
-opt-level = 3
 [profile.dev.package.velato]
-opt-level = 3
-[profile.dev.package.kurbo]
-opt-level = 3
-[profile.dev.package.peniko]
 opt-level = 3
 
 [profile.release]

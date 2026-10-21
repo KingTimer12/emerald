@@ -5,6 +5,7 @@
 mod i18n;
 
 mod discord;
+mod logging;
 mod paths;
 mod settings;
 mod ui;
@@ -28,11 +29,11 @@ pub(crate) fn sign_out() -> ! {
         cache.clear_responses();
     }
     let error = match std::env::current_exe() {
-        // `token::load` already took DISCORD_TOKEN out of the environment.
+        // `token::take_env` already took DISCORD_TOKEN out of the environment.
         Ok(exe) => restart(&mut std::process::Command::new(exe)),
         Err(e) => e,
     };
-    eprintln!("could not restart Emerald: {error}");
+    tracing::error!("could not restart Emerald: {error}");
     std::process::exit(1);
 }
 
@@ -73,28 +74,41 @@ fn run_child_mode() {
 }
 
 fn main() {
+    // First, while the process is still single-threaded, as taking the
+    // token out of the environment requires.
+    let env_token = discord::token::take_env();
     // Before the child modes too: the login and captcha windows have titles.
     let settings = settings::Settings::load();
     i18n::set(settings.language());
     ui::set_time_format(settings.time_format);
+    if std::env::args().nth(1).is_some_and(|arg| arg == "--login" || arg == "--captcha") {
+        logging::init_child();
+    }
     run_child_mode();
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+    let logging = logging::init();
+    log_startup(&logging, &settings);
 
-    // Still single-threaded here, as `token::load` requires.
-    let token = match discord::token::load() {
+    let token = match env_token.inspect(|_| tracing::info!("token taken from DISCORD_TOKEN")) {
         Some(token) => token,
-        // No stored token: open the official login webview in a child process.
-        None => match webview::run_child("--login", b"").and_then(discord::token::Token::new) {
-            Some(token) => {
-                if let Err(e) = discord::token::save(&token) {
-                    eprintln!("warning: could not save the token: {e}");
-                }
-                token
-            }
+        None => match discord::token::load() {
+            Some(token) => token,
+            // No stored token: open the official login webview in a child process.
             None => {
-                eprintln!("{}", t!("login.cancelled"));
-                std::process::exit(1);
+                tracing::info!("opening the login window");
+                match webview::run_child("--login", b"").and_then(discord::token::Token::new) {
+                    Some(token) => {
+                        tracing::info!("signed in");
+                        if let Err(e) = discord::token::save(&token) {
+                            tracing::warn!("could not save the token: {e}");
+                        }
+                        token
+                    }
+                    None => {
+                        tracing::info!("login cancelled");
+                        std::process::exit(1);
+                    }
+                }
             }
         },
     };
@@ -107,7 +121,10 @@ fn main() {
             KeyBinding::new("secondary-q", Quit, None),
             KeyBinding::new("secondary-shift-l", Logout, None),
         ]);
-        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.on_action(|_: &Quit, cx| {
+            tracing::info!("quitting");
+            cx.quit()
+        });
 
         let bounds = Bounds::centered(None, size(px(1200.), px(780.)), cx);
         let window = cx
@@ -143,7 +160,7 @@ fn main() {
                             discord::NetEvent::AuthExpired => sign_out(),
                             discord::NetEvent::LoggedOut { error } => {
                                 if let Some(error) = error {
-                                    eprintln!("warning: Discord did not revoke the token: {error}");
+                                    tracing::warn!("Discord did not revoke the token: {error}");
                                 }
                                 sign_out();
                             }
@@ -160,4 +177,25 @@ fn main() {
         })
         .detach();
     });
+}
+
+/// What a bug report needs to know about this run, without anything
+/// personal: version, platform, where files go, and the chosen language.
+fn log_startup(logging: &logging::Logging, settings: &settings::Settings) {
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        build = if cfg!(debug_assertions) { "debug" } else { "release" },
+        pid = std::process::id(),
+        "Emerald starting"
+    );
+    let shown = |dir: Option<std::path::PathBuf>| dir.map_or_else(|| "unavailable".to_owned(), |d| d.display().to_string());
+    tracing::info!(
+        logs = %shown(logging.dir.clone()),
+        config = %shown(paths::config_dir()),
+        cache = %shown(paths::cache_dir()),
+        "directories"
+    );
+    tracing::info!(language = ?settings.language(), "settings loaded");
 }

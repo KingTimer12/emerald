@@ -400,8 +400,8 @@ mod tests {
 
     #[test]
     fn headings_and_escapes() {
-        let (text, spans) = spans("# Título\n\\*não\\*");
-        assert_eq!(text, "Título\n*não*");
-        assert_eq!(spans, vec![("Título".into(), Style::Bold)]);
+        let (text, spans) = spans("# Title\n\\*not\\*");
+        assert_eq!(text, "Title\n*not*");
+        assert_eq!(spans, vec![("Title".into(), Style::Bold)]);
     }
 }
