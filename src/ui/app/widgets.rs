@@ -7,7 +7,7 @@ use gpui::{
     img, prelude::*, px, rgb,
 };
 
-use super::super::theme;
+use super::super::{icons, theme};
 use super::Feedback;
 use crate::discord::model::Snowflake;
 
@@ -172,6 +172,26 @@ pub fn icon_button(id: impl Into<ElementId>, glyph: &'static str) -> Stateful<Di
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
         .child(glyph)
+}
+
+/// [`icon_button`] with an SVG icon. Svg colors are not inherited, so the
+/// hover color is restated on the icon through the button's group.
+pub fn svg_button(id: &'static str, path: &'static str) -> Stateful<Div> {
+    div()
+        .id(id)
+        .group(id)
+        .flex_none()
+        .size(px(32.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::hover()))
+        .child(
+            icons::icon(path, 20., theme::INTERACTIVE)
+                .group_hover(id, |s| s.text_color(rgb(theme::TEXT_STRONG))),
+        )
 }
 
 /// Uppercase field caption above inputs and values.

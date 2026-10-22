@@ -26,8 +26,9 @@ pub const ATTACH: &str = "icons/attach.svg";
 pub const CLOSE: &str = "icons/close.svg";
 pub const EYE: &str = "icons/eye.svg";
 pub const THREAD: &str = "icons/thread.svg";
+pub const SETTINGS: &str = "icons/settings.svg";
 
-const ALL: [(&str, &[u8]); 20] = [
+const ALL: [(&str, &[u8]); 21] = [
     (FRIENDS, include_bytes!("../../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../../assets/icons/text.svg")),
@@ -48,6 +49,7 @@ const ALL: [(&str, &[u8]); 20] = [
     (CLOSE, include_bytes!("../../assets/icons/close.svg")),
     (EYE, include_bytes!("../../assets/icons/eye.svg")),
     (THREAD, include_bytes!("../../assets/icons/thread.svg")),
+    (SETTINGS, include_bytes!("../../assets/icons/settings.svg")),
 ];
 
 pub struct Icons;
