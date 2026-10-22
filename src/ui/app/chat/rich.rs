@@ -12,6 +12,7 @@ use gpui::{
 use super::super::super::markdown::{self, Mention, Style};
 use super::super::super::theme;
 use super::super::Emerald;
+use super::select::{self, Selectable};
 use crate::discord::model::{Snowflake, custom_url};
 
 /// Emoji-only messages, as large as Discord draws them.
@@ -27,11 +28,12 @@ impl Emerald {
         mentions: &[(Snowflake, SharedString)],
         clickable: bool,
     ) -> AnyElement {
-        self.render_rich(id, content, mentions, clickable, None, false)
+        self.render_rich(id, content, mentions, clickable, None)
     }
 
     /// A message's own text: [`Self::rich_text`] followed by a muted `note`,
-    /// as "(edited)" trails the text it marks, and large when only emoji.
+    /// as "(edited)" trails the text it marks, large when only emoji, and
+    /// selectable by dragging over it.
     pub(super) fn rich_text_noted(
         &self,
         id: impl Into<gpui::ElementId>,
@@ -39,8 +41,9 @@ impl Emerald {
         mentions: &[(Snowflake, SharedString)],
         clickable: bool,
         note: Option<&str>,
+        selectable: Selectable,
     ) -> AnyElement {
-        self.render_rich(id, content, mentions, clickable, note, true)
+        self.render_rich(id, content, mentions, clickable, Some(Own { note, selectable }))
     }
 
     fn render_rich(
@@ -49,9 +52,10 @@ impl Emerald {
         content: &str,
         mentions: &[(Snowflake, SharedString)],
         clickable: bool,
-        note: Option<&str>,
-        may_jumbo: bool,
+        own: Option<Own>,
     ) -> AnyElement {
+        let may_jumbo = own.is_some();
+        let (note, selectable) = own.map_or((None, None), |own| (own.note, Some(own.selectable)));
         let guild = self.spaces.current().info();
         let name = |mention: Mention| match mention {
             Mention::User(id) => guild
@@ -79,9 +83,13 @@ impl Emerald {
             rich.spans.push((start..rich.text.len(), Style::Muted));
         }
         let links = rich.links;
-        let styled = StyledText::new(rich.text).with_highlights(flatten(&rich.spans));
+        let text: SharedString = rich.text.into();
+        let selected = selectable.as_ref().and_then(|s| {
+            self.text_selection.as_ref()?.range_in(s.message, &text)
+        });
+        let styled = StyledText::new(text.clone()).with_highlights(flatten(&rich.spans, selected));
         let layout = styled.layout().clone();
-        let text = if !clickable || links.is_empty() {
+        let shown = if !clickable || links.is_empty() {
             styled.into_any_element()
         } else {
             let ranges = links.iter().map(|(range, _)| range.clone()).collect();
@@ -89,8 +97,9 @@ impl Emerald {
                 .on_click(ranges, move |ix, _, cx| cx.open_url(&links[ix].1))
                 .into_any_element()
         };
-        if rich.emojis.is_empty() && !jumbo {
-            return text;
+        let layer = selectable.map(|s| select::selection_layer(s, text, layout.clone()));
+        if rich.emojis.is_empty() && !jumbo && layer.is_none() {
+            return shown;
         }
         let emojis: Vec<_> = rich
             .emojis
@@ -100,7 +109,8 @@ impl Emerald {
         let drawn = div()
             .relative()
             .when(jumbo, |text| text.text_size(px(JUMBO * 0.8)).line_height(px(JUMBO + 4.)))
-            .child(text)
+            .children(layer)
+            .child(shown)
             .child(
                 canvas(
                     move |_, window, cx| {
@@ -136,6 +146,12 @@ impl Emerald {
     }
 }
 
+/// What only a message's own text has: its trailing note and selection.
+struct Own<'a> {
+    note: Option<&'a str>,
+    selectable: Selectable,
+}
+
 /// Where the emoji kept at `range` goes: centred on its room, as tall as
 /// Discord draws it beside text of this line height.
 fn emoji_bounds(layout: &TextLayout, range: Range<usize>, jumbo: bool) -> Option<Bounds<gpui::Pixels>> {
@@ -150,9 +166,15 @@ fn emoji_bounds(layout: &TextLayout, range: Range<usize>, jumbo: bool) -> Option
 }
 
 /// gpui wants highlights sorted and disjoint; nested markdown overlaps, so
-/// split at every boundary and merge the styles covering each piece.
-fn flatten(spans: &[(Range<usize>, Style)]) -> Vec<(Range<usize>, HighlightStyle)> {
-    let mut cuts: Vec<usize> = spans.iter().flat_map(|(r, _)| [r.start, r.end]).collect();
+/// split at every boundary and merge the styles covering each piece. The
+/// selection, if any, goes on top.
+fn flatten(spans: &[(Range<usize>, Style)], selected: Option<Range<usize>>) -> Vec<(Range<usize>, HighlightStyle)> {
+    let mut cuts: Vec<usize> = spans
+        .iter()
+        .map(|(r, _)| r)
+        .chain(&selected)
+        .flat_map(|r| [r.start, r.end])
+        .collect();
     cuts.sort_unstable();
     cuts.dedup();
     cuts.windows(2)
@@ -165,6 +187,13 @@ fn flatten(spans: &[(Range<usize>, Style)]) -> Vec<(Range<usize>, HighlightStyle
                     any = true;
                     style = style.highlight(highlight(*kind));
                 }
+            }
+            if selected.as_ref().is_some_and(|s| s.start <= piece.start && piece.end <= s.end) {
+                any = true;
+                style = style.highlight(HighlightStyle {
+                    background_color: Some(theme::text_selection().into()),
+                    ..Default::default()
+                });
             }
             any.then_some((piece, style))
         })

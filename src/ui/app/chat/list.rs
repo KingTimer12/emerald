@@ -1,19 +1,25 @@
 //! The chat list's rows: the channel intro, messages with their replies,
 //! attachments, embeds and stickers, and day separators.
 
+use std::time::Duration;
+
 use gpui::{
-    AnyElement, Context, Div, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString, StyledText,
+    AnyElement, Context, Div, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString, Stateful, StyledText,
     div, img, prelude::*, px, rgb,
 };
 
 use super::super::super::{icons, markdown, theme, time};
 use super::super::state::{Log, MessageView, Msg, Picture, Reply, Sticker};
 use super::super::{Emerald, widgets};
-use crate::discord::model::{Channel, Embed, message_kind};
+use super::select::Selectable;
+use crate::discord::Command;
+use crate::discord::model::{Channel, Embed, Snowflake, message_kind};
 
 /// Rows above the messages: the channel intro once the whole history is
 /// loaded, an empty spacer before that.
 const TOP: usize = 1;
+/// How long a message jumped to stays highlighted.
+const FLASH: Duration = Duration::from_secs(2);
 /// Messages from one author closer than this share a group, like Discord.
 const GROUP_WINDOW_SECS: i64 = 7 * 60;
 const STICKER_SIZE: f32 = 160.;
@@ -51,6 +57,68 @@ impl MessageView for ListState {
 }
 
 impl Emerald {
+    /// Scrolls to `message` in the open channel and flashes it, paging older
+    /// history in first when it is not loaded, as clicking a reply does.
+    fn jump_to(&mut self, message: Snowflake, cx: &mut Context<Self>) {
+        let Some(channel) = self.selected_channel else { return };
+        self.jump = Some((channel, message));
+        self.continue_jump(channel, cx);
+    }
+
+    /// Advances a pending jump in `channel`: reveals the message once its
+    /// page is in, asks for the next older page otherwise, and gives up at
+    /// the start of the channel or the history cap.
+    pub(in super::super) fn continue_jump(&mut self, channel: Snowflake, cx: &mut Context<Self>) {
+        let Some((target_channel, message)) = self.jump else { return };
+        if target_channel != channel {
+            return;
+        }
+        if self.selected_channel != Some(channel) {
+            self.jump = None;
+            return;
+        }
+        if let Some((ix, _)) = self.history.find(channel, message) {
+            self.jump = None;
+            // A couple of rows above it stay in view, for context.
+            self.messages.scroll_to(ListOffset {
+                item_ix: (TOP + ix).saturating_sub(2),
+                offset_in_item: px(0.),
+            });
+            self.flash = Some(message);
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(FLASH).await;
+                this.update(cx, |this, cx| {
+                    if this.flash == Some(message) {
+                        this.flash = None;
+                        cx.notify();
+                    }
+                })
+                .ok();
+            })
+            .detach();
+            cx.notify();
+            return;
+        }
+        let loading = self.history.get(channel).is_some_and(|log| log.loading);
+        if loading {
+            return;
+        }
+        match self.history.older(channel) {
+            Some(oldest) => {
+                self.net.post(Command::History {
+                    channel,
+                    before: Some(oldest),
+                });
+                cx.notify();
+            }
+            None => {
+                self.jump = None;
+                self.connection.set_message(t!("chat.reply_too_old"));
+                cx.notify();
+            }
+        }
+    }
+
     /// Row `ix` of the chat list: the intro on top, then the messages.
     pub(super) fn render_list_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let log = self.selected_channel.and_then(|c| self.history.get(c));
@@ -144,6 +212,7 @@ impl Emerald {
         let my_roles = self.spaces.current().info().map_or(&[][..], |g| g.my_roles());
         let mentioned = msg.mentions_user(self.people.my_id(), my_roles);
         let editing = self.is_editing(msg);
+        let flashed = self.flash == Some(msg.id);
         let group: SharedString = format!("message-{ix}").into();
         let toolbar = self.message_toolbar(msg, ix, group.clone(), cx);
         // Pings get Discord's gold tint and a bar on the left edge.
@@ -164,6 +233,7 @@ impl Emerald {
                 )
             })
             .when(editing, |row| row.bg(theme::hover()))
+            .when(flashed, |row| row.bg(theme::jumped()))
             .hover(move |s| s.bg(if mentioned { theme::mentioned_hover() } else { theme::hover() }))
             .when(!msg.pending, |row| {
                 row.on_mouse_down(MouseButton::Right, self.on_message_right_click(ix, cx))
@@ -257,7 +327,7 @@ impl Emerald {
                         .flex_col()
                         .px_4()
                         .py(px(2.))
-                        .children(msg.reply.as_ref().map(|reply| self.render_reply(reply)))
+                        .children(msg.reply.as_ref().map(|reply| self.render_reply(reply, ix, cx)))
                         .child(
                             div()
                                 .flex()
@@ -314,9 +384,19 @@ impl Emerald {
     }
 
     /// Discord's reply line: a curved connector into the avatar column, then
-    /// the original author and the first line of what they wrote.
-    fn render_reply(&self, reply: &Reply) -> Div {
-        let line = div().flex().items_center().gap_1().pl(px(20.)).h(px(22.)).text_size(px(14.));
+    /// the original author and the first line of what they wrote. Clicking
+    /// it jumps to the original, like an anchor.
+    fn render_reply(&self, reply: &Reply, ix: usize, cx: &mut Context<Self>) -> Stateful<Div> {
+        let group: SharedString = format!("reply-{ix}").into();
+        let line = div()
+            .id(("reply", ix))
+            .group(group.clone())
+            .flex()
+            .items_center()
+            .gap_1()
+            .pl(px(20.))
+            .h(px(22.))
+            .text_size(px(14.));
         let connector = div()
             .flex_none()
             .w(px(32.))
@@ -336,6 +416,12 @@ impl Emerald {
             );
         };
         let (name, color) = self.member_style(reply.author_id, &reply.author);
+        let line = match reply.id {
+            Some(original) => line
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _, _, cx| this.jump_to(original, cx))),
+            None => line,
+        };
         line.child(connector)
             .child(widgets::avatar(
                 &name,
@@ -357,6 +443,8 @@ impl Emerald {
                     .min_w(px(0.))
                     .truncate()
                     .text_color(theme::muted())
+                    // Brighter on hover, as the web client hints the link.
+                    .group_hover(group, |s| s.text_color(theme::text()))
                     .child(self.rich_text(("reply", 0usize), content, &[], false)),
             )
     }
@@ -375,7 +463,11 @@ impl Emerald {
                     body
                 } else {
                     let edited = msg.edited.then(|| t!("chat.edited"));
-                    body.child(self.rich_text_noted(("content", ix), &msg.content, &msg.mentions, true, edited))
+                    let selectable = Selectable {
+                        message: msg.id,
+                        view: cx.entity().downgrade(),
+                    };
+                    body.child(self.rich_text_noted(("content", ix), &msg.content, &msg.mentions, true, edited, selectable))
                 }
             })
             .children(msg.images.iter().enumerate().map(|(n, picture)| self.render_picture(picture, (ix, n), cx)))

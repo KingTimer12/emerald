@@ -80,6 +80,8 @@ pub struct Sticker {
 /// The message a reply points at; `content` is `None` once it is deleted.
 #[derive(Clone)]
 pub struct Reply {
+    /// The original message, to jump to; `None` once it is deleted.
+    pub id: Option<Snowflake>,
     pub author_id: Snowflake,
     pub author: SharedString,
     pub avatar_url: SharedString,
@@ -90,6 +92,7 @@ impl Reply {
     /// A preview of `msg`, as a reply to it shows it.
     pub fn of(msg: &Msg) -> Self {
         Self {
+            id: Some(msg.id),
             author_id: msg.author_id,
             author: msg.author.clone(),
             avatar_url: msg.avatar_url.clone(),
@@ -240,6 +243,7 @@ impl From<Message> for Msg {
         }
         let reply = match message.referenced_message {
             Some(original) => Some(Reply {
+                id: Some(original.id),
                 author_id: original.author.id,
                 author: original.author.display_name().to_owned().into(),
                 avatar_url: original.author.avatar_url().into(),
@@ -247,6 +251,7 @@ impl From<Message> for Msg {
                 content: Some(preview(&original.content).into()),
             }),
             None if message.kind == message_kind::REPLY => Some(Reply {
+                id: None,
                 author_id: Snowflake(0),
                 author: SharedString::default(),
                 avatar_url: SharedString::default(),

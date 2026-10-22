@@ -7,12 +7,14 @@ mod list;
 mod picker;
 mod reactions;
 mod rich;
+mod select;
 mod threads;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
 pub(super) use forum::Forum;
 pub(super) use list::spoiler_pill;
 pub(super) use picker::ReactionPicker;
+pub(super) use select::TextSelection;
 pub(super) use threads::{NewPost, NewThread};
 
 use gpui::{

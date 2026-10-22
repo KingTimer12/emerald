@@ -105,6 +105,16 @@ pub fn mentioned_hover() -> Rgba {
 }
 pub const MENTIONED_BAR: u32 = 0xf0b232;
 
+/// A message the user jumped to, flashed like `--background-message-highlight`.
+pub fn jumped() -> Rgba {
+    rgba(0x5865f233)
+}
+
+/// Text selected in a message.
+pub fn text_selection() -> Rgba {
+    rgba(0x5865f266)
+}
+
 /// Background of a reaction we added: the brand color at 15%.
 pub fn reaction_mine() -> Rgba {
     rgba(0x5865f226)

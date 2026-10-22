@@ -48,6 +48,8 @@ pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Dismiss, Some("Emerald")),
         KeyBinding::new("up", EditLast, Some("Emerald")),
+        // Selected message text; inputs handle it first when they have a selection.
+        KeyBinding::new("secondary-c", crate::ui::text_input::Copy, Some("Emerald")),
     ]);
 }
 
@@ -177,6 +179,12 @@ pub struct Emerald {
     select_new_guild: bool,
     /// The open channel's messages, mirrored from `history`.
     messages: ListState,
+    /// A reply's original being paged in to jump to: (channel, message).
+    jump: Option<(Snowflake, Snowflake)>,
+    /// The message just jumped to, highlighted for a moment.
+    flash: Option<Snowflake>,
+    /// Text selected by dragging over a message.
+    text_selection: Option<chat::TextSelection>,
     /// Member list of the open guild channel.
     members: MemberLists,
     /// A member list subscription waits out a scroll burst.
@@ -288,6 +296,9 @@ impl Emerald {
             busy: HashSet::new(),
             select_new_guild: false,
             messages,
+            jump: None,
+            flash: None,
+            text_selection: None,
             members: MemberLists::default(),
             members_resubscribe: false,
             members_scroll: UniformListScrollHandle::new(),
@@ -387,6 +398,9 @@ impl Render for Emerald {
             .key_context("Emerald")
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.dismiss(window, cx)))
             .on_action(cx.listener(|this, _: &EditLast, window, cx| this.edit_last(window, cx)))
+            .on_action(cx.listener(|this, _: &crate::ui::text_input::Copy, _, cx| {
+                this.copy_selection(cx);
+            }))
             .on_action(cx.listener(|this, _: &crate::Logout, _, cx| this.log_out(cx)))
             .relative()
             .flex()
