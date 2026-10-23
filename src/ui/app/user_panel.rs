@@ -2,7 +2,7 @@
 
 use gpui::{Context, FontWeight, SharedString, div, prelude::*, px, rgb};
 
-use super::super::theme;
+use super::super::{icons, theme};
 use super::settings::Page;
 use super::{Emerald, widgets};
 use crate::discord::model::Snowflake;
@@ -88,7 +88,7 @@ impl Emerald {
                     })),
             )
             .child(
-                widgets::icon_button("open-settings", "⚙")
+                widgets::svg_button("open-settings", icons::SETTINGS)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_settings(Page::Account, window, cx)
                     })),

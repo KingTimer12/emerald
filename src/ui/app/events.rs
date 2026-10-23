@@ -150,6 +150,7 @@ impl Emerald {
                 let view = shown(&self.messages, self.selected_channel, channel);
                 self.history.page(channel, before, messages, view);
                 self.request_authors(channel);
+                self.continue_jump(channel, cx);
             }
             NetEvent::HistoryFailed {
                 channel,
@@ -158,6 +159,9 @@ impl Emerald {
             } => {
                 let view = shown(&self.messages, self.selected_channel, channel);
                 self.history.page_failed(channel, forbidden, view);
+                if self.jump.is_some_and(|(c, _)| c == channel) {
+                    self.jump = None;
+                }
                 self.connection.set_message(t!("common.error", error = error));
             }
             NetEvent::TypingStart(typing) => self.on_typing(typing, cx),

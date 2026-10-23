@@ -249,6 +249,9 @@ impl TextInput {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content[self.selected_range.clone()].to_string(),
             ));
+        } else {
+            // Nothing selected here: text selected elsewhere (a message) may be.
+            cx.propagate();
         }
     }
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
