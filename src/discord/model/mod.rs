@@ -3,6 +3,7 @@
 //! never materialize members or presences in memory.
 
 mod channel;
+mod command;
 mod emoji;
 mod guild;
 mod member_list;
@@ -13,6 +14,7 @@ mod snowflake;
 mod user;
 
 pub use channel::*;
+pub use command::*;
 pub use emoji::*;
 pub use guild::*;
 pub use member_list::*;

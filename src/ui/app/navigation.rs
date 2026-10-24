@@ -63,7 +63,9 @@ impl Emerald {
         if let Some(user) = user {
             self.profile(user, None);
         }
-        self.composer.open(placeholder, cx);
+        self.composer.open(id, placeholder, cx);
+        self.autocomplete.close();
+        self.suggestions.clear();
 
         if kind.is_forum() {
             self.open_forum(id, cx);

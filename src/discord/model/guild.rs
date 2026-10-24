@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use super::snowflake::bits;
-use super::{Channel, GuildEmoji, Snowflake, User};
+use super::{Channel, GuildEmoji, Snowflake, StickerItem, User};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Role {
@@ -14,6 +14,9 @@ pub struct Role {
     pub position: i32,
     #[serde(default, deserialize_with = "bits")]
     pub permissions: u64,
+    /// Anyone may ping it; otherwise only those allowed to mention everyone.
+    #[serde(default)]
+    pub mentionable: bool,
 }
 
 pub mod overwrite_kind {
@@ -132,6 +135,8 @@ pub struct Guild {
     pub members: Vec<Member>,
     #[serde(default)]
     pub emojis: Vec<GuildEmoji>,
+    #[serde(default)]
+    pub stickers: Vec<StickerItem>,
     #[serde(default)]
     pub features: Vec<String>,
     /// Active threads the user can see, when the gateway sends them.

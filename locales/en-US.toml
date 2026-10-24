@@ -64,6 +64,7 @@ title = "Friends"
 username_placeholder = "Username"
 
 [composer]
+emoji = "Select emoji"
 channel = "Message #{name}"
 dm = "Message @{name}"
 no_channel = "Select a channel"
@@ -94,6 +95,30 @@ too_large = "{name} is too large. The max file size here is {max}."
 too_many = "You can only upload {max} files at a time."
 unreadable = "Could not read {name}."
 
+[autocomplete]
+commands = "COMMANDS"
+members = "MEMBERS"
+roles = "ROLES"
+channels = "TEXT CHANNELS"
+emoji = "EMOJI"
+everyone = "Notify everyone who has permission to view this channel."
+here = "Notify everyone online who has permission to view this channel."
+
+[picker]
+search_gifs = "Search Tenor"
+search_stickers = "Find the perfect sticker"
+gifs = "GIFs"
+stickers = "Stickers"
+emoji = "Emoji"
+no_stickers = "No stickers you can use here."
+no_gifs = "No GIFs found."
+
+[commands]
+subcommand = "Choose one of: {names}."
+missing = "Fill in {name}: to run this command."
+invalid = "That value doesn't fit {name}."
+unsupported = "{name} takes a file, which can't be given from here yet."
+
 [forum]
 content = "MESSAGE"
 content_placeholder = "Write the first message"
@@ -105,6 +130,7 @@ title = "POST TITLE"
 title_placeholder = "Title"
 title_required = "Give your post a title."
 content_required = "Write the post's first message."
+files_required = "Posts here need at least one file."
 empty = "There are no posts here yet."
 pinned = "Pinned"
 

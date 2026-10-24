@@ -24,7 +24,7 @@ use super::model::{
     Channel, Guild, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
     Presence, ReactionAddMany, ReactionClear, ReactionUpdate, Ready, ReadySupplemental, Relationship,
     RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry,
-    ThreadMembersUpdate, TypingStart, User, GuildEmojisUpdate,
+    ThreadMembersUpdate, TypingStart, User, GuildEmojisUpdate, GuildStickersUpdate,
 };
 
 /// Raw gateway payloads from the UI (op 8, op 37), sent once a session is up.
@@ -445,6 +445,10 @@ fn dispatch(
             Some(update) => NetEvent::GuildEmojis(update),
             None => return,
         },
+        "GUILD_STICKERS_UPDATE" => match parse::<GuildStickersUpdate>(kind, data) {
+            Some(update) => NetEvent::GuildStickers(update),
+            None => return,
+        },
         "TYPING_START" => match parse::<TypingStart>(kind, data) {
             Some(t) => NetEvent::TypingStart(t),
             None => return,
@@ -468,6 +472,15 @@ pub fn search_members(guild: Snowflake, query: &str, nonce: &str) -> serde_json:
     json!({
         "op": 8,
         "d": { "guild_id": [guild.to_string()], "query": query, "limit": 100, "presences": false, "nonce": nonce },
+    })
+}
+
+/// Op 8 as the message box's `@` suggestions send it: the first ten
+/// members whose name starts with `query`, with no nonce.
+pub fn query_members(guild: Snowflake, query: &str) -> serde_json::Value {
+    json!({
+        "op": 8,
+        "d": { "guild_id": [guild.to_string()], "query": query, "limit": 10, "presences": false },
     })
 }
 

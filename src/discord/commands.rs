@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use super::protocol::{Action, Command, NetEvent, ThreadPage};
-use super::rest;
+use super::rest::{self, Outgoing};
 
 pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Sender<NetEvent>) {
     let event = match cmd {
@@ -64,7 +64,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                     break 'send NetEvent::SendFailed { channel, nonce, content, files, error };
                 }
             };
-            match with_captcha!(|captcha| rest.send_message(channel, &content, &nonce, reply, &uploaded, captcha).await) {
+            match with_captcha!(|captcha| rest.send_message(channel, &Outgoing { content: &content, nonce: &nonce, reply, files: &uploaded, stickers: &[] }, captcha).await) {
                 // Usually the gateway echo arrives first; the UI drops the duplicate.
                 Ok(message) => NetEvent::MessageCreate(message),
                 Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
@@ -77,6 +77,86 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 },
             }
         }
+        Command::SendSticker { channel, sticker, nonce } => {
+            let stickers = [sticker];
+            match with_captcha!(|captcha| rest.send_message(channel, &Outgoing { nonce: &nonce, stickers: &stickers, ..Outgoing::default() }, captcha).await) {
+                Ok(message) => NetEvent::MessageCreate(message),
+                Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
+                Err(e) => NetEvent::SendFailed {
+                    channel,
+                    nonce,
+                    content: String::new(),
+                    files: Vec::new(),
+                    error: rest::describe(&e),
+                },
+            }
+        }
+        Command::SendGif { channel, gif, query, nonce } => {
+            // Only bookkeeping on Discord's side; the GIF goes out either way.
+            if let Err(e) = rest.select_gif(&gif.id, &query).await {
+                tracing::debug!("gif select: {e:#}");
+            }
+            match with_captcha!(|captcha| rest.send_message(channel, &Outgoing { content: &gif.url, nonce: &nonce, ..Outgoing::default() }, captcha).await) {
+                Ok(message) => NetEvent::MessageCreate(message),
+                Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
+                Err(e) => NetEvent::SendFailed {
+                    channel,
+                    nonce,
+                    content: String::new(),
+                    files: Vec::new(),
+                    error: rest::describe(&e),
+                },
+            }
+        }
+        Command::ListCommands(target) => 'index: {
+            // Discord answers 202 while it builds the index; the web client
+            // asks again 5 seconds later, three tries in all.
+            for _ in 0..3 {
+                match rest.command_index(target).await {
+                    Ok(Some(index)) => break 'index NetEvent::CommandIndex { target, index: Some(index) },
+                    Ok(None) => tokio::time::sleep(std::time::Duration::from_secs(5)).await,
+                    Err(e) if e.is::<rest::Unauthorized>() => break 'index NetEvent::AuthExpired,
+                    Err(e) => {
+                        tracing::warn!("command index: {}", rest::describe(&e));
+                        break 'index NetEvent::CommandIndex { target, index: None };
+                    }
+                }
+            }
+            NetEvent::CommandIndex { target, index: None }
+        }
+        Command::Interact {
+            application,
+            guild,
+            channel,
+            data,
+            nonce,
+        } => outcome(Action::RunCommand, rest.run_command(application, guild, channel, data, &nonce).await),
+        Command::StickerPacks => match rest.sticker_packs().await {
+            Ok(packs) => NetEvent::StickerPacks(Some(packs)),
+            Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
+            Err(e) => {
+                tracing::warn!("sticker packs: {}", rest::describe(&e));
+                NetEvent::StickerPacks(None)
+            }
+        },
+        Command::Gifs { query } => match rest.gifs(query.as_deref()).await {
+            Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
+            gifs => {
+                // Counts only: the search is the user's own words.
+                match &gifs {
+                    Ok(gifs) => tracing::info!(
+                        "gifs: {} results, {} with an image to show",
+                        gifs.len(),
+                        gifs.iter().filter(|gif| gif.image_url().is_some()).count()
+                    ),
+                    Err(e) => tracing::warn!("gifs: {}", rest::describe(e)),
+                }
+                NetEvent::Gifs {
+                    query,
+                    gifs: gifs.map_err(|e| rest::describe(&e)),
+                }
+            }
+        },
         Command::CreateThread {
             parent,
             message,
@@ -96,14 +176,26 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
             tags,
             content,
             auto_archive,
-        } => match with_captcha!(|captcha| rest
-            .create_post(forum, &name, &tags, &content, auto_archive, captcha)
-            .await)
+            files,
+        } => 'post: {
+            // As with messages, files go up once and a captcha retry only
+            // resends the post.
+            let uploaded = match rest.upload_files(forum, &files).await {
+                Ok(uploaded) => uploaded,
+                Err(e) => break 'post failure(Action::CreateThread, e),
+            };
+            match with_captcha!(|captcha| rest
+                .create_post(forum, &name, &tags, auto_archive, &Outgoing { content: &content, files: &uploaded, ..Outgoing::default() }, captcha)
+                .await)
+            {
+                Ok(post) => NetEvent::ThreadCreated(post),
+                Err(e) => failure(Action::CreateThread, e),
+            }
+        }
+        Command::ThreadMembership { thread, join, forum_post } => match rest
+            .thread_membership(thread, join, forum_post)
+            .await
         {
-            Ok(post) => NetEvent::ThreadCreated(post),
-            Err(e) => failure(Action::CreateThread, e),
-        },
-        Command::ThreadMembership { thread, join } => match rest.thread_membership(thread, join).await {
             Ok(()) => NetEvent::ThreadMembership { thread, joined: join },
             Err(e) => failure(Action::ThreadMembership, e),
         },
@@ -225,6 +317,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
         | Command::SetLocale(_)
         | Command::RequestMembers { .. }
         | Command::SearchMembers { .. }
+        | Command::QueryMembers { .. }
         | Command::SubscribeGuild { .. } => {
             return;
         }

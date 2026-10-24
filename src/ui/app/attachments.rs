@@ -85,10 +85,10 @@ impl Emerald {
                         Ok(upload) => this.attach(upload),
                         Err(Refused::TooLarge(name)) => {
                             let max = format_size(this.upload_limit());
-                            this.composer.error = Some(t!("upload.too_large", name = name, max = max).into());
+                            this.attach_error(t!("upload.too_large", name = name, max = max));
                         }
                         Err(Refused::Unreadable(name)) => {
-                            this.composer.error = Some(t!("upload.unreadable", name = name).into());
+                            this.attach_error(t!("upload.unreadable", name = name));
                         }
                     }
                 }
@@ -106,7 +106,7 @@ impl Emerald {
         }
         if image.bytes.len() as u64 > self.upload_limit() {
             let max = format_size(self.upload_limit());
-            self.composer.error = Some(t!("upload.too_large", name = "image", max = max).into());
+            self.attach_error(t!("upload.too_large", name = "image", max = max));
         } else {
             self.attach(Upload {
                 name: format!("image.{}", extension(image.format)),
@@ -120,11 +120,20 @@ impl Emerald {
 
     fn attach(&mut self, upload: Upload) {
         if self.composer.attachments.len() >= MAX_FILES {
-            self.composer.error = Some(t!("upload.too_many", max = MAX_FILES).into());
+            self.attach_error(t!("upload.too_many", max = MAX_FILES));
             return;
         }
         self.composer.error = None;
         self.composer.attachments.push(Attachment::new(upload));
+    }
+
+    /// Why a file was left out, shown under the form it was meant for: the
+    /// "New Post" form while it is open, else the message box.
+    fn attach_error(&mut self, error: impl Into<SharedString>) {
+        match &mut self.overlay {
+            Some(Overlay::CreatePost(modal)) => modal.error = Some(error.into()),
+            _ => self.composer.error = Some(error.into()),
+        }
     }
 
     /// The largest file the open channel takes, as the web client works it
@@ -145,8 +154,9 @@ impl Emerald {
         self.selected_channel.is_some_and(|channel| self.can_attach(channel))
     }
 
-    /// The cards above the message box.
-    pub(super) fn render_attachments(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// The cards above the message box, or in the "New Post" form. There
+    /// `editable` is off: "Modify Attachment" would replace the form.
+    pub(super) fn render_attachments(&self, editable: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.composer.attachments.is_empty() {
             return None;
         }
@@ -176,10 +186,12 @@ impl Emerald {
                         }),
                     ),
                 )
-                .child(
-                    tool(("attachment-edit", ix), icons::EDIT, t!("upload.edit"), false)
-                        .on_click(cx.listener(move |this, _, window, cx| this.edit_attachment(ix, window, cx))),
-                )
+                .when(editable, |tools| {
+                    tools.child(
+                        tool(("attachment-edit", ix), icons::EDIT, t!("upload.edit"), false)
+                            .on_click(cx.listener(move |this, _, window, cx| this.edit_attachment(ix, window, cx))),
+                    )
+                })
                 .child(
                     tool(("attachment-remove", ix), icons::TRASH, t!("upload.remove"), false).on_click(
                         cx.listener(move |this, _, _, cx| {
@@ -386,6 +398,8 @@ impl Emerald {
             div()
                 .id("attach")
                 .flex_none()
+                // Centered on a one-row message box.
+                .mt(px(7.))
                 .size(px(32.))
                 .flex()
                 .items_center()

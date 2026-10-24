@@ -7,6 +7,7 @@ use gpui::{Context, Window};
 
 use super::state::{DMS, Space, typing};
 use super::{Emerald, Feedback, Overlay, shown};
+use super::state::autocomplete::Trigger;
 use crate::discord::model::{Channel, ChannelKind, MembersChunk, Message, TypingStart};
 use crate::discord::{Action, Command, Link, NetEvent, Snapshot};
 
@@ -42,7 +43,7 @@ impl Emerald {
                 }
             }
             NetEvent::Avatar { url, bytes } => self.images.store(url, bytes),
-            NetEvent::MembersChunk(chunk) => self.on_members(chunk),
+            NetEvent::MembersChunk(chunk) => self.on_members(chunk, cx),
             NetEvent::MemberList(update) => {
                 self.members.apply(update);
             }
@@ -137,6 +138,17 @@ impl Emerald {
                     guild.set_emojis(update.emojis);
                 }
             }
+            NetEvent::GuildStickers(update) => {
+                if let Some(guild) = self.spaces.guild_mut(update.guild_id) {
+                    guild.set_stickers(update.stickers);
+                }
+            }
+            NetEvent::StickerPacks(packs) => {
+                // A failure leaves them to be asked for on the next visit.
+                self.sticker_packs = packs;
+            }
+            NetEvent::Gifs { query, gifs } => self.on_gifs(query, gifs, cx),
+            NetEvent::CommandIndex { target, index } => self.on_command_index(target, index, cx),
             NetEvent::MessageDelete(delete) => {
                 self.message_gone(delete.channel_id, delete.id, window, cx);
                 let view = shown(&self.messages, self.selected_channel, delete.channel_id);
@@ -222,7 +234,7 @@ impl Emerald {
         }
     }
 
-    fn on_members(&mut self, chunk: MembersChunk) {
+    fn on_members(&mut self, chunk: MembersChunk, cx: &mut Context<Self>) {
         let found: Vec<_> = chunk.members.iter().filter_map(|m| m.id()).collect();
         self.member_search.accept(chunk.nonce.as_deref(), found.into_iter());
         for member in chunk.members {
@@ -232,6 +244,10 @@ impl Emerald {
             if let (Some(id), Some(guild)) = (member.id(), self.spaces.guild_mut(chunk.guild_id)) {
                 guild.add_member(id, member);
             }
+        }
+        // An answer to the `@` suggestions' own query, or members that match.
+        if self.autocomplete.query().is_some_and(|q| q.trigger == Trigger::Mention) {
+            self.refresh_suggestions(true, cx);
         }
     }
 
@@ -249,8 +265,17 @@ impl Emerald {
         }
     }
 
-    fn on_message(&mut self, message: Message, cx: &mut Context<Self>) {
+    fn on_message(&mut self, mut message: Message, cx: &mut Context<Self>) {
         let channel = message.channel_id;
+        // The REST answer to our own send has no `guild_id`; without one the
+        // message would read as a DM and list the channel among the DMs.
+        if message.guild_id.is_none() {
+            message.guild_id = self.spaces.guild_id_of(channel).or_else(|| {
+                // A forum post opened from its forum need not be listed.
+                let space = self.spaces.current();
+                (self.selected_channel == Some(channel) && !space.is_dms()).then_some(space.id)
+            });
+        }
         let author = message.author.id;
         let mine = self.people.is_me(author);
         match message.guild_id {
@@ -380,7 +405,7 @@ impl Emerald {
                     self.creating_thread_failed(error);
                 }
             }
-            Action::ThreadMembership => {
+            Action::ThreadMembership | Action::RunCommand => {
                 if let Err(error) = result {
                     self.composer.error = Some(error.into());
                 }

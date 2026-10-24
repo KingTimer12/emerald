@@ -8,7 +8,7 @@ use gpui::SharedString;
 
 use super::super::super::icons;
 use crate::discord::model::{
-    Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake, ThreadListSync, ThreadMember,
+    Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake, StickerItem, ThreadListSync, ThreadMember,
 };
 use crate::discord::permissions::{self, GuildAccess};
 
@@ -76,6 +76,7 @@ pub struct GuildInfo {
     /// The current user's permissions per channel.
     permissions: HashMap<Snowflake, u64>,
     emojis: Vec<GuildEmoji>,
+    stickers: Vec<StickerItem>,
     /// Upload size the guild's boosts unlock.
     upload_limit: Option<u64>,
 }
@@ -99,6 +100,15 @@ impl GuildInfo {
         self.emojis = emojis;
     }
 
+    /// Stickers uploaded here.
+    pub fn stickers(&self) -> &[StickerItem] {
+        &self.stickers
+    }
+
+    pub fn set_stickers(&mut self, stickers: Vec<StickerItem>) {
+        self.stickers = stickers;
+    }
+
     /// Display name and role color of a member, when known.
     pub fn member_style(&self, user: Snowflake) -> (Option<&str>, Option<u32>) {
         let Some(member) = self.members.get(&user) else { return (None, None) };
@@ -112,6 +122,15 @@ impl GuildInfo {
             .filter(|role| role.color != 0 && roles.contains(&role.id))
             .max_by_key(|role| role.position)
             .map(|role| role.color)
+    }
+
+    pub fn roles(&self) -> &[Role] {
+        &self.roles
+    }
+
+    /// Members seen so far: message authors, the member list and searches.
+    pub fn members(&self) -> impl Iterator<Item = (Snowflake, &Member)> {
+        self.members.iter().map(|(id, member)| (*id, member))
     }
 
     pub fn role(&self, id: Snowflake) -> Option<&Role> {
@@ -200,6 +219,7 @@ impl Space {
                 permissions: HashMap::new(),
                 upload_limit,
                 emojis: guild.emojis,
+                stickers: guild.stickers,
             }),
             channels: guild.channels,
             rows: Vec::new(),
@@ -610,6 +630,14 @@ impl Spaces {
         Some((space.id, space.guild.as_mut()?))
     }
 
+    /// The id of the guild listing `channel`, if a guild does.
+    pub fn guild_id_of(&self, channel: Snowflake) -> Option<Snowflake> {
+        self.list
+            .iter()
+            .find(|s| s.guild.is_some() && s.channels.iter().any(|c| c.id == channel))
+            .map(|s| s.id)
+    }
+
     /// The open 1:1 DM with `user`, if any.
     pub fn dm_with(&self, user: Snowflake) -> Option<Snowflake> {
         self.dms().channels.iter().find(|c| c.recipient() == Some(user)).map(|c| c.id)
@@ -723,6 +751,7 @@ mod tests {
             color: 0,
             position: 0,
             permissions: permissions::VIEW_CHANNEL,
+            mentionable: false,
         };
         let guild = serde_json::from_value::<Guild>(serde_json::json!({ "id": "100", "name": "Rust Brasil" }))
             .map(|mut g| {
@@ -778,6 +807,7 @@ mod tests {
             color: 0xff0000,
             position: 1,
             permissions,
+            mentionable: false,
         };
         space.upsert_role(role(100, 0));
         assert_eq!(space.permissions(Snowflake(1)), 0);
@@ -826,5 +856,14 @@ mod tests {
         let found = space.search("an");
         assert_eq!(names(&space, &found), ["Ana"]);
         assert_eq!(space.search("").get(2).map(|ix| names(&space, &[*ix])), Some(vec!["Ana".into()]));
+    }
+
+    #[test]
+    fn guild_channels_are_found_without_their_guild_id() {
+        let mut spaces = Spaces::default();
+        let text = channel(1, ChannelKind::GUILD_TEXT, None, 0);
+        spaces.reset(vec![Space::dms(Vec::new()), guild(vec![text])]);
+        assert_eq!(spaces.guild_id_of(Snowflake(1)), Some(GUILD));
+        assert_eq!(spaces.guild_id_of(Snowflake(2)), None);
     }
 }

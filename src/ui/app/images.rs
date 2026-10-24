@@ -16,10 +16,15 @@ use crate::discord::Command;
 /// Images kept decoded; scrolling a huge member list would otherwise grow
 /// the cache without bound. Evicted ones come back from the disk cache.
 const MAX_IMAGES: usize = 1500;
-/// Lottie players kept; each holds its parsed animation and a frame buffer.
+/// Lottie players kept for the chat; each holds its parsed animation and a
+/// frame buffer.
 const MAX_ANIMATIONS: usize = 16;
-/// Lottie frames are drawn at this size, twice the shown 160px for Retina.
+/// Chat stickers are drawn at this size, twice the shown 160px for Retina.
 pub const ANIMATION_PIXELS: u16 = 320;
+/// Players kept for the sticker picker, more than a screenful of its rows.
+const MAX_PICKER_ANIMATIONS: usize = 48;
+/// Picker stickers are drawn at twice the picker's 80px.
+const PICKER_PIXELS: u16 = 160;
 
 #[derive(Default)]
 pub struct Images {
@@ -28,11 +33,57 @@ pub struct Images {
     slots: RefCell<HashMap<SharedString, Option<Arc<Image>>>>,
     /// URLs in the order they were first requested, oldest first.
     order: RefCell<VecDeque<SharedString>>,
-    /// Lottie stickers, kept like `slots`.
-    animations: RefCell<HashMap<SharedString, Option<Rc<Player>>>>,
-    animation_order: RefCell<VecDeque<SharedString>>,
+    /// Lottie stickers in the chat.
+    chat: Players<MAX_ANIMATIONS, ANIMATION_PIXELS>,
+    /// Lottie stickers in the sticker picker, smaller and more of them.
+    picker: Players<MAX_PICKER_ANIMATIONS, PICKER_PIXELS>,
     /// Frames of evicted players, still to be freed from the GPU.
     evicted: RefCell<Vec<Arc<RenderImage>>>,
+}
+
+/// Lottie players by URL, at most `MAX` of them, drawing `PIXELS` square.
+/// Only players being shown ask for frames, so the ones scrolled away cost
+/// memory but no time.
+#[derive(Default)]
+struct Players<const MAX: usize, const PIXELS: u16> {
+    slots: RefCell<HashMap<SharedString, Option<Rc<Player>>>>,
+    order: RefCell<VecDeque<SharedString>>,
+}
+
+impl<const MAX: usize, const PIXELS: u16> Players<MAX, PIXELS> {
+    fn get(&self, url: &str, outbox: &dyn Outbox, evicted: &RefCell<Vec<Arc<RenderImage>>>) -> Option<Rc<Player>> {
+        let mut slots = self.slots.borrow_mut();
+        if let Some(slot) = slots.get(url) {
+            return slot.clone();
+        }
+        let url: SharedString = url.to_owned().into();
+        let mut order = self.order.borrow_mut();
+        while order.len() >= MAX {
+            let Some(oldest) = order.pop_front() else { break };
+            let player = slots.remove(&oldest).flatten().and_then(|p| Rc::try_unwrap(p).ok());
+            if let Some(player) = player {
+                evicted.borrow_mut().extend(player.into_images());
+            }
+        }
+        order.push_back(url.clone());
+        slots.insert(url.clone(), None);
+        outbox.post(Command::FetchAvatar { url: url.to_string() });
+        None
+    }
+
+    /// Takes the download for `url` if it was asked for here.
+    fn store(&self, url: &str, bytes: Option<&[u8]>) -> bool {
+        let mut slots = self.slots.borrow_mut();
+        let Some(slot) = slots.get_mut(url) else { return false };
+        *slot = bytes.and_then(|bytes| Player::new(bytes, PIXELS)).map(Rc::new);
+        true
+    }
+
+    fn take_retired(&self, into: &mut Vec<Arc<RenderImage>>) {
+        for player in self.slots.borrow().values().flatten() {
+            into.extend(player.take_retired());
+        }
+    }
 }
 
 impl Images {
@@ -55,48 +106,40 @@ impl Images {
         None
     }
 
-    /// The Lottie player for `url` once downloaded; otherwise starts the
-    /// download (once).
+    /// The Lottie player for `url` in the chat once downloaded; otherwise
+    /// starts the download (once).
     pub fn animation(&self, url: &str, outbox: &dyn Outbox) -> Option<Rc<Player>> {
-        let mut slots = self.animations.borrow_mut();
-        if let Some(slot) = slots.get(url) {
-            return slot.clone();
-        }
-        let url: SharedString = url.to_owned().into();
-        let mut order = self.animation_order.borrow_mut();
-        while order.len() >= MAX_ANIMATIONS {
-            let Some(oldest) = order.pop_front() else { break };
-            let player = slots.remove(&oldest).flatten().and_then(|p| Rc::try_unwrap(p).ok());
-            if let Some(player) = player {
-                self.evicted.borrow_mut().extend(player.into_images());
-            }
-        }
-        order.push_back(url.clone());
-        slots.insert(url.clone(), None);
-        outbox.post(Command::FetchAvatar { url: url.to_string() });
-        None
+        self.chat.get(url, outbox, &self.evicted)
+    }
+
+    /// The same for the sticker picker's smaller players.
+    pub fn picker_animation(&self, url: &str, outbox: &dyn Outbox) -> Option<Rc<Player>> {
+        self.picker.get(url, outbox, &self.evicted)
     }
 
     /// Frames no longer on screen, to be dropped from the GPU atlas.
     pub fn take_retired(&self) -> Vec<Arc<RenderImage>> {
         let mut retired = std::mem::take(&mut *self.evicted.borrow_mut());
-        for player in self.animations.borrow().values().flatten() {
-            retired.extend(player.take_retired());
-        }
+        self.chat.take_retired(&mut retired);
+        self.picker.take_retired(&mut retired);
         retired
     }
 
     /// The download for `url` finished; `None` or undecodable bytes leave a
     /// permanent blank.
     pub fn store(&self, url: String, bytes: Option<Vec<u8>>) {
-        if let Some(slot) = self.animations.borrow_mut().get_mut(url.as_str()) {
-            *slot = bytes
-                .and_then(|bytes| Player::new(&bytes, ANIMATION_PIXELS))
-                .map(Rc::new);
+        // The same sticker may play in the chat and in the picker at once.
+        let in_picker = self.picker.store(&url, bytes.as_deref());
+        if self.chat.store(&url, bytes.as_deref()) || in_picker {
             return;
         }
         let image = bytes.and_then(|bytes| {
-            let format = image_format(&bytes)?;
+            let Some(format) = image_format(&bytes) else {
+                // The host only: paths can name channels and files.
+                let host = url.split('/').nth(2).unwrap_or_default();
+                tracing::warn!("image from {host} is in a format that cannot be drawn");
+                return None;
+            };
             Some(Arc::new(Image::from_bytes(format, bytes)))
         });
         // Evicted while downloading: dropped rather than kept untracked.

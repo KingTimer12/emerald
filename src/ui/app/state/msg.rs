@@ -3,7 +3,9 @@
 use gpui::SharedString;
 
 use super::super::super::time;
-use crate::discord::model::{Attachment, Channel, Embed, Emoji, Message, Reaction, Snowflake, User, message_kind};
+use crate::discord::model::{
+    Attachment, Channel, Embed, Emoji, Message, Reaction, Snowflake, StickerItem, User, message_kind,
+};
 
 /// Largest size an attached image is shown at, as in the web client.
 const IMAGE_MAX: (f32, f32) = (400., 300.);
@@ -75,6 +77,16 @@ pub struct Sticker {
     pub url: Option<SharedString>,
     /// A Lottie animation rather than an image.
     pub lottie: bool,
+}
+
+impl Sticker {
+    pub fn new(sticker: &StickerItem) -> Self {
+        Self {
+            name: sticker.name.clone().into(),
+            url: sticker.url().map(Into::into),
+            lottie: sticker.is_lottie(),
+        }
+    }
 }
 
 /// The message a reply points at; `content` is `None` once it is deleted.
@@ -263,11 +275,7 @@ impl From<Message> for Msg {
             stickers: message
                 .sticker_items
                 .iter()
-                .map(|s| Sticker {
-                    name: s.name.clone().into(),
-                    url: s.url().map(Into::into),
-                    lottie: s.is_lottie(),
-                })
+                .map(Sticker::new)
                 .collect(),
             kind: message.kind,
             mentions: mention_names(&message.mentions),

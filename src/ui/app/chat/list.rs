@@ -493,7 +493,7 @@ impl Emerald {
                     )
             }))
             .children(msg.embeds.iter().enumerate().filter_map(|(n, embed)| self.render_embed(embed, ix, n)))
-            .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker)))
+            .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker, STICKER_SIZE)))
             .children(msg.thread.as_ref().map(|thread| self.render_thread_chip(thread, ix, cx)))
             .children(self.render_reactions(msg, ix, cx))
     }
@@ -582,22 +582,23 @@ impl Emerald {
         }
     }
 
-    fn render_sticker(&self, sticker: &Sticker) -> AnyElement {
+    /// A sticker drawn `size` pixels square.
+    pub(super) fn render_sticker(&self, sticker: &Sticker, size: f32) -> AnyElement {
         let url = sticker.url.as_deref();
         let shown = match url {
             Some(url) if sticker.lottie => self.images.animation(url, &*self.net).and_then(|player| {
                 self.animating.set(true);
                 let frame = player.frame(self.animation_clock.elapsed())?;
-                Some(img(frame).size(px(STICKER_SIZE)).into_any_element())
+                Some(img(frame).size(px(size)).into_any_element())
             }),
-            Some(url) => self.avatar_image(url).map(|image| img(image).size(px(STICKER_SIZE)).into_any_element()),
+            Some(url) => self.avatar_image(url).map(|image| img(image).size(px(size)).into_any_element()),
             None => None,
         };
         // Unknown formats, and stickers still downloading: a card with the
         // sticker's name in its place.
         shown.unwrap_or_else(|| {
             div()
-                        .size(px(STICKER_SIZE))
+                        .size(px(size))
                         .rounded_lg()
                         .bg(theme::hover())
                         .flex()

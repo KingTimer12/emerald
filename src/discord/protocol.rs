@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::model::{
-    Channel, ChannelKind, Emoji, Guild, GuildEmojisUpdate, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
+    Channel, ChannelKind, CommandIndex, Emoji, Gif, Guild, GuildEmojisUpdate, GuildStickersUpdate, StickerPack, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
     MessageAck, MessageDelete, MessageUpdate, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
     RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry, ThreadMembersUpdate, TypingStart,
     User,
@@ -23,6 +23,19 @@ pub enum Action {
     CreateThread,
     /// Joining or leaving a thread.
     ThreadMembership,
+    /// Running a slash command.
+    RunCommand,
+}
+
+/// Whose slash commands to list, as the web client asks for them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IndexTarget {
+    /// A guild's commands.
+    Guild(Snowflake),
+    /// A DM's or group DM's commands.
+    Channel(Snowflake),
+    /// Apps the user installed, usable everywhere.
+    User,
 }
 
 /// The gateway's reaction events.
@@ -149,6 +162,19 @@ pub enum NetEvent {
         error: String,
     },
     GuildEmojis(GuildEmojisUpdate),
+    GuildStickers(GuildStickersUpdate),
+    /// Answer to `Command::CommandIndex`; `None` when it could not be had.
+    CommandIndex {
+        target: IndexTarget,
+        index: Option<CommandIndex>,
+    },
+    /// Answer to `Command::StickerPacks`; `None` when it failed.
+    StickerPacks(Option<Vec<StickerPack>>),
+    /// Answer to `Command::Gifs`: trending ones when `query` is `None`.
+    Gifs {
+        query: Option<String>,
+        gifs: Result<Vec<Gif>, String>,
+    },
     TypingStart(TypingStart),
     Profile {
         /// The guild whose member profile was asked for, if any.
@@ -237,6 +263,37 @@ pub enum Command {
         reply: Option<ReplyTo>,
         files: Vec<Upload>,
     },
+    /// A sticker sent on its own, as picking one in the web client does.
+    SendSticker {
+        channel: Snowflake,
+        sticker: Snowflake,
+        nonce: String,
+    },
+    /// A GIF from the picker: its Tenor page sent as the message, after
+    /// telling Discord which one was picked for `query`.
+    SendGif {
+        channel: Snowflake,
+        gif: Gif,
+        query: String,
+        nonce: String,
+    },
+    /// GIFs for the picker: a search, or the trending ones.
+    Gifs {
+        query: Option<String>,
+    },
+    /// Discord's standard sticker packs, asked for once a session.
+    StickerPacks,
+    /// The slash commands of a guild, a DM or the user's own apps.
+    ListCommands(IndexTarget),
+    /// Runs a slash command in `channel`; the app answers through the
+    /// gateway like any message.
+    Interact {
+        application: Snowflake,
+        guild: Option<Snowflake>,
+        channel: Snowflake,
+        data: serde_json::Value,
+        nonce: String,
+    },
     /// Starts a thread in `parent`, from `message` when given.
     CreateThread {
         parent: Snowflake,
@@ -252,10 +309,15 @@ pub enum Command {
         tags: Vec<Snowflake>,
         content: String,
         auto_archive: u32,
+        /// Uploaded to the forum first, then named in the post's message.
+        files: Vec<Upload>,
     },
     ThreadMembership {
         thread: Snowflake,
         join: bool,
+        /// Forum posts are joined from the post's own toolbar button,
+        /// other threads from the header's overflow menu.
+        forum_post: bool,
     },
     /// The gateway echoes the outcome as MESSAGE_UPDATE.
     EditMessage {
@@ -322,6 +384,12 @@ pub enum Command {
         guild: Snowflake,
         query: String,
         nonce: String,
+    },
+    /// Gateway op 8 for the message box's `@` suggestions: ten members
+    /// whose name starts with `query`.
+    QueryMembers {
+        guild: Snowflake,
+        query: String,
     },
     /// Gateway op 37: what the web client sends on opening a guild, so the
     /// gateway delivers its typing and thread events, and with `members`

@@ -63,6 +63,7 @@ title = "Amigos"
 username_placeholder = "Nome de usuário"
 
 [composer]
+emoji = "Selecionar emoji"
 channel = "Conversar em #{name}"
 dm = "Conversar com @{name}"
 no_channel = "Selecione um canal"
@@ -93,6 +94,30 @@ too_large = "{name} é grande demais. O tamanho máximo de arquivo aqui é {max}
 too_many = "Você só pode enviar {max} arquivos por vez."
 unreadable = "Não foi possível ler {name}."
 
+[autocomplete]
+commands = "COMANDOS"
+members = "MEMBROS"
+roles = "CARGOS"
+channels = "CANAIS DE TEXTO"
+emoji = "EMOJIS"
+everyone = "Notificar todos que têm permissão para ver este canal."
+here = "Notificar todos online que têm permissão para ver este canal."
+
+[picker]
+search_gifs = "Pesquisar no Tenor"
+search_stickers = "Encontre a figurinha perfeita"
+gifs = "GIFs"
+stickers = "Figurinhas"
+emoji = "Emoji"
+no_stickers = "Nenhuma figurinha que você possa usar aqui."
+no_gifs = "Nenhum GIF encontrado."
+
+[commands]
+subcommand = "Escolha um destes: {names}."
+missing = "Preencha {name}: para usar este comando."
+invalid = "Esse valor não serve para {name}."
+unsupported = "{name} pede um arquivo, o que ainda não dá para enviar daqui."
+
 [forum]
 content = "MENSAGEM"
 content_placeholder = "Escreva a primeira mensagem"
@@ -104,6 +129,7 @@ title = "TÍTULO DO POST"
 title_placeholder = "Título"
 title_required = "Dê um título ao post."
 content_required = "Escreva a primeira mensagem do post."
+files_required = "Posts aqui precisam de pelo menos um arquivo."
 empty = "Ainda não há posts aqui."
 pinned = "Fixado"
 

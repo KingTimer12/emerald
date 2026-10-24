@@ -220,7 +220,7 @@ impl Emerald {
     /// Escape closes the innermost thing open: the menu, an overlay, the
     /// edit box, then the reply.
     pub(in super::super) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.close_reaction_picker(window, cx) {
+        if self.close_reaction_picker(window, cx) || self.dismiss_suggestions(cx) {
         } else if self.message_menu.take().is_some() {
             cx.notify();
         } else if self.overlay.is_some() {
@@ -252,7 +252,7 @@ impl Emerald {
         let rights = self.rights(channel, msg);
         let id = msg.id;
         let open = self.message_menu.as_ref().is_some_and(|m| m.message == id)
-            || self.reaction_picker.as_ref().is_some_and(|p| p.message == id);
+            || self.reaction_picker.as_ref().is_some_and(|p| p.message == Some(id));
         let react = self.may_react(channel, msg, true);
         let quick: Vec<_> = if react {
             self.recent_emojis().take(QUICK_REACTIONS).collect()

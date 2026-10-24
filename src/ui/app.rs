@@ -20,7 +20,9 @@ mod outbox;
 mod profile;
 mod settings;
 mod sidebar;
+mod slash;
 mod state;
+mod suggestions;
 mod user_panel;
 mod widgets;
 
@@ -29,7 +31,7 @@ use gpui::{
     SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, px, relative, rgb,
 };
 
-use super::text_input::{PastedImage, Submitted, TextInput};
+use super::text_input::{MenuKey, PastedImage, Submitted, TextInput};
 use super::theme;
 use crate::discord::model::{Profile, Snowflake};
 use crate::discord::{Action, Command, Link};
@@ -40,7 +42,7 @@ use friends::Friends;
 use images::Images;
 pub use outbox::Outbox;
 use settings::SettingsView;
-use state::{History, MemberLists, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
+use state::{Autocomplete, History, MemberLists, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
 
 actions!(emerald_ui, [Dismiss, EditLast]);
 
@@ -156,6 +158,16 @@ pub struct Emerald {
     selected_channel: Option<Snowflake>,
     friends: Friends,
     composer: Composer,
+    /// The suggestions over the message box, and their entries.
+    autocomplete: Autocomplete,
+    suggestions: Vec<suggestions::Suggestion>,
+    /// `@` names asked of the gateway lately, per guild, to ask once a minute.
+    member_queries: Vec<(Snowflake, String, Instant)>,
+    /// Discord's standard sticker packs; `Some` once asked for, and filled
+    /// when they arrive.
+    sticker_packs: Option<Vec<crate::discord::model::StickerPack>>,
+    /// Slash commands per guild or DM, and the user's own apps'.
+    command_sets: HashMap<crate::discord::IndexTarget, slash::CommandSet>,
     /// The own message being edited in place, and its edit box.
     edit: Option<chat::Editing>,
     edit_input: Entity<TextInput>,
@@ -212,7 +224,7 @@ impl Emerald {
                 .compact()
         });
         let member_query = cx.new(|cx| TextInput::new(t!("members.search"), cx).keep_on_submit().compact());
-        let edit_input = cx.new(|cx| TextInput::new("", cx));
+        let edit_input = cx.new(|cx| TextInput::new("", cx).multiline(composer::MAX_ROWS));
         let alt_input = cx.new(|cx| TextInput::new(t!("upload.description_placeholder"), cx).keep_on_submit().submit_empty());
         let emoji_query = cx.new(|cx| TextInput::new(t!("reaction.search"), cx).keep_on_submit().compact());
         let subscriptions = vec![
@@ -225,6 +237,7 @@ impl Emerald {
             cx.observe(&member_query, |this, _, cx| this.on_member_query(cx)),
             cx.observe(&emoji_query, |this, _, cx| {
                 this.emoji_scroll = UniformListScrollHandle::new();
+                this.on_picker_query(cx);
                 cx.notify();
             }),
             cx.subscribe_in(&emoji_query, window, |this, _, _: &Submitted, window, cx| {
@@ -237,6 +250,7 @@ impl Emerald {
                 this.attach_pasted(&event.0, cx)
             }),
             cx.observe(&composer.input, |this, _, cx| this.on_draft_changed(cx)),
+            cx.subscribe(&composer.input, |this, _, key: &MenuKey, cx| this.on_menu_key(*key, cx)),
             cx.subscribe(&friends.input, |this, _, event: &Submitted, cx| {
                 this.send_friend_request(event.0.clone(), cx)
             }),
@@ -282,6 +296,11 @@ impl Emerald {
             selected_channel: None,
             friends,
             composer,
+            autocomplete: Autocomplete::default(),
+            suggestions: Vec::new(),
+            member_queries: Vec::new(),
+            sticker_packs: None,
+            command_sets: HashMap::new(),
             edit: None,
             edit_input,
             alt_input,

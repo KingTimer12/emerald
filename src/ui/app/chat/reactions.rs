@@ -98,7 +98,7 @@ impl Emerald {
     }
 
     /// Moves `emoji` to the front of "Frequently Used".
-    fn remember_emoji(&mut self, emoji: &Emoji) {
+    pub(in super::super) fn remember_emoji(&mut self, emoji: &Emoji) {
         let key = emoji.route_key();
         let recent = &mut self.settings.recent_emojis;
         recent.retain(|k| *k != key);
@@ -203,7 +203,7 @@ impl Emerald {
 
     /// An emoji at `size`: Unicode ones as text, custom ones as their image
     /// (a blank square while it downloads).
-    pub(super) fn emoji_image(&self, emoji: &Emoji, size: f32) -> gpui::AnyElement {
+    pub(in super::super) fn emoji_image(&self, emoji: &Emoji, size: f32) -> gpui::AnyElement {
         match emoji.id {
             Some(id) => match self.avatar_image(&custom_url(id)) {
                 Some(image) => img(image).size(px(size)).flex_none().into_any_element(),

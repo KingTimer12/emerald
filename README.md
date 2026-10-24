@@ -50,7 +50,20 @@ CPU near zero when idle.
 - **Uploads**: up to 10 files per message from the + button, dragged onto the chat or
   pasted, with image previews, alt text and spoilers; sent the way the web client sends
   them, with the size limit following Nitro and server boosts. Spoiler images arrive
-  covered (and are not downloaded) until clicked; alt text shows on hover.
+  covered (and are not downloaded) until clicked; alt text shows on hover. Forum and
+  media channel posts take files too.
+- **Message box**: several lines (Shift+Enter), growing up to twelve rows and then
+  scrolling; a draft kept per channel, with its reply and files, when you switch away.
+  Suggestions as you type: `@` for members (asked of the gateway the way the web client
+  does), roles, `@everyone` and `@here` when allowed; `#` for channels; `:` for emoji;
+  picked with the arrows and Tab or Enter, and sent as real mentions.
+- **Emoji, stickers and GIFs** from the button at the end of the message box: the emoji
+  picker writes into the message; stickers (the server's, every server's with Nitro, and
+  Discord's standard packs) and GIFs from Discord's Tenor search are sent at once, as on
+  Discord. Stickers animate in the picker too, only those on screen.
+- **Slash commands**: `/` lists the server's, DM's and your own apps' commands; options
+  are written as `name:value` with a hint showing which are required; Enter runs it
+  once. Option autocomplete and file options are not supported yet.
 - **Message actions** from a hover toolbar or right click: reply (with or without the
   ping), edit in place (Up edits your last message), pin, copy, delete with confirmation
   (Shift skips it).
@@ -68,7 +81,7 @@ CPU near zero when idle.
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, files on forum posts (so media channels can't be posted to), animated
+Not there yet: voice, animated
 custom emoji (shown still).
 
 ## Requirements

@@ -28,10 +28,13 @@ use error::{ErrorBody, Unavailable};
 use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
 
-use super::{ReactionSource, ReplyTo, Upload};
+use super::{IndexTarget, ReactionSource, ReplyTo, Upload};
 use super::cache::Cache;
 use super::identity::{self, Identity};
-use super::model::{Channel, ChannelKind, DISCORD_EPOCH_MS, Emoji, Invite, Message, Profile, Snowflake, User};
+use super::model::{
+    Channel, ChannelKind, CommandIndex, DISCORD_EPOCH_MS, Emoji, Gif, Invite, Message, Profile, Snowflake, StickerPack,
+    StickerPacks, User,
+};
 
 const MAX_ATTEMPTS: u32 = 4;
 pub const HISTORY_PAGE: usize = 50;
@@ -288,12 +291,16 @@ impl Rest {
     pub async fn send_message(
         &self,
         channel: Snowflake,
-        content: &str,
-        nonce: &str,
-        reply: Option<ReplyTo>,
-        files: &[Uploaded],
+        message: &Outgoing<'_>,
         captcha: Option<&Solution>,
     ) -> Result<Message> {
+        let Outgoing {
+            content,
+            nonce,
+            reply,
+            files,
+            stickers,
+        } = *message;
         let mut body = json!({
             "mobile_network_type": "unknown",
             "content": content,
@@ -302,27 +309,11 @@ impl Rest {
             "flags": 0,
         });
         if !files.is_empty() {
-            // Ids are the files' places in this list, as the web client sends.
-            let attachments: Vec<_> = files
-                .iter()
-                .enumerate()
-                .map(|(ix, file)| {
-                    let mut attachment = json!({
-                        "id": ix.to_string(),
-                        "filename": file.filename,
-                        "uploaded_filename": file.uploaded_filename,
-                    });
-                    // Both are left out unless set, as the web client does.
-                    if !file.description.is_empty() {
-                        attachment["description"] = file.description.clone().into();
-                    }
-                    if file.spoiler {
-                        attachment["is_spoiler"] = true.into();
-                    }
-                    attachment
-                })
-                .collect();
-            body["attachments"] = attachments.into();
+            body["attachments"] = attachments(files);
+        }
+        if !stickers.is_empty() {
+            let ids: Vec<String> = stickers.iter().map(ToString::to_string).collect();
+            body["sticker_ids"] = ids.into();
         }
         if let Some(reply) = reply {
             body["message_reference"] = json!({
@@ -344,6 +335,84 @@ impl Rest {
                 .captcha(captcha),
         )
         .await
+    }
+
+    /// The GIF picker's results, from Discord's Tenor proxy: a search, or
+    /// the trending GIFs. Asked for in WebM like the web client on macOS
+    /// and Windows; only the still `preview` and `gif_src` are drawn here.
+    pub async fn gifs(&self, query: Option<&str>) -> Result<Vec<Gif>> {
+        let locale = self.identity.locale();
+        let call = match query {
+            Some(query) => Call::get(
+                "/gifs/search",
+                format!("/gifs/search?q={}&media_format=webm&locale={locale}", encode_component(query)),
+            ),
+            None => Call::get("/gifs/trending-gifs", format!("/gifs/trending-gifs?media_format=webm&locale={locale}")),
+        };
+        self.fetch(call.cached(Policy::MICRO)).await
+    }
+
+    /// Discord's standard sticker packs, named in the interface language,
+    /// as the sticker picker asks for them.
+    pub async fn sticker_packs(&self) -> Result<Vec<StickerPack>> {
+        let path = format!("/sticker-packs?locale={}", self.identity.locale());
+        let packs: StickerPacks = self.fetch(Call::get("/sticker-packs", path).cached(Policy::MICRO)).await?;
+        Ok(packs.sticker_packs)
+    }
+
+    /// Tells Discord which GIF was picked for `query`, as the web client
+    /// does before sending it.
+    pub async fn select_gif(&self, id: &str, query: &str) -> Result<()> {
+        self.run(Call::post("/gifs/select", "/gifs/select").json(json!({ "id": id, "q": query }))).await
+    }
+
+    /// The slash commands of `target`. `None` while Discord is still
+    /// building the index (202), to ask again later.
+    pub async fn command_index(&self, target: IndexTarget) -> Result<Option<CommandIndex>> {
+        let call = match target {
+            IndexTarget::Guild(guild) => Call::get(
+                "/guilds/{id}/application-command-index",
+                format!("/guilds/{guild}/application-command-index"),
+            )
+            .major(guild),
+            IndexTarget::Channel(channel) => Call::get(
+                "/channels/{id}/application-command-index",
+                format!("/channels/{channel}/application-command-index"),
+            )
+            .major(channel),
+            IndexTarget::User => {
+                Call::get("/users/@me/application-command-index", "/users/@me/application-command-index")
+            }
+        };
+        let response = self.send(&call).await?;
+        if response.status() == StatusCode::ACCEPTED {
+            return Ok(None);
+        }
+        Ok(Some(response.json().await?))
+    }
+
+    /// Runs a slash command: an interaction of type 2, with the body the
+    /// web client's command box sends.
+    pub async fn run_command(
+        &self,
+        application: Snowflake,
+        guild: Option<Snowflake>,
+        channel: Snowflake,
+        data: serde_json::Value,
+        nonce: &str,
+    ) -> Result<()> {
+        let mut body = serde_json::Map::new();
+        body.insert("type".into(), 2.into());
+        body.insert("application_id".into(), application.to_string().into());
+        if let Some(guild) = guild {
+            body.insert("guild_id".into(), guild.to_string().into());
+        }
+        body.insert("channel_id".into(), channel.to_string().into());
+        body.insert("session_id".into(), self.identity.session_id().into());
+        body.insert("data".into(), data);
+        body.insert("nonce".into(), nonce.into());
+        body.insert("analytics_location".into(), "slash_ui".into());
+        self.run(Call::post("/interactions", "/interactions").json(body.into())).await
     }
 
     /// Puts each file in Discord's storage, as the web client does: ask the
@@ -431,11 +500,15 @@ impl Rest {
         forum: Snowflake,
         name: &str,
         tags: &[Snowflake],
-        content: &str,
         auto_archive: u32,
+        first: &Outgoing<'_>,
         captcha: Option<&Solution>,
     ) -> Result<Channel> {
         let tags: Vec<String> = tags.iter().map(ToString::to_string).collect();
+        let mut message = json!({ "content": first.content });
+        if !first.files.is_empty() {
+            message["attachments"] = attachments(first.files);
+        }
         self.fetch(
             Call::post("/channels/{id}/threads", format!("/channels/{forum}/threads?use_nested_fields=true"))
                 .major(forum)
@@ -443,16 +516,19 @@ impl Rest {
                     "name": name,
                     "auto_archive_duration": auto_archive,
                     "applied_tags": tags,
-                    "message": { "content": content },
+                    "message": message,
                 }))
                 .captcha(captcha),
         )
         .await
     }
 
-    /// Joins or leaves `thread`.
-    pub async fn thread_membership(&self, thread: Snowflake, join: bool) -> Result<()> {
-        let path = format!("/channels/{thread}/thread-members/@me?location=Thread%20Header");
+    /// Joins or leaves `thread`. The `location` is the surface the web
+    /// client's button sits on: "Forum Toolbar" for a forum post, and
+    /// "Toolbar Overflow" (the header's menu) for any other thread.
+    pub async fn thread_membership(&self, thread: Snowflake, join: bool, forum_post: bool) -> Result<()> {
+        let location = if forum_post { "Forum%20Toolbar" } else { "Toolbar%20Overflow" };
+        let path = format!("/channels/{thread}/thread-members/@me?location={location}");
         let route = "/channels/{id}/thread-members/@me";
         let call = if join { Call::post(route, path) } else { Call::delete(route, path) };
         self.run(call.major(thread)).await
@@ -886,6 +962,43 @@ struct UploadUrl {
 
 /// The web client numbers upload requests with lodash's `uniqueId`: a
 /// counter shared with the rest of the page, sent as a string.
+/// A message to send: its text, what it carries, and what it answers.
+/// `nonce` is left out of a forum post's first message, as the web client
+/// does.
+#[derive(Clone, Copy, Default)]
+pub struct Outgoing<'a> {
+    pub content: &'a str,
+    pub nonce: &'a str,
+    pub reply: Option<ReplyTo>,
+    pub files: &'a [Uploaded],
+    pub stickers: &'a [Snowflake],
+}
+
+/// The `attachments` of a message naming uploaded files. Ids are the files'
+/// places in this list, as the web client sends.
+fn attachments(files: &[Uploaded]) -> serde_json::Value {
+    files
+        .iter()
+        .enumerate()
+        .map(|(ix, file)| {
+            let mut attachment = json!({
+                "id": ix.to_string(),
+                "filename": file.filename,
+                "uploaded_filename": file.uploaded_filename,
+            });
+            // Both are left out unless set, as the web client does.
+            if !file.description.is_empty() {
+                attachment["description"] = file.description.clone().into();
+            }
+            if file.spoiler {
+                attachment["is_spoiler"] = true.into();
+            }
+            attachment
+        })
+        .collect::<Vec<_>>()
+        .into()
+}
+
 fn upload_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -917,7 +1030,8 @@ fn mime_type(name: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{encode_component, encode_path, invite_code};
+    use super::{Uploaded, attachments, encode_component, encode_path, invite_code};
+    use serde_json::json;
 
     #[test]
     fn reaction_routes_encode_like_the_browser() {
@@ -943,5 +1057,29 @@ mod tests {
         assert_eq!(invite_code(""), None);
         assert_eq!(invite_code("https://discord.gg/"), None);
         assert_eq!(invite_code("not a code"), None);
+    }
+
+    #[test]
+    fn attachments_name_only_what_is_set() {
+        let file = |name: &str, description: &str, spoiler| Uploaded {
+            filename: name.into(),
+            uploaded_filename: format!("up/{name}"),
+            description: description.into(),
+            spoiler,
+        };
+        let sent = attachments(&[file("a.png", "", false), file("b.png", "a cat", true)]);
+        assert_eq!(
+            sent,
+            json!([
+                { "id": "0", "filename": "a.png", "uploaded_filename": "up/a.png" },
+                {
+                    "id": "1",
+                    "filename": "b.png",
+                    "uploaded_filename": "up/b.png",
+                    "description": "a cat",
+                    "is_spoiler": true,
+                },
+            ])
+        );
     }
 }

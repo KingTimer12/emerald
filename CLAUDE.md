@@ -80,25 +80,25 @@ otherwise. Tick items off here as they land.
 
 Done but never checked in the real app, or known to be partial:
 
-1. [ ] Visual check of the thread rows in the sidebar (`w_auto` width fix), the thread
+1. [x] Visual check of the thread rows in the sidebar (`w_auto` width fix), the thread
    chip under a message, and the ALT badge on images.
 2. [ ] Ask the user to try, by hand, one real upload, one spoiler image, one thread from
    a message, one forum post, and join/leave. Fix whatever they report.
-3. [ ] The `location` sent on joining or leaving a thread (`Thread Header`) is a guess;
+3. [x] The `location` sent on joining or leaving a thread (`Thread Header`) is a guess;
    find the real value in the bundle.
-4. [ ] Files on forum posts (the post form has no attachments), which also unlocks
+4. [x] Files on forum posts (the post form has no attachments), which also unlocks
    posting in media channels.
 
 ### Phase 1 — the message box (daily-use pain first)
 
-5. [ ] Multi-line composer: Shift+Enter for a new line, the box grows up to a limit, then
+5. [x] Multi-line composer: Shift+Enter for a new line, the box grows up to a limit, then
    scrolls. `TextInput` is single-line today; edit mode needs it too.
-6. [ ] Drafts kept per channel when switching away.
-7. [ ] `@` autocomplete for members and roles (op 8 search is already there), `#` for
+6. [x] Drafts kept per channel when switching away.
+7. [x] `@` autocomplete for members and roles (op 8 search is already there), `#` for
    channels, `:` for emoji, with arrow keys and Tab/Enter.
-8. [ ] Emoji picker button in the composer, reusing the reaction picker.
-9. [ ] Sticker and GIF pickers (GIFs come from Discord's Tenor proxy endpoints).
-10. [ ] Slash commands: listing and filling app commands. Treat with care, since
+8. [x] Emoji picker button in the composer, reusing the reaction picker.
+9. [x] Sticker and GIF pickers (GIFs come from Discord's Tenor proxy endpoints).
+10. [x] Slash commands: listing and filling app commands. Treat with care, since
     interactions are bot traffic. Last in this phase.
 
 ### Phase 2 — reading messages fully

@@ -7,7 +7,7 @@ use gpui::{
     prelude::*, px, rgb,
 };
 
-use super::super::super::text_input::{Submitted, TextInput};
+use super::super::super::text_input::{PastedImage, Submitted, TextInput};
 use super::super::super::{theme, time};
 use super::super::state::Msg;
 use super::super::{Emerald, Overlay, widgets};
@@ -21,6 +21,8 @@ const MAX_NAME: usize = 100;
 const MAX_TAGS: usize = 5;
 /// The web client cuts names it makes up from a message at this length.
 const DEFAULT_NAME_LEN: usize = 40;
+/// Rows the post's message grows to before it scrolls.
+const POST_ROWS: usize = 6;
 
 /// "Create Thread", from `message` in `parent` when given.
 pub(in super::super) struct NewThread {
@@ -38,7 +40,7 @@ pub(in super::super) struct NewPost {
     content: Entity<TextInput>,
     tags: Vec<Snowflake>,
     pub error: Option<SharedString>,
-    _subscriptions: [Subscription; 2],
+    _subscriptions: [Subscription; 3],
 }
 
 impl Emerald {
@@ -111,13 +113,17 @@ impl Emerald {
 
     pub(super) fn open_create_post(&mut self, forum: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
         let title = cx.new(|cx| TextInput::new(t!("forum.title_placeholder"), cx).keep_on_submit());
-        let content = cx.new(|cx| TextInput::new(t!("forum.content_placeholder"), cx).keep_on_submit());
+        let content = cx.new(|cx| TextInput::new(t!("forum.content_placeholder"), cx).keep_on_submit().multiline(POST_ROWS));
         let next = content.focus_handle(cx);
         let subscriptions = [
             // Enter in the title moves on to the message.
             cx.subscribe_in(&title, window, move |_, _, _: &Submitted, window, _| window.focus(&next)),
             cx.subscribe(&content, |this, _, _: &Submitted, cx| this.create_post(cx)),
+            cx.subscribe(&content, |this, _, event: &PastedImage, cx| this.attach_pasted(&event.0, cx)),
         ];
+        // The post's files wait where the message box keeps its own; the
+        // box is hidden while a forum is open.
+        self.composer.attachments.clear();
         window.focus(&title.focus_handle(cx));
         self.overlay = Some(Overlay::CreatePost(NewPost {
             forum,
@@ -145,9 +151,13 @@ impl Emerald {
         let forum = self.spaces.channel(modal.forum);
         let name: String = modal.title.read(cx).text().trim().chars().take(MAX_NAME).collect();
         let content = modal.content.read(cx).text().trim().to_owned();
+        let has_files = !self.composer.attachments.is_empty();
+        let media = forum.is_some_and(|f| f.kind == ChannelKind::MEDIA);
         let error = if name.is_empty() {
             Some(t!("forum.title_required"))
-        } else if content.is_empty() {
+        } else if media && !has_files {
+            Some(t!("forum.files_required"))
+        } else if content.is_empty() && !has_files {
             Some(t!("forum.content_required"))
         } else if modal.tags.is_empty() && forum.is_some_and(Channel::requires_tag) {
             Some(t!("forum.tag_required"))
@@ -165,6 +175,8 @@ impl Emerald {
             tags: modal.tags.clone(),
             content,
             auto_archive: auto_archive(forum),
+            // Kept in the form until the post exists, in case it fails.
+            files: self.composer.attachments.iter().map(|a| a.upload.clone()).collect(),
         };
         self.run(Action::CreateThread, command, cx);
     }
@@ -172,6 +184,9 @@ impl Emerald {
     /// The thread or post we started: we are in it, and it opens.
     pub(in super::super) fn on_thread_created(&mut self, mut thread: Channel, window: &mut Window, cx: &mut Context<Self>) {
         self.busy.remove(&Action::CreateThread);
+        if matches!(self.overlay, Some(Overlay::CreatePost(_))) {
+            self.composer.attachments.clear();
+        }
         if matches!(self.overlay, Some(Overlay::CreateThread(_) | Overlay::CreatePost(_))) {
             self.close_overlay(window, cx);
         }
@@ -225,12 +240,13 @@ impl Emerald {
             (t!("thread.join"), widgets::ButtonKind::Brand)
         };
         let busy = self.busy.contains(&Action::ThreadMembership);
+        let forum_post = thread.parent_id.and_then(|p| self.spaces.channel(p)).is_some_and(|p| p.kind.is_forum());
         Some(
             widgets::button("thread-membership", label, kind)
                 .h(px(32.))
                 .when(busy, |button| button.opacity(0.5))
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.run(Action::ThreadMembership, Command::ThreadMembership { thread: id, join: !joined }, cx);
+                    this.run(Action::ThreadMembership, Command::ThreadMembership { thread: id, join: !joined, forum_post }, cx);
                 }))
                 .into_any_element(),
         )
@@ -310,7 +326,20 @@ impl Emerald {
                     .flex_col()
                     .gap_2()
                     .child(widgets::label(t!("forum.content")))
-                    .child(modal.content.clone()),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .children(self.render_attachments(false, cx))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_start()
+                                    .gap_1()
+                                    .children(self.render_attach_button(cx))
+                                    .child(div().flex_1().min_w(px(0.)).child(modal.content.clone())),
+                            ),
+                    ),
             );
         let submit = widgets::button("post-create", t!("forum.post_button"), widgets::ButtonKind::Brand)
             .when(busy, |button| button.opacity(0.5))

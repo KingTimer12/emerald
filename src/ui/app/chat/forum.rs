@@ -11,7 +11,7 @@ use super::super::super::icons::{self, icon};
 use super::super::super::{theme, time};
 use super::super::{Emerald, widgets};
 use super::super::state::Msg;
-use crate::discord::model::{Channel, ChannelKind, Message, Snowflake};
+use crate::discord::model::{Channel, Message, Snowflake};
 use crate::discord::{Command, ThreadPage};
 
 /// First messages asked for at once, as the web client batches them.
@@ -152,9 +152,7 @@ impl Emerald {
         .flex_1()
         .px_4()
         .py_2();
-        // Media channels take posts with files, which this form has none of.
-        let postable = self.can_send(forum)
-            && self.spaces.current().channels().iter().any(|c| c.id == forum && c.kind == ChannelKind::FORUM);
+        let postable = self.can_send(forum);
         div()
             .flex_1()
             .min_h(px(0.))

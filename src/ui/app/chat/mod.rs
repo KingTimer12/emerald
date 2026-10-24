@@ -3,6 +3,7 @@
 
 mod actions;
 mod forum;
+mod expressions;
 mod list;
 mod picker;
 mod reactions;
@@ -203,17 +204,22 @@ impl Emerald {
             }))
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_col()
+                    .children(self.render_suggestions(cx))
+                    .children(self.render_command_hint(cx))
                     .children(self.render_reply_bar(cx))
-                    .children(self.render_attachments(cx))
+                    .children(self.render_attachments(true, cx))
                     .child(
+                        // The + stays by the first row as the box grows.
                         div()
                             .flex()
-                            .items_center()
+                            .items_start()
                             .gap_1()
                             .children(self.render_attach_button(cx))
-                            .child(div().flex_1().min_w(px(0.)).child(self.composer.input.clone())),
+                            .child(div().flex_1().min_w(px(0.)).child(self.composer.input.clone()))
+                            .children(self.render_emoji_button(cx)),
                     ),
             )
             // Typing indicator in the strip under the input, as on Discord.
