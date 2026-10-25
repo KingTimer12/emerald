@@ -349,7 +349,7 @@ impl Emerald {
 
     /// A centered form over a scrim: title, fields, the error, then Cancel
     /// and `submit`.
-    fn form_modal(
+    pub(super) fn form_modal(
         &self,
         id: &'static str,
         title: &'static str,

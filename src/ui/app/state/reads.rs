@@ -75,6 +75,11 @@ impl ReadStates {
         }
     }
 
+    /// The last message read in `channel`, if Discord said.
+    pub fn last_read(&self, channel: Snowflake) -> Option<Snowflake> {
+        self.read.get(&channel).copied()
+    }
+
     pub fn has_read(&self, channel: Snowflake, message: Snowflake) -> bool {
         self.read.get(&channel).is_some_and(|read| *read >= message)
     }

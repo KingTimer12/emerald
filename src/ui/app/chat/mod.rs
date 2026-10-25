@@ -3,9 +3,13 @@
 
 mod actions;
 mod forum;
+mod jump;
 mod expressions;
 mod list;
+mod media;
 mod picker;
+mod poll;
+mod poll_form;
 mod reactions;
 mod rich;
 mod select;
@@ -13,8 +17,11 @@ mod threads;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
 pub(super) use forum::Forum;
+pub(super) use jump::{Jump, JumpTarget};
+pub(super) use poll_form::NewPoll;
 pub(super) use list::spoiler_pill;
 pub(super) use picker::ReactionPicker;
+pub(super) use rich::SpoilerKey;
 pub(super) use select::TextSelection;
 pub(super) use threads::{NewPost, NewThread};
 
@@ -105,7 +112,7 @@ impl Emerald {
                     .child(title.clone()),
             )
             .children(topic.map(|topic| {
-                let topic = self.rich_text("topic", &topic, &[], false);
+                let topic = self.rich_line("topic", &topic, &[]);
                 // Divider and one-line topic, as in the web client's header.
                 div()
                     .flex()
@@ -172,22 +179,30 @@ impl Emerald {
         } else if let Some(forum) = forum {
             self.render_forum(forum, cx)
         } else {
-            list(
+            let messages = list(
                 self.messages.clone(),
                 cx.processor(|this, ix, _, cx| {
                     let row = this.render_list_row(ix, cx);
+                    this.row_drawn(ix, cx);
                     if this.animating.take() {
                         this.next_animation_frame(cx);
                     }
                     row
                 }),
             )
-            .flex_1()
+            .size_full()
             .pb_4()
             // Discord's 1.375 line height, scaled with the chosen font size.
             .text_size(px(self.settings.font_size))
-            .line_height(px((self.settings.font_size * 1.375).round()))
-            .into_any_element()
+            .line_height(px((self.settings.font_size * 1.375).round()));
+            div()
+                .relative()
+                .flex_1()
+                .min_h(px(0.))
+                .child(messages)
+                .children(self.render_unread_bar(cx))
+                .children(self.render_present_bar(cx))
+                .into_any_element()
         };
 
         let composer = div()
@@ -207,6 +222,7 @@ impl Emerald {
                     .relative()
                     .flex()
                     .flex_col()
+                    .children(self.render_plus_menu(cx))
                     .children(self.render_suggestions(cx))
                     .children(self.render_command_hint(cx))
                     .children(self.render_reply_bar(cx))
@@ -217,7 +233,7 @@ impl Emerald {
                             .flex()
                             .items_start()
                             .gap_1()
-                            .children(self.render_attach_button(cx))
+                            .children(self.render_plus_button(cx))
                             .child(div().flex_1().min_w(px(0.)).child(self.composer.input.clone()))
                             .children(self.render_emoji_button(cx)),
                     ),

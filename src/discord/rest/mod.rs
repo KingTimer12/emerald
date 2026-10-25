@@ -28,7 +28,7 @@ use error::{ErrorBody, Unavailable};
 use microcache::{Lookup, MicroCache, Policy, Ticket};
 use ratelimit::{RateLimiter, Route};
 
-use super::{IndexTarget, ReactionSource, ReplyTo, Upload};
+use super::{IndexTarget, NewPoll, Page, ReactionSource, ReplyTo, Upload};
 use super::cache::Cache;
 use super::identity::{self, Identity};
 use super::model::{
@@ -38,6 +38,11 @@ use super::model::{
 
 const MAX_ATTEMPTS: u32 = 4;
 pub const HISTORY_PAGE: usize = 50;
+/// Largest still image downloaded.
+const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
+/// Largest animated GIF or WebP downloaded; they are scaled down as they
+/// are decoded, so this bounds the download, not the memory.
+const MAX_ANIMATION_BYTES: usize = 12 * 1024 * 1024;
 
 /// Template the web client uses for "Create My Own".
 const CREATE_GUILD_TEMPLATE: &str = "2TffvPucqHkN";
@@ -208,10 +213,19 @@ impl Rest {
     /// Fetches a CDN image from the disk cache, or downloads and caches it.
     /// Refuses anything implausibly large for an avatar or sticker.
     pub async fn cdn_image(&self, url: &str) -> Result<Vec<u8>> {
+        self.cached_download(url, MAX_IMAGE_BYTES).await
+    }
+
+    /// An animated GIF or WebP, which may be larger than other images.
+    pub async fn cdn_animation(&self, url: &str) -> Result<Vec<u8>> {
+        self.cached_download(url, MAX_ANIMATION_BYTES).await
+    }
+
+    async fn cached_download(&self, url: &str, max_bytes: usize) -> Result<Vec<u8>> {
         if let Some(bytes) = self.on_disk(|cache, url| cache.image(url), url).await.flatten() {
             return Ok(bytes);
         }
-        let bytes = self.download(url).await?;
+        let bytes = self.download(url, max_bytes).await?;
         let stored = bytes.clone();
         self.on_disk(move |cache, url| cache.put_image(url, &stored), url).await;
         Ok(bytes)
@@ -229,32 +243,32 @@ impl Rest {
         tokio::task::spawn_blocking(move || op(&cache, &key)).await.ok()
     }
 
-    async fn download(&self, url: &str) -> Result<Vec<u8>> {
-        const MAX_BYTES: usize = 2 * 1024 * 1024;
+    async fn download(&self, url: &str, max_bytes: usize) -> Result<Vec<u8>> {
         let response = self.cdn.get(url).send().await?.error_for_status()?;
-        if response.content_length().is_some_and(|len| len as usize > MAX_BYTES) {
+        if response.content_length().is_some_and(|len| len as usize > max_bytes) {
             bail!(Local::ImageTooLarge);
         }
         let bytes = response.bytes().await?;
-        if bytes.len() > MAX_BYTES {
+        if bytes.len() > max_bytes {
             bail!(Local::ImageTooLarge);
         }
         Ok(bytes.to_vec())
     }
 
-    pub async fn messages(
-        &self,
-        channel: Snowflake,
-        before: Option<Snowflake>,
-    ) -> Result<Vec<Message>> {
-        let mut path = format!("/channels/{channel}/messages?limit={HISTORY_PAGE}");
-        if let Some(before) = before {
-            path.push_str(&format!("&before={before}"));
-        }
+    /// A page of history, oldest first. The query keeps the web client's
+    /// key order: `before`, `after`, `limit`, `around`.
+    pub async fn messages(&self, channel: Snowflake, page: Page) -> Result<Vec<Message>> {
+        let path = match page {
+            Page::Latest => format!("/channels/{channel}/messages?limit={HISTORY_PAGE}"),
+            Page::Before(id) => format!("/channels/{channel}/messages?before={id}&limit={HISTORY_PAGE}"),
+            Page::After(id) => format!("/channels/{channel}/messages?after={id}&limit={HISTORY_PAGE}"),
+            Page::Around(id) => format!("/channels/{channel}/messages?limit={HISTORY_PAGE}&around={id}"),
+        };
         let mut messages: Vec<Message> = self
             .fetch(Call::get("/channels/{id}/messages", path).major(channel).cached(Policy::MICRO))
             .await?;
-        messages.reverse();
+        // Newest first for most anchors; ids sort them whatever the order.
+        messages.sort_by_key(|m| m.id);
         Ok(messages)
     }
 
@@ -300,6 +314,7 @@ impl Rest {
             reply,
             files,
             stickers,
+            poll,
         } = *message;
         let mut body = json!({
             "mobile_network_type": "unknown",
@@ -315,6 +330,18 @@ impl Rest {
             let ids: Vec<String> = stickers.iter().map(ToString::to_string).collect();
             body["sticker_ids"] = ids.into();
         }
+        if let Some(poll) = poll {
+            // As the web client's poll form builds it; layout 1 is text
+            // answers, the only kind made here.
+            let answers: Vec<_> = poll.answers.iter().map(|text| json!({ "poll_media": { "text": text } })).collect();
+            body["poll"] = json!({
+                "question": { "text": poll.question },
+                "answers": answers,
+                "allow_multiselect": poll.multiple,
+                "duration": poll.hours,
+                "layout_type": 1,
+            });
+        }
         if let Some(reply) = reply {
             body["message_reference"] = json!({
                 "channel_id": channel.to_string(),
@@ -328,13 +355,15 @@ impl Rest {
                 });
             }
         }
-        self.fetch(
-            Call::post("/channels/{id}/messages", format!("/channels/{channel}/messages"))
-                .major(channel)
-                .json(body)
-                .captcha(captcha),
-        )
-        .await
+        let call = Call::post("/channels/{id}/messages", format!("/channels/{channel}/messages"))
+            .major(channel)
+            .json(body)
+            .captcha(captcha);
+        // The poll form sends with `location: poll_creation`, which the
+        // web client's HTTP layer turns into this header; inferred from the
+        // bundle, not seen on the wire.
+        let call = if poll.is_some() { call.context(json!({ "location": "poll_creation" })) } else { call };
+        self.fetch(call).await
     }
 
     /// The GIF picker's results, from Discord's Tenor proxy: a search, or
@@ -547,6 +576,19 @@ impl Rest {
         self.run(
             Call::delete("/channels/{id}/messages/{id}", format!("/channels/{channel}/messages/{message}"))
                 .major(channel),
+        )
+        .await
+    }
+
+    /// Replaces our vote on a poll, as the web client sends it: the answer
+    /// ids as strings, an empty list taking the vote back.
+    pub async fn vote_poll(&self, channel: Snowflake, message: Snowflake, answers: &[u32]) -> Result<()> {
+        let ids: Vec<String> = answers.iter().map(ToString::to_string).collect();
+        let path = format!("/channels/{channel}/polls/{message}/answers/@me");
+        self.run(
+            Call::put("/channels/{id}/polls/{id}/answers/@me", path)
+                .major(channel)
+                .json(json!({ "answer_ids": ids })),
         )
         .await
     }
@@ -971,6 +1013,7 @@ pub struct Outgoing<'a> {
     pub nonce: &'a str,
     pub reply: Option<ReplyTo>,
     pub files: &'a [Uploaded],
+    pub poll: Option<&'a NewPoll>,
     pub stickers: &'a [Snowflake],
 }
 

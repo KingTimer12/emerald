@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::msg::{Msg, mention_names};
+use crate::discord::Page;
 use crate::discord::model::{Message, MessageDelete, MessageUpdate, Snowflake};
 use crate::discord::rest::HISTORY_PAGE;
 
@@ -27,12 +28,25 @@ pub trait MessageView {
     fn refresh_intro(&self);
 }
 
-#[derive(Default)]
 pub struct Log {
     pub messages: VecDeque<Msg>,
     /// The log reaches the channel's first message.
     pub complete: bool,
+    /// The log reaches the channel's newest message. False after a jump
+    /// to an older one, until paging forward or back to the present.
+    pub latest: bool,
     pub loading: bool,
+}
+
+impl Default for Log {
+    fn default() -> Self {
+        Self {
+            messages: VecDeque::new(),
+            complete: false,
+            latest: true,
+            loading: false,
+        }
+    }
 }
 
 impl Log {
@@ -51,7 +65,12 @@ impl Log {
         if let Some(v) = view {
             v.insert(end, 1);
         }
-        if self.messages.len() > MESSAGES_PER_CHANNEL {
+        self.trim_front(view);
+    }
+
+    /// Drops the oldest messages past the cap.
+    fn trim_front(&mut self, view: Option<&dyn MessageView>) {
+        while self.messages.len() > MESSAGES_PER_CHANNEL {
             self.messages.pop_front();
             if let Some(view) = view {
                 view.remove(0);
@@ -118,10 +137,11 @@ impl History {
         fetch
     }
 
-    /// A message from the gateway, or the REST echo of our own send.
+    /// A message from the gateway, or the REST echo of our own send. A
+    /// log away from the present leaves it for paging forward to bring.
     pub fn receive(&mut self, message: Message, mine: bool, view: Option<&dyn MessageView>) {
         let Some(log) = self.logs.get_mut(&message.channel_id) else { return };
-        if log.position(message.id).is_some() {
+        if !log.latest || log.position(message.id).is_some() {
             return;
         }
         // Our own send coming back: confirm the pending copy in place.
@@ -163,6 +183,9 @@ impl History {
         }
         if let Some(thread) = update.thread {
             msg.thread = Some(*thread);
+        }
+        if let Some(poll) = update.poll {
+            msg.poll = Some(poll);
         }
         if let Some(v) = view {
             v.refresh(ix);
@@ -221,24 +244,44 @@ impl History {
         }
     }
 
-    /// A page of history: the newest one replaces the log, older ones go on
-    /// top up to the cap.
-    pub fn page(
-        &mut self,
-        channel: Snowflake,
-        before: Option<Snowflake>,
-        messages: Vec<Message>,
-        view: Option<&dyn MessageView>,
-    ) {
+    /// A page of history: the newest one, or one around a message, replaces
+    /// the log; older ones go on top and newer ones below, up to the cap.
+    pub fn page(&mut self, channel: Snowflake, page: Page, messages: Vec<Message>, view: Option<&dyn MessageView>) {
         let log = self.logs.entry(channel).or_default();
         log.loading = false;
-        log.complete = messages.len() < HISTORY_PAGE;
-        if before.is_none() {
-            log.messages = messages.into_iter().map(Msg::from).collect();
-            if let Some(v) = view {
-                v.reset(log.messages.len());
+        let short = messages.len() < HISTORY_PAGE;
+        match page {
+            Page::Latest | Page::Around(_) => {
+                // Around a message, a short page is a channel smaller than a
+                // page: both ends are in.
+                log.complete = short;
+                log.latest = short || page == Page::Latest;
+                log.messages = messages.into_iter().map(Msg::from).collect();
+                if let Some(v) = view {
+                    v.reset(log.messages.len());
+                }
+                return;
             }
-            return;
+            Page::After(_) => {
+                log.latest = short;
+                let known: HashSet<Snowflake> = log.messages.iter().map(|m| m.id).collect();
+                let fresh: Vec<Msg> = messages
+                    .into_iter()
+                    .filter(|m| !known.contains(&m.id))
+                    .map(Msg::from)
+                    .collect();
+                let end = log.messages.len();
+                let added = fresh.len();
+                log.messages.extend(fresh);
+                if let Some(v) = view
+                    && added > 0
+                {
+                    v.insert(end, added);
+                }
+                log.trim_front(view);
+                return;
+            }
+            Page::Before(_) => log.complete = short,
         }
         let room = MESSAGES_PER_CHANNEL.saturating_sub(log.messages.len());
         let skip = messages.len().saturating_sub(room);
@@ -267,6 +310,36 @@ impl History {
         if forbidden {
             self.forbidden.insert(channel);
             self.forget(channel, view);
+        }
+    }
+
+    /// The newest message to page forward from in a log away from the
+    /// present, marking it as loading; `None` while loading or at the
+    /// present.
+    pub fn newer(&mut self, channel: Snowflake) -> Option<Snowflake> {
+        let log = self.logs.get_mut(&channel)?;
+        if log.loading || log.latest {
+            return None;
+        }
+        let newest = log.messages.back()?.id;
+        log.loading = true;
+        Some(newest)
+    }
+
+    /// Whether the log of `channel` reaches its newest message.
+    pub fn at_latest(&self, channel: Snowflake) -> bool {
+        self.logs.get(&channel).is_none_or(|log| log.latest)
+    }
+
+    /// Marks `channel`'s log as loading a page asked for elsewhere, as a
+    /// jump does; false when one is already on its way.
+    pub fn start_loading(&mut self, channel: Snowflake) -> bool {
+        match self.logs.get_mut(&channel) {
+            Some(log) if !log.loading => {
+                log.loading = true;
+                true
+            }
+            _ => false,
         }
     }
 
@@ -450,16 +523,46 @@ mod tests {
         let mut history = History::default();
         let rows = Rows::default();
         history.open(CHANNEL, true, &rows);
-        history.page(CHANNEL, None, page(100..150), Some(&rows));
+        history.page(CHANNEL, Page::Latest, page(100..150), Some(&rows));
         assert_eq!(history.older(CHANNEL), Some(Snowflake(100)));
         // Already loading: no second request.
         assert_eq!(history.older(CHANNEL), None);
-        history.page(CHANNEL, Some(Snowflake(100)), page(80..100), Some(&rows));
+        history.page(CHANNEL, Page::Before(Snowflake(100)), page(80..100), Some(&rows));
         let log = history.get(CHANNEL).unwrap();
         assert!(log.complete);
         assert_eq!(log.messages.front().map(|m| m.id), Some(Snowflake(80)));
         assert_eq!((*rows.count.borrow(), *rows.intro.borrow()), (70, 1));
         assert_eq!(history.older(CHANNEL), None);
+    }
+
+    #[test]
+    fn jumps_detach_from_the_present_until_paged_back() {
+        let mut history = History::default();
+        let rows = Rows::default();
+        history.open(CHANNEL, true, &rows);
+        history.page(CHANNEL, Page::Around(Snowflake(500)), page(475..525), Some(&rows));
+        assert!(!history.at_latest(CHANNEL));
+        // New messages wait for paging forward to bring them in order.
+        history.receive(message(900, None), false, Some(&rows));
+        assert_eq!(history.get(CHANNEL).unwrap().messages.len(), 50);
+        assert_eq!(history.newer(CHANNEL), Some(Snowflake(524)));
+        assert_eq!(history.newer(CHANNEL), None);
+        history.page(CHANNEL, Page::After(Snowflake(524)), page(524..540), Some(&rows));
+        let log = history.get(CHANNEL).unwrap();
+        assert!(log.latest);
+        assert_eq!((log.messages.len(), *rows.count.borrow()), (65, 65));
+        history.receive(message(900, None), false, Some(&rows));
+        assert_eq!(history.get(CHANNEL).unwrap().messages.back().map(|m| m.id), Some(Snowflake(900)));
+    }
+
+    #[test]
+    fn small_channels_are_whole_around_any_message() {
+        let mut history = History::default();
+        let rows = Rows::default();
+        history.open(CHANNEL, true, &rows);
+        history.page(CHANNEL, Page::Around(Snowflake(5)), page(1..10), Some(&rows));
+        let log = history.get(CHANNEL).unwrap();
+        assert!(log.latest && log.complete);
     }
 
     #[test]

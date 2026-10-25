@@ -1,25 +1,20 @@
 //! The chat list's rows: the channel intro, messages with their replies,
 //! attachments, embeds and stickers, and day separators.
 
-use std::time::Duration;
-
 use gpui::{
-    AnyElement, Context, Div, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString, Stateful, StyledText,
-    div, img, prelude::*, px, rgb,
+    AnyElement, Context, Div, ElementId, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString,
+    Stateful, StyledText, div, img, prelude::*, px, rgb,
 };
 
-use super::super::super::{icons, markdown, theme, time};
-use super::super::state::{Log, MessageView, Msg, Picture, Reply, Sticker};
+use super::super::super::{icons, theme, time};
+use super::super::state::{Log, MessageView, Msg, Reply, Sticker};
 use super::super::{Emerald, widgets};
-use super::select::Selectable;
-use crate::discord::Command;
-use crate::discord::model::{Channel, Embed, Snowflake, message_kind};
+use super::jump::unread_divider;
+use crate::discord::model::{Channel, message_kind};
 
 /// Rows above the messages: the channel intro once the whole history is
 /// loaded, an empty spacer before that.
-const TOP: usize = 1;
-/// How long a message jumped to stays highlighted.
-const FLASH: Duration = Duration::from_secs(2);
+pub(super) const TOP: usize = 1;
 /// Messages from one author closer than this share a group, like Discord.
 const GROUP_WINDOW_SECS: i64 = 7 * 60;
 const STICKER_SIZE: f32 = 160.;
@@ -57,68 +52,6 @@ impl MessageView for ListState {
 }
 
 impl Emerald {
-    /// Scrolls to `message` in the open channel and flashes it, paging older
-    /// history in first when it is not loaded, as clicking a reply does.
-    fn jump_to(&mut self, message: Snowflake, cx: &mut Context<Self>) {
-        let Some(channel) = self.selected_channel else { return };
-        self.jump = Some((channel, message));
-        self.continue_jump(channel, cx);
-    }
-
-    /// Advances a pending jump in `channel`: reveals the message once its
-    /// page is in, asks for the next older page otherwise, and gives up at
-    /// the start of the channel or the history cap.
-    pub(in super::super) fn continue_jump(&mut self, channel: Snowflake, cx: &mut Context<Self>) {
-        let Some((target_channel, message)) = self.jump else { return };
-        if target_channel != channel {
-            return;
-        }
-        if self.selected_channel != Some(channel) {
-            self.jump = None;
-            return;
-        }
-        if let Some((ix, _)) = self.history.find(channel, message) {
-            self.jump = None;
-            // A couple of rows above it stay in view, for context.
-            self.messages.scroll_to(ListOffset {
-                item_ix: (TOP + ix).saturating_sub(2),
-                offset_in_item: px(0.),
-            });
-            self.flash = Some(message);
-            cx.spawn(async move |this, cx| {
-                cx.background_executor().timer(FLASH).await;
-                this.update(cx, |this, cx| {
-                    if this.flash == Some(message) {
-                        this.flash = None;
-                        cx.notify();
-                    }
-                })
-                .ok();
-            })
-            .detach();
-            cx.notify();
-            return;
-        }
-        let loading = self.history.get(channel).is_some_and(|log| log.loading);
-        if loading {
-            return;
-        }
-        match self.history.older(channel) {
-            Some(oldest) => {
-                self.net.post(Command::History {
-                    channel,
-                    before: Some(oldest),
-                });
-                cx.notify();
-            }
-            None => {
-                self.jump = None;
-                self.connection.set_message(t!("chat.reply_too_old"));
-                cx.notify();
-            }
-        }
-    }
-
     /// Row `ix` of the chat list: the intro on top, then the messages.
     pub(super) fn render_list_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let log = self.selected_channel.and_then(|c| self.history.get(c));
@@ -371,14 +304,16 @@ impl Emerald {
                 .into_any_element()
         };
 
-        if !new_day {
+        let divider = self.starts_unread(ix).then(unread_divider);
+        if !new_day && divider.is_none() {
             return message;
         }
         div()
             .w_full()
             .flex()
             .flex_col()
-            .child(day_separator(time::day_label(msg.secs)))
+            .when(new_day, |column| column.child(day_separator(time::day_label(msg.secs))))
+            .children(divider)
             .child(message)
             .into_any_element()
     }
@@ -445,7 +380,7 @@ impl Emerald {
                     .text_color(theme::muted())
                     // Brighter on hover, as the web client hints the link.
                     .group_hover(group, |s| s.text_color(theme::text()))
-                    .child(self.rich_text(("reply", 0usize), content, &[], false)),
+                    .child(self.rich_line(("reply", ix), content, &[])),
             )
     }
 
@@ -463,36 +398,23 @@ impl Emerald {
                     body
                 } else {
                     let edited = msg.edited.then(|| t!("chat.edited"));
-                    let selectable = Selectable {
-                        message: msg.id,
-                        view: cx.entity().downgrade(),
-                    };
-                    body.child(self.rich_text_noted(("content", ix), &msg.content, &msg.mentions, true, edited, selectable))
+                    body.child(self.rich_text_noted(("content", ix), &msg.content, &msg.mentions, edited, msg.id))
                 }
             })
-            .children(msg.images.iter().enumerate().map(|(n, picture)| self.render_picture(picture, (ix, n), cx)))
-            .children(msg.files.iter().map(|name| {
-                div()
-                    .max_w(px(432.))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .p_3()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(theme::border())
-                    .bg(rgb(theme::BASE_LOW))
-                    .child(div().text_size(px(24.)).child("📄"))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .truncate()
-                            .text_color(rgb(theme::LINK))
-                            .child(name.clone()),
-                    )
+            .children(msg.forward.as_ref().map(|forward| self.render_forward(forward, msg.id, ix, cx)))
+            .children(msg.images.iter().enumerate().map(|(n, picture)| {
+                self.render_picture(picture, ElementId::Name(format!("picture-{ix}-{n}").into()), cx)
             }))
-            .children(msg.embeds.iter().enumerate().filter_map(|(n, embed)| self.render_embed(embed, ix, n)))
+            .children(msg.files.iter().enumerate().map(|(n, file)| {
+                self.render_file(file, ElementId::Name(format!("file-{ix}-{n}").into()), cx)
+            }))
+            .children(msg.poll.as_ref().map(|poll| self.render_poll(poll, msg, ix, cx)))
+            .children(
+                msg.embeds
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(n, embed)| self.render_embed(embed, msg.id, &format!("message-{ix}"), n)),
+            )
             .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker, STICKER_SIZE)))
             .children(msg.thread.as_ref().map(|thread| self.render_thread_chip(thread, ix, cx)))
             .children(self.render_reactions(msg, ix, cx))
@@ -532,56 +454,6 @@ impl Emerald {
             .into_any_element()
     }
 
-    /// An image attachment. Spoilers stay covered, and are not even
-    /// downloaded, until clicked; alt text shows on hover and as a badge.
-    fn render_picture(&self, picture: &Picture, id: (usize, usize), cx: &mut Context<Self>) -> AnyElement {
-        let frame = div()
-            .id(SharedString::from(format!("picture-{}-{}", id.0, id.1)))
-            .relative()
-            .w(px(picture.width))
-            .h(px(picture.height))
-            .rounded_lg()
-            .overflow_hidden();
-        if picture.spoiler && !self.revealed.contains(&picture.url) {
-            let url = picture.url.clone();
-            return frame
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .bg(rgb(theme::BASE_LOWEST))
-                .child(spoiler_pill())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.revealed.insert(url.clone());
-                    cx.notify();
-                }))
-                .into_any_element();
-        }
-        let shown = match self.avatar_image(&picture.url) {
-            Some(image) => frame.child(img(image).size_full()),
-            None => frame.bg(theme::hover()),
-        };
-        match &picture.alt {
-            Some(alt) => shown
-                .tooltip(widgets::tooltip(alt.clone()))
-                .child(
-                    div()
-                        .absolute()
-                        .bottom(px(6.))
-                        .left(px(6.))
-                        .px_1()
-                        .rounded_sm()
-                        .bg(theme::scrim())
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(rgb(theme::TEXT_STRONG))
-                        .child(t!("chat.alt")),
-                )
-                .into_any_element(),
-            None => shown.into_any_element(),
-        }
-    }
-
     /// A sticker drawn `size` pixels square.
     pub(super) fn render_sticker(&self, sticker: &Sticker, size: f32) -> AnyElement {
         let url = sticker.url.as_deref();
@@ -612,71 +484,6 @@ impl Emerald {
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(sticker.name.clone()))
                         .into_any_element()
         })
-    }
-
-    /// Text parts of a rich embed in a card with its color bar; embeds with
-    /// nothing textual (bare image previews) are skipped.
-    fn render_embed(&self, embed: &Embed, message: usize, n: usize) -> Option<Div> {
-        let provider = embed.provider.as_ref().and_then(|p| p.name.clone());
-        let author = embed.author.as_ref().and_then(|a| a.name.clone());
-        let footer = embed.footer.as_ref().and_then(|f| f.text.clone());
-        if embed.title.is_none() && embed.description.is_none() && author.is_none() {
-            return None;
-        }
-        let small = |text: String, size: f32, color: u32| {
-            div().text_size(px(size)).text_color(rgb(color)).child(text)
-        };
-        let title = embed.title.clone().map(|title| {
-            // Embed URLs come from the sender; open only http(s).
-            let url = embed.url.as_deref().and_then(markdown::web_url).map(str::to_owned);
-            let link = url.is_some();
-            let element = div()
-                .text_size(px(16.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(if link { theme::LINK } else { theme::TEXT_STRONG }))
-                .child(title);
-            match url {
-                Some(url) => element
-                    .id(("embed-title", message * 16 + n))
-                    .cursor_pointer()
-                    .on_click(move |_, _, cx| cx.open_url(&url))
-                    .into_any_element(),
-                None => element.into_any_element(),
-            }
-        });
-        Some(
-            div()
-                .max_w(px(520.))
-                .flex()
-                .rounded_md()
-                .overflow_hidden()
-                .bg(rgb(theme::BASE_LOW))
-                .border_1()
-                .border_color(theme::border())
-                .child(div().w(px(4.)).flex_none().bg(rgb(embed.color.unwrap_or(theme::INTERACTIVE_MUTED))))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .gap_1()
-                        .px_3()
-                        .py_2()
-                        .children(provider.map(|p| small(p, 12., theme::TEXT_MUTED)))
-                        .children(author.map(|a| {
-                            small(a, 14., theme::TEXT_STRONG).font_weight(FontWeight::SEMIBOLD)
-                        }))
-                        .children(title)
-                        .children(embed.description.as_ref().map(|description| {
-                            div()
-                                .text_size(px(14.))
-                                .line_height(px(18.))
-                                .child(self.rich_text(("embed", message * 16 + n), description, &[], true))
-                        }))
-                        .children(footer.map(|f| small(f, 12., theme::TEXT_MUTED))),
-                ),
-        )
     }
 }
 

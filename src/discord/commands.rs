@@ -8,10 +8,10 @@ use super::rest::{self, Outgoing};
 
 pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_channel::Sender<NetEvent>) {
     let event = match cmd {
-        Command::History { channel, before } => match rest.messages(channel, before).await {
+        Command::History { channel, page } => match rest.messages(channel, page).await {
             Ok(messages) => NetEvent::History {
                 channel,
-                before,
+                page,
                 messages,
             },
             Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
@@ -64,7 +64,7 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                     break 'send NetEvent::SendFailed { channel, nonce, content, files, error };
                 }
             };
-            match with_captcha!(|captcha| rest.send_message(channel, &Outgoing { content: &content, nonce: &nonce, reply, files: &uploaded, stickers: &[] }, captcha).await) {
+            match with_captcha!(|captcha| rest.send_message(channel, &Outgoing { content: &content, nonce: &nonce, reply, files: &uploaded, ..Outgoing::default() }, captcha).await) {
                 // Usually the gateway echo arrives first; the UI drops the duplicate.
                 Ok(message) => NetEvent::MessageCreate(message),
                 Err(e) if e.is::<rest::Unauthorized>() => NetEvent::AuthExpired,
@@ -207,6 +207,18 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
         Command::DeleteMessage { channel, message } => {
             outcome(Action::Message, rest.delete_message(channel, message).await)
         }
+        Command::SendPoll { channel, nonce, poll } => outcome(
+            Action::CreatePoll,
+            with_captcha!(|captcha| rest
+                .send_message(channel, &Outgoing { nonce: &nonce, poll: Some(&poll), ..Outgoing::default() }, captcha)
+                .await)
+            .map(|_| ()),
+        ),
+        Command::VotePoll {
+            channel,
+            message,
+            answers,
+        } => outcome(Action::Message, rest.vote_poll(channel, message, &answers).await),
         Command::PinMessage { channel, message, pin } => {
             outcome(Action::Message, rest.pin_message(channel, message, pin).await)
         }
@@ -306,6 +318,21 @@ pub(super) async fn handle(rest: Arc<rest::Rest>, cmd: Command, events: async_ch
                 .ok();
             NetEvent::Avatar { url, bytes }
         }
+        Command::FetchAnimation { url, width, height } => {
+            let bytes = rest
+                .cdn_animation(&url)
+                .await
+                .map_err(|e| tracing::warn!("animation from {}: {e:#}", host(&url)))
+                .ok();
+            let frames = match bytes {
+                Some(bytes) => tokio::task::spawn_blocking(move || crate::frames::decode(&bytes, width, height))
+                    .await
+                    .ok()
+                    .flatten(),
+                None => None,
+            };
+            NetEvent::Animation { url, frames }
+        }
         Command::Ack { channel, message } => {
             if let Err(e) = rest.ack(channel, message).await {
                 tracing::debug!("ack {channel}/{message}: {e:#}");
@@ -358,6 +385,11 @@ async fn solve_captcha(error: &anyhow::Error) -> Option<rest::Solution> {
         .ok()
         .flatten()?;
     Some(rest::Solution::new(key, &challenge))
+}
+
+/// The host of `url`, for logs: paths can name channels and files.
+fn host(url: &str) -> &str {
+    url.split('/').nth(2).unwrap_or_default()
 }
 
 fn outcome(action: Action, result: anyhow::Result<()>) -> NetEvent {

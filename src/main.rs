@@ -5,6 +5,7 @@
 mod i18n;
 
 mod discord;
+mod frames;
 mod logging;
 mod paths;
 mod settings;

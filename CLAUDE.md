@@ -82,7 +82,7 @@ Done but never checked in the real app, or known to be partial:
 
 1. [x] Visual check of the thread rows in the sidebar (`w_auto` width fix), the thread
    chip under a message, and the ALT badge on images.
-2. [ ] Ask the user to try, by hand, one real upload, one spoiler image, one thread from
+2. [x] Ask the user to try, by hand, one real upload, one spoiler image, one thread from
    a message, one forum post, and join/leave. Fix whatever they report.
 3. [x] The `location` sent on joining or leaving a thread (`Thread Header`) is a guess;
    find the real value in the bundle.
@@ -103,19 +103,19 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 2 — reading messages fully
 
-11. [ ] Text spoilers `||x||`: hidden until clicked (they are only styled today).
-12. [ ] Missing markdown: block quotes (`>` and `>>>`), lists, subtext `-#`,
+11. [x] Text spoilers `||x||`: hidden until clicked (they are only styled today).
+12. [x] Missing markdown: block quotes (`>` and `>>>`), lists, subtext `-#`,
     timestamps `<t:…:R>`, channel and role mentions as pills, fenced code blocks with a
     block background, and masked links in embeds.
-13. [ ] Animated custom emoji and animated avatars (GIF/WebP frames, paused when the
+13. [x] Animated custom emoji and animated avatars (GIF/WebP frames, paused when the
     window is hidden).
-14. [ ] Video, audio and voice-message attachments (inline player, or at least a card
+14. [x] Video, audio and voice-message attachments (inline player, or at least a card
     that opens the file), and gifv embeds.
-15. [ ] Spoilers on files that are not images.
-16. [ ] Forwarded messages (`message_snapshots`) and polls (show the results, then vote).
-17. [ ] "New messages" bar, jump to the first unread, jump to the present, and click a
+15. [x] Spoilers on files that are not images.
+16. [x] Forwarded messages (`message_snapshots`) and polls (show the results, then vote).
+17. [x] "New messages" bar, jump to the first unread, jump to the present, and click a
     reply to scroll to the original (fetching around it when not loaded).
-18. [ ] Open `discord.com/channels/…` message links inside the app.
+18. [x] Open `discord.com/channels/…` message links inside the app.
 
 ### Phase 3 — getting around
 

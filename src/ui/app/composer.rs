@@ -6,7 +6,7 @@ use gpui::{AppContext, Context, Entity, SharedString};
 use super::attachments::Attachment;
 use super::chat::Replying;
 use super::state::autocomplete::{self, Completion};
-use super::state::{Drafts, Msg};
+use super::state::{Drafts, FileCard, FileKind, Msg};
 use super::{Emerald, shown};
 use super::super::text_input::TextInput;
 use crate::discord::model::{AppCommand, Snowflake};
@@ -139,11 +139,27 @@ impl Emerald {
         let nonce = rest::nonce();
         let reply = self.composer.reply.take().filter(|r| r.channel == channel);
         let files: Vec<Upload> = self.composer.attachments.drain(..).map(|a| a.upload).collect();
+        // Sending from older messages brings the newest back first, where
+        // the new message goes.
+        if !self.history.at_latest(channel) {
+            self.jump_to_present(cx);
+        }
         if let Some(me) = self.people.me() {
             let preview = reply.as_ref().map(|r| r.preview.clone());
             let view = shown(&self.messages, self.selected_channel, channel);
             let mut pending = Msg::pending(me, content.clone(), nonce.clone(), preview);
-            pending.files = files.iter().map(|f| f.name.clone().into()).collect();
+            // A card per file until the server's copy, with its real
+            // kinds and links, replaces this one.
+            pending.files = files
+                .iter()
+                .map(|f| FileCard {
+                    name: f.name.clone().into(),
+                    url: SharedString::default(),
+                    size: f.bytes.len() as u64,
+                    kind: FileKind::Other,
+                    spoiler: false,
+                })
+                .collect();
             self.history.add_pending(channel, pending, view);
         }
         self.net.post(Command::Send {

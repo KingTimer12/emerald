@@ -12,7 +12,7 @@ pub mod token;
 use std::sync::Arc;
 
 use model::Status;
-pub use protocol::{Action, Command, IndexTarget, Link, NetEvent, ReactionEvent, ReactionSource, ReplyTo, Snapshot, ThreadPage, Upload};
+pub use protocol::{Action, Command, IndexTarget, Link, NetEvent, NewPoll, Page, ReactionEvent, ReactionSource, ReplyTo, Snapshot, ThreadPage, Upload};
 use tokio::sync::{mpsc, watch};
 
 /// Runs all networking on one dedicated OS thread with a single-threaded

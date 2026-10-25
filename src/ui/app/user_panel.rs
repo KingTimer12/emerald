@@ -57,7 +57,7 @@ impl Emerald {
                     .child(widgets::avatar(
                         &name,
                         me.map_or(Snowflake(0), |me| me.id),
-                        me.and_then(|me| self.avatar_image(&me.avatar_url())),
+                        me.and_then(|me| self.profile_avatar(me.id)),
                         32.,
                         Some((status.unwrap_or("offline"), theme::BASE_LOW)),
                     ))

@@ -31,6 +31,9 @@ struct Local {
     day: i32,
     hour: i32,
     minute: i32,
+    second: i32,
+    /// Day of the week, 0 for Sunday.
+    weekday: i32,
 }
 
 fn local(secs: i64) -> Option<Local> {
@@ -52,6 +55,8 @@ fn local(secs: i64) -> Option<Local> {
         day: tm.tm_mday,
         hour: tm.tm_hour,
         minute: tm.tm_min,
+        second: tm.tm_sec,
+        weekday: tm.tm_wday,
     })
 }
 
@@ -163,6 +168,93 @@ pub fn day_label(secs: i64) -> String {
     })
 }
 
+const WEEKDAYS: [&str; 7] = [
+    "time.weekday.sunday",
+    "time.weekday.monday",
+    "time.weekday.tuesday",
+    "time.weekday.wednesday",
+    "time.weekday.thursday",
+    "time.weekday.friday",
+    "time.weekday.saturday",
+];
+
+/// A `<t:secs:style>` timestamp as the reader sees it, in their timezone:
+/// `t` "14:05", `T` "14:05:30", `d` "10/24/2026", `D` "October 24, 2026",
+/// `f` (the default) with the time, `F` with the weekday too, and `R`
+/// relative to now, "3 hours ago".
+pub fn stamp(secs: i64, style: char) -> String {
+    if style == 'R' {
+        return relative(secs - now_secs());
+    }
+    let Some(at) = local(secs) else { return String::new() };
+    let long_date = || {
+        let month = crate::i18n::text(MONTHS[(at.month - 1) as usize]);
+        t!("time.day_label", day = at.day, month = month, year = at.year)
+    };
+    match style {
+        't' => clock(at),
+        'T' => clock_seconds(at),
+        'd' => t!(
+            "time.numeric_date",
+            day = format!("{:02}", at.day),
+            month = format!("{:02}", at.month),
+            year = at.year
+        ),
+        'D' => long_date(),
+        'F' => {
+            let weekday = crate::i18n::text(WEEKDAYS[at.weekday.rem_euclid(7) as usize]);
+            let date = t!("time.long_date", weekday = weekday, date = long_date());
+            t!("time.date_time", date = date, time = clock(at))
+        }
+        _ => t!("time.date_time", date = long_date(), time = clock(at)),
+    }
+}
+
+/// "3 hours ago" or "in 2 days" for a moment `delta` seconds from now, in
+/// the largest unit that fits.
+fn relative(delta: i64) -> String {
+    let amount = duration(delta.unsigned_abs());
+    if delta > 0 {
+        t!("time.from_now", amount = amount)
+    } else {
+        t!("time.ago", amount = amount)
+    }
+}
+
+/// A span of time in the largest unit that fits: "3 hours".
+pub fn duration(secs: u64) -> String {
+    match secs {
+        0..60 => unit(secs, t!("time.unit.second_one"), |count| t!("time.unit.second", count = count)),
+        60..3_600 => unit(secs / 60, t!("time.unit.minute_one"), |count| t!("time.unit.minute", count = count)),
+        3_600..86_400 => unit(secs / 3_600, t!("time.unit.hour_one"), |count| t!("time.unit.hour", count = count)),
+        86_400..2_592_000 => unit(secs / 86_400, t!("time.unit.day_one"), |count| t!("time.unit.day", count = count)),
+        2_592_000..31_536_000 => {
+            unit(secs / 2_592_000, t!("time.unit.month_one"), |count| t!("time.unit.month", count = count))
+        }
+        _ => unit(secs / 31_536_000, t!("time.unit.year_one"), |count| t!("time.unit.year", count = count)),
+    }
+}
+
+/// `one` for a count of one, else `many` of it.
+fn unit(count: u64, one: &str, many: impl Fn(u64) -> String) -> String {
+    if count == 1 { one.to_owned() } else { many(count) }
+}
+
+/// The time of day with seconds: "14:05:30" or "2:05:30 PM".
+fn clock_seconds(at: Local) -> String {
+    let (minute, second) = (format!("{:02}", at.minute), format!("{:02}", at.second));
+    if twelve_hour() {
+        let hour = match at.hour % 12 {
+            0 => 12,
+            h => h,
+        };
+        let ampm = if at.hour < 12 { t!("time.am") } else { t!("time.pm") };
+        t!("time.clock_12_seconds", hour = hour, minute = minute, second = second, ampm = ampm)
+    } else {
+        t!("time.clock_24_seconds", hour = format!("{:02}", at.hour), minute = minute, second = second)
+    }
+}
+
 /// "12 de jul. de 2017", as "Membro desde" shows it.
 pub fn short_date(secs: i64) -> String {
     local(secs).map_or_else(String::new, |at| {
@@ -180,5 +272,13 @@ mod tests {
         assert_eq!(iso_utc(0), "1970-01-01T00:00:00+00:00");
         assert_eq!(iso_utc(1_735_826_700), "2025-01-02T14:05:00+00:00");
         assert_eq!(iso_utc(951_782_400), "2000-02-29T00:00:00+00:00");
+    }
+
+    #[test]
+    fn relative_times_pick_the_largest_unit() {
+        assert_eq!(relative(-5), "5 seconds ago");
+        assert_eq!(relative(-3_600), "1 hour ago");
+        assert_eq!(relative(2 * 86_400 + 10), "in 2 days");
+        assert_eq!(relative(-400 * 86_400), "1 year ago");
     }
 }

@@ -21,7 +21,7 @@ pub use expiry::TtlCache;
 pub use history::{History, Log, MessageView};
 pub use member_search::MemberSearch;
 pub use members::{MemberList, MemberLists};
-pub use msg::{Msg, Picture, Reacted, Reply, Sticker};
+pub use msg::{FileCard, FileKind, Forward, Msg, Picture, Reacted, Reply, Sticker, sized_picture};
 pub use people::People;
 pub use reads::ReadStates;
 pub use spaces::{ChannelRow, DMS, Row, Space, Spaces};

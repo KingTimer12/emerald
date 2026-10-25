@@ -67,7 +67,9 @@ pub fn avatar(
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(theme::TEXT_STRONG))
         .map(|avatar| match image {
-            Some(image) => avatar.child(img(image).size_full().rounded_full()),
+            // The id keeps an animated avatar's frame between redraws;
+            // still ones cost nothing more.
+            Some(image) => avatar.child(img(image).id(("avatar", id.0)).size_full().rounded_full()),
             None => avatar.child(initial),
         })
         .when_some(status, |avatar, (status, ring)| {

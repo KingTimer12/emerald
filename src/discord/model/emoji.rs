@@ -51,6 +51,12 @@ pub fn custom_url(id: Snowflake) -> String {
     format!("https://cdn.discordapp.com/emojis/{id}.png?size=48")
 }
 
+/// An animated custom emoji with all its frames. The web client asks for
+/// WebP; GIF is the animated format gpui decodes frame by frame.
+pub fn animated_custom_url(id: Snowflake) -> String {
+    format!("https://cdn.discordapp.com/emojis/{id}.gif?size=48")
+}
+
 /// An emoji uploaded to a guild.
 #[derive(Clone, Debug, Deserialize)]
 pub struct GuildEmoji {

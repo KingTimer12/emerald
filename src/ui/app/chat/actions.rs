@@ -144,6 +144,7 @@ impl Emerald {
             mention_roles: None,
             mention_everyone: None,
             thread: None,
+            poll: None,
         };
         let view = shown(&self.messages, self.selected_channel, channel);
         self.history.edit(update, view);
@@ -221,7 +222,7 @@ impl Emerald {
     /// edit box, then the reply.
     pub(in super::super) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_reaction_picker(window, cx) || self.dismiss_suggestions(cx) {
-        } else if self.message_menu.take().is_some() {
+        } else if self.message_menu.take().is_some() || std::mem::take(&mut self.plus_menu) {
             cx.notify();
         } else if self.overlay.is_some() {
             self.close_overlay(window, cx);
@@ -457,7 +458,7 @@ impl Emerald {
                                 .child(div().text_color(rgb(color)).font_weight(FontWeight::MEDIUM).child(author))
                                 .child(div().text_xs().text_color(theme::muted()).child(msg.time.clone())),
                         )
-                        .child(self.rich_text("delete-preview", &msg.content, &msg.mentions, false)),
+                        .child(self.rich_text("delete-preview", &msg.content, &msg.mentions)),
                 )
         });
         div()

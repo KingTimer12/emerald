@@ -133,7 +133,7 @@ impl Emerald {
             .child(widgets::avatar(
                 &card.name,
                 user,
-                self.user_avatar(user),
+                self.profile_avatar(user),
                 size,
                 Some((self.people.presence(user), theme::BASE_LOWEST)),
             ))

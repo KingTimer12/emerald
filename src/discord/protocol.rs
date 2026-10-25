@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use super::model::{
     Channel, ChannelKind, CommandIndex, Emoji, Gif, Guild, GuildEmojisUpdate, GuildStickersUpdate, StickerPack, Member, MemberListUpdate, MemberUpdate, MembersChunk, Message,
-    MessageAck, MessageDelete, MessageUpdate, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
+    MessageAck, MessageDelete, MessageUpdate, PollVote, Profile, ReactionAddMany, ReactionClear, ReactionUpdate, Relationship,
     RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry, ThreadMembersUpdate, TypingStart,
     User,
 };
@@ -25,6 +25,8 @@ pub enum Action {
     ThreadMembership,
     /// Running a slash command.
     RunCommand,
+    /// Posting a poll.
+    CreatePoll,
 }
 
 /// Whose slash commands to list, as the web client asks for them.
@@ -127,6 +129,12 @@ pub enum NetEvent {
         url: String,
         bytes: Option<Vec<u8>>,
     },
+    /// The frames of an animated image asked for with `FetchAnimation`;
+    /// `None` if it could not be downloaded or decoded.
+    Animation {
+        url: String,
+        frames: Option<Vec<image::Frame>>,
+    },
     ActionDone(Action),
     ActionFailed {
         action: Action,
@@ -153,6 +161,11 @@ pub enum NetEvent {
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
     Reaction(ReactionEvent),
+    /// Someone voted on a poll (`add`) or took a vote back.
+    PollVote {
+        vote: PollVote,
+        add: bool,
+    },
     /// Our reaction did not go through; the UI undoes it.
     ReactionFailed {
         channel: Snowflake,
@@ -183,7 +196,7 @@ pub enum NetEvent {
     },
     History {
         channel: Snowflake,
-        before: Option<Snowflake>,
+        page: Page,
         messages: Vec<Message>,
     },
     HistoryFailed {
@@ -240,11 +253,34 @@ pub struct ReplyTo {
     pub mention: bool,
 }
 
+/// A poll to post, as the creation form fills it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NewPoll {
+    pub question: String,
+    pub answers: Vec<String>,
+    pub multiple: bool,
+    /// How long it takes votes, in hours.
+    pub hours: u32,
+}
+
+/// Which page of a channel's history to load.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Page {
+    /// The newest messages.
+    Latest,
+    /// Older than this message.
+    Before(Snowflake),
+    /// Newer than this message.
+    After(Snowflake),
+    /// This message with those around it, to jump to it.
+    Around(Snowflake),
+}
+
 /// Requests flowing from the UI to the network thread.
 pub enum Command {
     History {
         channel: Snowflake,
-        before: Option<Snowflake>,
+        page: Page,
     },
     /// First messages of these posts of `forum`.
     ForumPosts {
@@ -330,6 +366,19 @@ pub enum Command {
         channel: Snowflake,
         message: Snowflake,
     },
+    /// Posts a poll; the gateway brings the message.
+    SendPoll {
+        channel: Snowflake,
+        nonce: String,
+        poll: NewPoll,
+    },
+    /// Our vote on a poll, all of it: the answers picked, or none to take
+    /// it back. The gateway echoes each vote that changed.
+    VotePoll {
+        channel: Snowflake,
+        message: Snowflake,
+        answers: Vec<u32>,
+    },
     /// Pins or unpins; the gateway echoes it as MESSAGE_UPDATE.
     PinMessage {
         channel: Snowflake,
@@ -414,6 +463,13 @@ pub enum Command {
     /// Downloads an avatar or sticker image.
     FetchAvatar {
         url: String,
+    },
+    /// Downloads a GIF or WebP and decodes its frames, scaled to fit
+    /// `width` by `height` pixels.
+    FetchAnimation {
+        url: String,
+        width: u32,
+        height: u32,
     },
     LogOut,
 }

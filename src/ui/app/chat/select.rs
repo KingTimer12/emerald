@@ -15,6 +15,8 @@ use crate::discord::model::Snowflake;
 /// The selected part of one message's text.
 pub struct TextSelection {
     message: Snowflake,
+    /// Which of the message's blocks of text holds it.
+    part: usize,
     /// The text as drawn, mentions resolved: what gets copied.
     text: SharedString,
     anchor: usize,
@@ -24,11 +26,12 @@ pub struct TextSelection {
 }
 
 impl TextSelection {
-    /// The selected byte range of `message`'s text, if that is the message
-    /// and its text is still `text`.
-    pub fn range_in(&self, message: Snowflake, text: &str) -> Option<Range<usize>> {
+    /// The selected byte range of block `part` of `message`, if that is
+    /// where it is and the block's text is still `text`.
+    pub fn range_in(&self, message: Snowflake, part: usize, text: &str) -> Option<Range<usize>> {
         let range = self.anchor.min(self.head)..self.anchor.max(self.head);
-        (self.message == message && self.text == text && !range.is_empty()).then_some(range)
+        let here = self.message == message && self.part == part;
+        (here && self.text == text && !range.is_empty()).then_some(range)
     }
 
     fn selected(&self) -> Option<&str> {
@@ -40,6 +43,8 @@ impl TextSelection {
 /// What a message's text needs to be selectable.
 pub struct Selectable {
     pub message: Snowflake,
+    /// The block of text, counted from the top of the message.
+    pub part: usize,
     pub view: WeakEntity<Emerald>,
 }
 
@@ -65,7 +70,7 @@ impl Emerald {
 /// over it into a selection. Painted before the text, so links keep their
 /// pointer cursor on top of the text cursor.
 pub(super) fn selection_layer(selectable: Selectable, text: SharedString, layout: TextLayout) -> AnyElement {
-    let Selectable { message, view } = selectable;
+    let Selectable { message, part, view } = selectable;
     canvas(
         |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
         move |_, hitbox, window, _| {
@@ -92,13 +97,14 @@ pub(super) fn selection_layer(selectable: Selectable, text: SharedString, layout
                             };
                             this.text_selection = Some(TextSelection {
                                 message,
+                                part,
                                 text: text_down.clone(),
                                 anchor,
                                 head,
                                 dragging: event.click_count == 1,
                             });
                             cx.notify();
-                        } else if this.text_selection.as_ref().is_some_and(|s| s.message == message) {
+                        } else if this.text_selection.as_ref().is_some_and(|s| s.message == message && s.part == part) {
                             // A press anywhere else drops this selection.
                             this.text_selection = None;
                             cx.notify();
@@ -117,7 +123,7 @@ pub(super) fn selection_layer(selectable: Selectable, text: SharedString, layout
                         let Some(selection) = this
                             .text_selection
                             .as_mut()
-                            .filter(|s| s.message == message && s.dragging)
+                            .filter(|s| s.message == message && s.part == part && s.dragging)
                         else {
                             return;
                         };
@@ -142,7 +148,7 @@ pub(super) fn selection_layer(selectable: Selectable, text: SharedString, layout
                 }
                 view_up
                     .update(cx, |this, _| {
-                        if let Some(selection) = this.text_selection.as_mut().filter(|s| s.message == message) {
+                        if let Some(selection) = this.text_selection.as_mut().filter(|s| s.message == message && s.part == part) {
                             selection.dragging = false;
                         }
                     })

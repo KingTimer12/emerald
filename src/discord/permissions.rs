@@ -18,6 +18,7 @@ pub const USE_EXTERNAL_STICKERS: u64 = 1 << 37;
 pub const SEND_MESSAGES_IN_THREADS: u64 = 1 << 38;
 /// Split off MANAGE_MESSAGES in 2025: pinning without moderating.
 pub const PIN_MESSAGES: u64 = 1 << 51;
+pub const SEND_POLLS: u64 = 1 << 49;
 
 /// A thread's permissions from its parent's, as the web client derives
 /// them: private threads are closed to those who neither joined nor

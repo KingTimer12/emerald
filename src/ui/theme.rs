@@ -124,3 +124,14 @@ pub fn reaction_mine() -> Rgba {
 pub fn code_bg() -> Rgba {
     rgba(0x1e1f2299)
 }
+
+/// A text spoiler still hidden: `--spoiler-hidden-background`, opaque so
+/// the text under it cannot be read.
+pub const SPOILER_HIDDEN: u32 = 0x1e1f22;
+
+/// Code blocks: the system's monospace face, as the web client falls back
+/// to when its own font is missing.
+#[cfg(target_os = "macos")]
+pub const MONO: &str = "Menlo";
+#[cfg(not(target_os = "macos"))]
+pub const MONO: &str = "Consolas";

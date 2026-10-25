@@ -48,7 +48,7 @@ impl ProfileMember {
 
 /// Unix seconds of an ISO 8601 timestamp such as `2021-05-01T12:30:00.123000+00:00`.
 /// Offsets are ignored: the callers show a calendar day.
-fn iso_secs(text: &str) -> Option<i64> {
+pub fn iso_secs(text: &str) -> Option<i64> {
     let (date, time) = text.split_once('T')?;
     let mut date = date.split('-').map(|n| n.parse::<i64>().ok());
     let (year, month, day) = (date.next()??, date.next()??, date.next()??);

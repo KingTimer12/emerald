@@ -72,17 +72,32 @@ CPU near zero when idle.
   context menu or the + after the chips: search, "Frequently Used" (whose first three also
   sit on the toolbar), the server's custom emoji (every server's with Nitro) and the Unicode
   categories.
-- **Discord markdown**: bold, italics, underline, strikethrough, code, headings, mentions,
-  clickable links, custom emoji drawn inline (large when a message is only emoji). Masked
-  links always show their real host.
+- **Discord markdown**: bold, italics, underline, strikethrough, inline code and fenced
+  code blocks, headings, subtext (`-#`), lists, block quotes (`>` and `>>>`), spoilers
+  hidden until clicked, timestamps (`<t:…>`, every style, in your timezone), mentions as
+  pills (roles in their color; a click on a user opens the profile, on a channel opens
+  it), clickable links, custom emoji drawn inline (large when a message is only emoji,
+  animated ones moving while the window has focus). Masked links always show their real
+  host. `discord.com/channels/…` links show as a pill and open in the app, jumping to the
+  message.
+- **Media and embeds**: video attachments as their still with a play button, audio files
+  and voice messages as cards (they open in the browser: there is no player yet), file
+  spoilers covered like image ones; embeds with fields, thumbnails and images, image
+  links and GIFs, GIF attachments included (their frames decoded off the UI thread, GIF
+  and animated WebP alike, playing while focused); forwarded messages with where they
+  came from; polls with live results and voting, and a "Create Poll" form from the + menu.
+- **Moving through history**: a "new messages" divider and bar (jump to the first unread,
+  or mark as read), clicking a reply or a message link loads the page around the original
+  and flashes it, and a bar leads back to the present when reading older messages.
+- **Animated avatars** on profiles and the user panel, while the window has focus.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
 - **Unread state** synced with other devices, with read receipts batched; mention counts
   on channels, DMs and servers, and messages that ping you highlighted.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
-Not there yet: voice, animated
-custom emoji (shown still).
+Not there yet: voice; playing video and audio inside the app; animated avatars in the
+chat list (still there, as Discord shows them until hovered).
 
 ## Requirements
 

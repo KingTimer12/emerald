@@ -73,6 +73,7 @@ enum Overlay {
     EditAttachment { ix: usize, spoiler: bool },
     CreateThread(chat::NewThread),
     CreatePost(chat::NewPost),
+    CreatePoll(chat::NewPoll),
 }
 
 /// Result line under a form, green on success and red on failure.
@@ -179,6 +180,19 @@ pub struct Emerald {
     forums: HashMap<Snowflake, chat::Forum>,
     /// Spoiler images the user clicked open, by URL.
     revealed: HashSet<SharedString>,
+    /// The menu of the + beside the message box is open.
+    plus_menu: bool,
+    /// Answers picked on a poll before voting: (message, answers).
+    poll_choice: Option<(Snowflake, Vec<u32>)>,
+    /// Polls whose results the user asked to see before voting.
+    poll_results: HashSet<Snowflake>,
+    /// Text spoilers the user clicked open.
+    revealed_spoilers: HashSet<chat::SpoilerKey>,
+    /// The window has focus; animated emoji and avatars only play then,
+    /// as in the web client, so the app idles when in the background.
+    window_active: bool,
+    /// This view, for handlers drawn deep in the text to call back.
+    weak: gpui::WeakEntity<Emerald>,
     /// The reaction picker's search box, and its grid's scroll position.
     emoji_query: Entity<TextInput>,
     emoji_scroll: UniformListScrollHandle,
@@ -191,8 +205,13 @@ pub struct Emerald {
     select_new_guild: bool,
     /// The open channel's messages, mirrored from `history`.
     messages: ListState,
-    /// A reply's original being paged in to jump to: (channel, message).
-    jump: Option<(Snowflake, Snowflake)>,
+    /// A message being loaded to jump to.
+    jump: Option<chat::Jump>,
+    /// The open channel had unread messages when opened: (channel, last
+    /// read message), for the "new messages" divider and bar.
+    unread_marker: Option<(Snowflake, Snowflake)>,
+    /// The "new messages" divider was drawn, so its bar is not needed.
+    divider_seen: bool,
     /// The message just jumped to, highlighted for a moment.
     flash: Option<Snowflake>,
     /// Text selected by dragging over a message.
@@ -255,6 +274,10 @@ impl Emerald {
                 this.send_friend_request(event.0.clone(), cx)
             }),
             cx.observe(&dm_search, |_, _, cx| cx.notify()),
+            cx.observe_window_activation(window, |this, window, cx| {
+                this.window_active = window.is_window_active();
+                cx.notify();
+            }),
             cx.subscribe_in(&dm_search, window, |this, _, _: &Submitted, window, cx| {
                 this.open_first_dm(window, cx)
             }),
@@ -263,13 +286,18 @@ impl Emerald {
         let messages = ListState::new(0, ListAlignment::Bottom, px(400.));
         let weak = cx.entity().downgrade();
         messages.set_scroll_handler(move |event, _, cx| {
-            if event.visible_range.start == 0 && event.count > 0 {
-                let weak = weak.clone();
-                // The list state is borrowed while this handler runs.
-                cx.defer(move |cx| {
-                    weak.update(cx, |this, cx| this.load_older(cx)).ok();
-                });
-            }
+            let (range, count) = (event.visible_range.clone(), event.count);
+            let weak = weak.clone();
+            // The list state is borrowed while this handler runs.
+            cx.defer(move |cx| {
+                weak.update(cx, |this, cx| {
+                    if range.start == 0 && count > 0 {
+                        this.load_older(cx);
+                    }
+                    this.on_list_scrolled(range.end, count);
+                })
+                .ok();
+            });
         });
 
         Self {
@@ -307,6 +335,12 @@ impl Emerald {
             message_menu: None,
             reaction_picker: None,
             revealed: HashSet::new(),
+            revealed_spoilers: HashSet::new(),
+            plus_menu: false,
+            poll_choice: None,
+            poll_results: HashSet::new(),
+            window_active: window.is_window_active(),
+            weak: cx.entity().downgrade(),
             forums: HashMap::new(),
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
@@ -316,6 +350,8 @@ impl Emerald {
             select_new_guild: false,
             messages,
             jump: None,
+            unread_marker: None,
+            divider_seen: false,
             flash: None,
             text_selection: None,
             members: MemberLists::default(),
@@ -340,6 +376,19 @@ impl Emerald {
     /// Avatar of a known user, or the default one their id maps to.
     fn user_avatar(&self, id: Snowflake) -> Option<Arc<Image>> {
         self.avatar_image(&self.people.avatar_url(id))
+    }
+
+    /// A user's avatar on their profile: moving when it is animated and
+    /// the window has focus, as the web client plays them, else still.
+    fn profile_avatar(&self, id: Snowflake) -> Option<Arc<Image>> {
+        let animated = self
+            .people
+            .user(id)
+            .filter(|_| self.window_active)
+            .and_then(|user| user.animated_avatar_url());
+        animated
+            .and_then(|url| self.avatar_image(&url))
+            .or_else(|| self.user_avatar(id))
     }
 
     /// Sends a REST action unless the same kind is already in flight.
@@ -392,6 +441,11 @@ impl Focusable for Emerald {
 
 impl Render for Emerald {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Read here, not only on change: the window may start out focused.
+        self.window_active = window.is_window_active();
+        for image in self.images.take_retired() {
+            cx.drop_image(image, Some(window));
+        }
         let wide = f32::from(window.viewport_size().width) >= PROFILE_MIN_WINDOW;
         // Visual-refresh frame: server list on the app background, then one
         // bordered panel with a rounded top-left corner holding sidebar and
@@ -408,6 +462,7 @@ impl Render for Emerald {
             Some(Overlay::EditAttachment { ix, spoiler }) => self.render_attachment_modal(*ix, *spoiler, cx),
             Some(Overlay::CreateThread(modal)) => Some(self.render_thread_modal(modal, cx)),
             Some(Overlay::CreatePost(modal)) => Some(self.render_post_modal(modal, cx)),
+            Some(Overlay::CreatePoll(modal)) => Some(self.render_poll_modal(modal, cx)),
             None => None,
         };
         let menu = self.render_message_menu(cx);

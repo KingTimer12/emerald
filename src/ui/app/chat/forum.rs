@@ -213,7 +213,7 @@ impl Emerald {
                         .min_w(px(0.))
                         .truncate()
                         .text_color(rgb(theme::TEXT_DEFAULT))
-                        .child(self.rich_text(("post-preview", ix), &content, &msg.mentions, false)),
+                        .child(self.rich_text(("post-preview", ix), &content, &msg.mentions)),
                 )
         });
         let thumbnail = first.and_then(|msg| msg.images.first()).filter(|p| !p.spoiler).map(|picture| {

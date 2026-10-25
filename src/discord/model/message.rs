@@ -1,12 +1,21 @@
 use serde::{Deserialize, Deserializer};
 
-use super::{Member, Reaction, Snowflake, User};
+use super::{Emoji, Member, Reaction, Snowflake, User};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Attachment {
     pub filename: String,
+    /// The file on the CDN, to open in the browser.
+    #[serde(default)]
+    pub url: String,
     #[serde(default)]
     pub proxy_url: Option<String>,
+    /// In bytes.
+    #[serde(default)]
+    pub size: u64,
+    /// Voice messages and other audio: their length.
+    #[serde(default)]
+    pub duration_secs: Option<f64>,
     #[serde(default)]
     pub content_type: Option<String>,
     #[serde(default)]
@@ -34,15 +43,43 @@ pub struct EmbedAuthor {
     pub name: Option<String>,
 }
 
+/// An image, thumbnail or video of an embed.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct EmbedMedia {
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Through Discord's media proxy, which can resize it.
+    #[serde(default)]
+    pub proxy_url: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+}
+
+/// A name and value pair in a rich embed; `inline` ones sit side by side.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct EmbedField {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub inline: bool,
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct EmbedFooter {
     #[serde(default)]
     pub text: Option<String>,
 }
 
-/// Rich embed, reduced to its text parts.
+/// A rich embed or link preview, with the parts this client draws.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Embed {
+    /// `rich`, `image`, `video`, `gifv`, `link`, `article` and others.
+    #[serde(rename = "type", default)]
+    pub kind: Option<String>,
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
@@ -57,6 +94,117 @@ pub struct Embed {
     pub footer: Option<EmbedFooter>,
     #[serde(default)]
     pub provider: Option<EmbedAuthor>,
+    #[serde(default)]
+    pub fields: Vec<EmbedField>,
+    #[serde(default)]
+    pub image: Option<EmbedMedia>,
+    #[serde(default)]
+    pub thumbnail: Option<EmbedMedia>,
+    #[serde(default)]
+    pub video: Option<EmbedMedia>,
+}
+
+/// What a message points at: the message it replies to, or the one it
+/// forwards.
+#[derive(Clone, Debug, Deserialize)]
+pub struct MessageReference {
+    /// 0 a reply, 1 a forward.
+    #[serde(rename = "type", default)]
+    pub kind: u8,
+    #[serde(default)]
+    pub message_id: Option<Snowflake>,
+    #[serde(default)]
+    pub channel_id: Option<Snowflake>,
+    #[serde(default)]
+    pub guild_id: Option<Snowflake>,
+}
+
+pub const REFERENCE_FORWARD: u8 = 1;
+
+/// A copy of a forwarded message, as it was when forwarded.
+#[derive(Clone, Debug, Deserialize)]
+pub struct MessageSnapshot {
+    pub message: SnapshotMessage,
+}
+
+/// The parts of a message a forward carries.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct SnapshotMessage {
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub timestamp: Option<String>,
+    #[serde(default)]
+    pub mentions: Vec<User>,
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
+    #[serde(default)]
+    pub embeds: Vec<Embed>,
+    #[serde(default)]
+    pub sticker_items: Vec<StickerItem>,
+}
+
+/// The question or an answer of a poll.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct PollMedia {
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub emoji: Option<Emoji>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PollAnswer {
+    pub answer_id: u32,
+    #[serde(default)]
+    pub poll_media: PollMedia,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PollAnswerCount {
+    pub id: u32,
+    #[serde(default)]
+    pub count: u32,
+    #[serde(default)]
+    pub me_voted: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct PollResults {
+    /// The poll ended and the counts are final.
+    #[serde(default)]
+    pub is_finalized: bool,
+    #[serde(default)]
+    pub answer_counts: Vec<PollAnswerCount>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Poll {
+    #[serde(default)]
+    pub question: PollMedia,
+    #[serde(default)]
+    pub answers: Vec<PollAnswer>,
+    /// When voting closes, ISO 8601.
+    #[serde(default)]
+    pub expiry: Option<String>,
+    #[serde(default)]
+    pub allow_multiselect: bool,
+    #[serde(default)]
+    pub results: Option<PollResults>,
+}
+
+/// MESSAGE_POLL_VOTE_ADD and MESSAGE_POLL_VOTE_REMOVE.
+#[derive(Debug, Deserialize)]
+pub struct PollVote {
+    pub user_id: Snowflake,
+    pub channel_id: Snowflake,
+    pub message_id: Snowflake,
+    pub answer_id: u32,
+}
+
+pub mod message_flags {
+    /// A voice message: one audio attachment with a waveform.
+    pub const IS_VOICE_MESSAGE: u64 = 1 << 13;
 }
 
 pub mod message_kind {
@@ -221,6 +369,16 @@ pub struct Message {
     pub sticker_items: Vec<StickerItem>,
     #[serde(default)]
     pub reactions: Vec<Reaction>,
+    /// `message_flags`.
+    #[serde(default)]
+    pub flags: u64,
+    #[serde(default)]
+    pub message_reference: Option<MessageReference>,
+    /// The forwarded message, on a forward.
+    #[serde(default)]
+    pub message_snapshots: Vec<MessageSnapshot>,
+    #[serde(default)]
+    pub poll: Option<Poll>,
     /// Echo of the nonce the sender chose; matches our pending copy.
     #[serde(default, deserialize_with = "lenient_nonce")]
     pub nonce: Option<String>,
@@ -258,6 +416,9 @@ pub struct MessageUpdate {
     /// Set when a thread was started from the message.
     #[serde(default)]
     pub thread: Option<Box<super::Channel>>,
+    /// A poll that ended comes back with its final results.
+    #[serde(default)]
+    pub poll: Option<Poll>,
 }
 
 #[derive(Debug, Deserialize)]

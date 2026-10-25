@@ -22,7 +22,7 @@ use super::{Link, NetEvent, ReactionEvent, Snapshot};
 use super::identity::{self, Identity};
 use super::model::{
     Channel, Guild, MemberListUpdate, MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate,
-    Presence, ReactionAddMany, ReactionClear, ReactionUpdate, Ready, ReadySupplemental, Relationship,
+    PollVote, Presence, ReactionAddMany, ReactionClear, ReactionUpdate, Ready, ReadySupplemental, Relationship,
     RelationshipRemove, RoleDelete, RoleUpdate, Snowflake, Status, ThreadListSync, ThreadMemberEntry,
     ThreadMembersUpdate, TypingStart, User, GuildEmojisUpdate, GuildStickersUpdate,
 };
@@ -431,6 +431,13 @@ fn dispatch(
         "MESSAGE_REACTION_ADD" | "MESSAGE_REACTION_REMOVE" => match parse::<ReactionUpdate>(kind, data) {
             Some(update) if kind == "MESSAGE_REACTION_ADD" => NetEvent::Reaction(ReactionEvent::Add(update)),
             Some(update) => NetEvent::Reaction(ReactionEvent::Remove(update)),
+            None => return,
+        },
+        "MESSAGE_POLL_VOTE_ADD" | "MESSAGE_POLL_VOTE_REMOVE" => match parse::<PollVote>(kind, data) {
+            Some(vote) => NetEvent::PollVote {
+                vote,
+                add: kind == "MESSAGE_POLL_VOTE_ADD",
+            },
             None => return,
         },
         "MESSAGE_REACTION_ADD_MANY" => match parse::<ReactionAddMany>(kind, data) {

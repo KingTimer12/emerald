@@ -43,6 +43,7 @@ impl Emerald {
                 }
             }
             NetEvent::Avatar { url, bytes } => self.images.store(url, bytes),
+            NetEvent::Animation { url, frames } => self.images.store_animation(url, frames),
             NetEvent::MembersChunk(chunk) => self.on_members(chunk, cx),
             NetEvent::MemberList(update) => {
                 self.members.apply(update);
@@ -126,6 +127,13 @@ impl Emerald {
                 self.history.edit(update, view);
             }
             NetEvent::Reaction(event) => self.on_reaction(event),
+            NetEvent::PollVote { vote, add } => {
+                let mine = vote.user_id == self.people.my_id();
+                let view = shown(&self.messages, self.selected_channel, vote.channel_id);
+                self.history.update(vote.channel_id, vote.message_id, view, |msg| {
+                    msg.poll_vote(vote.answer_id, mine, add)
+                });
+            }
             NetEvent::ReactionFailed {
                 channel,
                 message,
@@ -154,13 +162,9 @@ impl Emerald {
                 let view = shown(&self.messages, self.selected_channel, delete.channel_id);
                 self.history.delete(delete, view);
             }
-            NetEvent::History {
-                channel,
-                before,
-                messages,
-            } => {
+            NetEvent::History { channel, page, messages } => {
                 let view = shown(&self.messages, self.selected_channel, channel);
-                self.history.page(channel, before, messages, view);
+                self.history.page(channel, page, messages, view);
                 self.request_authors(channel);
                 self.continue_jump(channel, cx);
             }
@@ -171,7 +175,7 @@ impl Emerald {
             } => {
                 let view = shown(&self.messages, self.selected_channel, channel);
                 self.history.page_failed(channel, forbidden, view);
-                if self.jump.is_some_and(|(c, _)| c == channel) {
+                if self.jump.is_some_and(|jump| jump.channel == channel) {
                     self.jump = None;
                 }
                 self.connection.set_message(t!("common.error", error = error));
@@ -405,6 +409,17 @@ impl Emerald {
                     self.creating_thread_failed(error);
                 }
             }
+            Action::CreatePoll => match result {
+                Ok(()) => {
+                    if matches!(self.overlay, Some(Overlay::CreatePoll(_))) {
+                        self.close_overlay(window, cx);
+                    }
+                }
+                Err(error) => match &mut self.overlay {
+                    Some(Overlay::CreatePoll(modal)) => modal.error = Some(error.into()),
+                    _ => self.composer.error = Some(error.into()),
+                },
+            },
             Action::ThreadMembership | Action::RunCommand => {
                 if let Err(error) = result {
                     self.composer.error = Some(error.into());

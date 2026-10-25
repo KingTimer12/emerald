@@ -6,8 +6,9 @@ use std::time::{Duration, Instant};
 use gpui::{App, Context, Focusable, Window};
 
 use super::Emerald;
+use super::chat::JumpTarget;
 use super::state::Row;
-use crate::discord::Command;
+use crate::discord::{Command, Page};
 use crate::discord::model::{Channel, Snowflake};
 use crate::discord::permissions;
 
@@ -42,6 +43,12 @@ impl Emerald {
     }
 
     pub(super) fn select_channel(&mut self, id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_channel != Some(id) {
+            // The divider marks what was unread when the channel opened,
+            // and stays while it is open, as on Discord.
+            self.unread_marker = self.reads.last_read(id).filter(|_| self.reads.is_unread(id)).map(|read| (id, read));
+            self.divider_seen = false;
+        }
         self.friends_open = false;
         self.selected_channel = Some(id);
         self.spaces.remember_channel(id);
@@ -74,10 +81,8 @@ impl Emerald {
             return;
         }
         if self.history.open(id, readable, &self.messages) {
-            self.net.post(Command::History {
-                channel: id,
-                before: None,
-            });
+            let page = self.first_page(id);
+            self.net.post(Command::History { channel: id, page });
         }
         if let Some(last) = self.newest_message(id) {
             self.ack(id, last, cx);
@@ -85,6 +90,53 @@ impl Emerald {
         self.sync_member_list(cx);
         window.focus(&self.composer.input.focus_handle(cx));
         cx.notify();
+    }
+
+    /// Opens a channel named by a mention or a `discord.com/channels/…`
+    /// link, switching space when it lives in another, and jumps to
+    /// `message` in it. A channel this client cannot see, in a server the
+    /// user is not in or hidden from them, stays closed with a note.
+    pub(super) fn open_channel_link(
+        &mut self,
+        guild: Option<Snowflake>,
+        channel: Snowflake,
+        message: Option<Snowflake>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let in_dms = self.spaces.dms().channels().iter().any(|c| c.id == channel);
+        let space = match self.spaces.guild_id_of(channel) {
+            Some(guild) => self.spaces.index(guild),
+            None if in_dms => Some(0),
+            None => None,
+        };
+        let visible = space.is_some_and(|ix| {
+            let space = self.spaces.iter().nth(ix);
+            space.is_some_and(|s| s.is_dms() || s.permissions(channel) & permissions::VIEW_CHANNEL != 0)
+        });
+        let Some(ix) = space.filter(|_| visible) else {
+            // Named for the log only by whether a guild was given, never by id.
+            tracing::info!("link to an unknown channel (guild given: {})", guild.is_some());
+            self.connection.set_message(t!("chat.link_unknown"));
+            cx.notify();
+            return;
+        };
+        if ix != self.spaces.selected() {
+            self.spaces.select(ix);
+            let (is_dms, guild) = (self.spaces.current().is_dms(), self.spaces.current().id);
+            if !is_dms && self.spaces.subscribe(guild) {
+                self.net.post(Command::SubscribeGuild { guild, members: None });
+            }
+        }
+        // Set before opening, so a channel not loaded yet opens on the
+        // page around the message instead of its newest one.
+        if let Some(message) = message {
+            self.start_jump(channel, JumpTarget::Message(message));
+        }
+        if self.selected_channel != Some(channel) || self.friends_open {
+            self.select_channel(channel, window, cx);
+        }
+        self.continue_jump(channel, cx);
     }
 
     /// Opens `thread`, learning it first when it is archived or new.
@@ -197,7 +249,7 @@ impl Emerald {
         let Some(oldest) = self.history.older(channel) else { return };
         self.net.post(Command::History {
             channel,
-            before: Some(oldest),
+            page: Page::Before(oldest),
         });
         cx.notify();
     }

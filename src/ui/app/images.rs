@@ -25,6 +25,8 @@ pub const ANIMATION_PIXELS: u16 = 320;
 const MAX_PICKER_ANIMATIONS: usize = 48;
 /// Picker stickers are drawn at twice the picker's 80px.
 const PICKER_PIXELS: u16 = 160;
+/// Animated GIFs and WebPs kept decoded, all frames each: a screenful.
+const MAX_ANIMATED: usize = 8;
 
 #[derive(Default)]
 pub struct Images {
@@ -39,6 +41,11 @@ pub struct Images {
     picker: Players<MAX_PICKER_ANIMATIONS, PICKER_PIXELS>,
     /// Frames of evicted players, still to be freed from the GPU.
     evicted: RefCell<Vec<Arc<RenderImage>>>,
+    /// Animated images by URL, decoded on the network thread; `None` while
+    /// on their way or after a failure.
+    animations: RefCell<HashMap<SharedString, Option<Arc<RenderImage>>>>,
+    /// Their URLs, oldest asked for first.
+    animation_order: RefCell<VecDeque<SharedString>>,
 }
 
 /// Lottie players by URL, at most `MAX` of them, drawing `PIXELS` square.
@@ -117,6 +124,41 @@ impl Images {
         self.picker.get(url, outbox, &self.evicted)
     }
 
+    /// The animated GIF or WebP at `url`, its frames fit to `width` by
+    /// `height` pixels, once decoded; otherwise starts the download (once).
+    /// gpui's `img` plays it when given an element id.
+    pub fn animated(&self, url: &str, width: u32, height: u32, outbox: &dyn Outbox) -> Option<Arc<RenderImage>> {
+        let mut slots = self.animations.borrow_mut();
+        if let Some(slot) = slots.get(url) {
+            return slot.clone();
+        }
+        let url: SharedString = url.to_owned().into();
+        let mut order = self.animation_order.borrow_mut();
+        while order.len() >= MAX_ANIMATED {
+            let Some(oldest) = order.pop_front() else { break };
+            if let Some(frames) = slots.remove(&oldest).flatten() {
+                self.evicted.borrow_mut().push(frames);
+            }
+        }
+        order.push_back(url.clone());
+        slots.insert(url.clone(), None);
+        outbox.post(Command::FetchAnimation {
+            url: url.to_string(),
+            width,
+            height,
+        });
+        None
+    }
+
+    /// The frames for `url` arrived; `None` leaves a permanent blank, and
+    /// the caller its still.
+    pub fn store_animation(&self, url: String, frames: Option<Vec<image::Frame>>) {
+        // Evicted while decoding: dropped rather than kept untracked.
+        if let Some(slot) = self.animations.borrow_mut().get_mut(url.as_str()) {
+            *slot = frames.map(|frames| Arc::new(RenderImage::new(frames)));
+        }
+    }
+
     /// Frames no longer on screen, to be dropped from the GPU atlas.
     pub fn take_retired(&self) -> Vec<Arc<RenderImage>> {
         let mut retired = std::mem::take(&mut *self.evicted.borrow_mut());
@@ -186,6 +228,24 @@ mod tests {
         }
         assert_eq!(images.slots.borrow().len(), MAX_IMAGES);
         assert!(!images.slots.borrow().contains_key("https://cdn/0.png"));
+    }
+
+    #[test]
+    fn animations_are_asked_for_once_and_capped() {
+        let images = Images::default();
+        let outbox = RefCell::new(Vec::new());
+        assert!(images.animated("https://x/a.webp", 10, 10, &outbox).is_none());
+        assert!(images.animated("https://x/a.webp", 10, 10, &outbox).is_none());
+        assert_eq!(outbox.borrow().len(), 1);
+        let frame = image::Frame::new(image::RgbaImage::new(1, 1));
+        images.store_animation("https://x/a.webp".into(), Some(vec![frame]));
+        assert!(images.animated("https://x/a.webp", 10, 10, &outbox).is_some());
+        for n in 0..MAX_ANIMATED {
+            images.animated(&format!("https://x/{n}.gif"), 10, 10, &outbox);
+        }
+        assert_eq!(images.animations.borrow().len(), MAX_ANIMATED);
+        // The decoded one went out and waits to be freed.
+        assert_eq!(images.take_retired().len(), 1);
     }
 
     #[test]
