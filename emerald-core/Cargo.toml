@@ -1,0 +1,10 @@
+[package]
+name = "emerald-core"
+description = "What every Emerald crate shares: paths, interface text, frame decoding and processes."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+image.workspace = true
+sys-locale.workspace = true
+toml.workspace = true

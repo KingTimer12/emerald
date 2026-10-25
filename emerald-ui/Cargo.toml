@@ -1,0 +1,24 @@
+[package]
+name = "emerald-ui"
+description = "Emerald's gpui interface: the window, its components and the local settings."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+emerald-core.workspace = true
+emerald-discord.workspace = true
+anyhow.workspace = true
+emojis.workspace = true
+gpui.workspace = true
+image.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+unicode-segmentation.workspace = true
+velato.workspace = true
+vello_cpu.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros", "rt"] }

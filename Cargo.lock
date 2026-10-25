@@ -1528,45 +1528,102 @@ dependencies = [
 ]
 
 [[package]]
-name = "emerald"
+name = "emerald-bin"
+version = "0.1.0"
+dependencies = [
+ "embed-resource",
+ "emerald-core",
+ "emerald-discord",
+ "emerald-ui",
+ "emerald-webview",
+ "gpui",
+ "serde_json",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "emerald-core"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "sys-locale",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "emerald-discord"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
  "base64 0.22.1",
  "bytes",
- "embed-resource",
- "emojis",
+ "emerald-core",
+ "emerald-http",
  "flate2",
  "futures-util",
- "gpui",
  "image",
- "libc",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-web-kit",
  "reqwest",
- "rusqlite",
  "rustls",
  "security-framework",
  "serde",
  "serde_json",
- "sys-locale",
  "tokio",
  "tokio-tungstenite",
- "toml 1.1.8+spec-1.1.0",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "unicode-segmentation",
  "uuid",
+ "windows 0.62.2",
+ "zeroize",
+]
+
+[[package]]
+name = "emerald-http"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "emerald-core",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "emerald-ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "emerald-core",
+ "emerald-discord",
+ "emojis",
+ "gpui",
+ "image",
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "unicode-segmentation",
  "velato",
  "vello_cpu",
+]
+
+[[package]]
+name = "emerald-webview"
+version = "0.1.0"
+dependencies = [
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
  "webview2-com",
  "windows 0.62.2",
  "windows-core 0.62.2",
- "zeroize",
 ]
 
 [[package]]

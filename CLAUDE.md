@@ -29,12 +29,12 @@ account must survive the whole project, so treat it as fragile.
   Keychain/Credential Manager in release). Never send the user's e-mail to any service.
 
 **Do instead:**
-- Prove behavior with unit tests first. Stores in `src/ui/app/state/` are UI-free and
+- Prove behavior with unit tests first. Stores in `emerald-ui/src/app/state/` are UI-free and
   take fakes (`Outbox`, `MessageView`), so most logic can be tested with no network.
 - To see UI, add a temporary local debug hook behind an env var, for example
   `EMERALD_X_TEST`, that opens the screen or injects fake data. Mark it
   `// DEBUG-HOOK-START` … `// DEBUG-HOOK-END`, and **remove it before finishing**. Check
-  with `grep -rn DEBUG src` that nothing is left.
+  with `grep -rn DEBUG emerald-*/src` that nothing is left.
 - Take screenshots in the background without stealing focus: get the window id of the
   app's PID with a small Swift script using CGWindowList, then run
   `screencapture -x -o -l<id> out.png`. Do not bring the app to the front; the user is
@@ -48,17 +48,29 @@ account must survive the whole project, so treat it as fragile.
 
 ## How to work here
 
+- **Crates.** The workspace is six crates at the root (see the README's Architecture):
+  `emerald-core` (paths, i18n, frames, processes), `emerald-http` (transport, caches,
+  rate limits), `emerald-discord` (endpoints, gateway, models), `emerald-ui` (interface),
+  `emerald-webview` (generic native webview, no Emerald code) and `emerald-bin` (the
+  executable and the login/captcha flows). A crate depends only on the ones before it in
+  that list. New request bodies and gateway frames go in `emerald-discord/src/packets/`;
+  Discord hosts come from `urls.rs`, never as literal URLs.
+- **Small modules.** Keep files to one concern, roughly under 400 lines. When an area
+  grows, make it a folder of modules (`rest/`, `commands/`, `text_input/`) rather than
+  a longer file; share repeated logic through a helper or trait (`or_expired`,
+  `token::Store`, `gateway::dispatch::decode`).
 - **Imitate the web client.** Before adding a request, find how discord.com does it:
   route, body, query string, headers, `location` values, batching and pagination. The
   client's scripts are downloaded into `target/discord-intl/` by
   `tools/discord_locales.py`; grep them there. When a value cannot be found, say that it
   is a guess, in a comment and to the user.
-- **Respect the REST layer.** Requests go through `Call` in `src/discord/rest/`, with
+- **Respect the REST layer.** Requests go through `Call` (`emerald-http`), with
   rate-limit buckets, `major` ids and the microcache for GETs. Writes that can trigger a
   captcha use `with_captcha!` in `commands.rs`.
-- **UI ↔ network** only through `Command` and `NetEvent` (`src/discord/protocol.rs`).
-- **Text:** every interface string goes in both `locales/en-US.toml` and
-  `locales/pt-BR.toml`, written by hand; tests check this. Locale files generated from
+- **UI ↔ network** only through `Command` and `NetEvent`
+  (`emerald-discord/src/protocol.rs`).
+- **Text:** every interface string goes in both `emerald-core/locales/en-US.toml` and
+  `emerald-core/locales/pt-BR.toml`, written by hand; tests check this. Locale files generated from
   Discord's translations are not committed.
 - **Language:** code, comments, logs, commits and docs are in English. Logs never
   contain the token or message content. Talk to the user in Portuguese.

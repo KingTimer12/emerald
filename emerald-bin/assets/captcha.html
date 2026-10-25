@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: #323339; color: #f3f3f4;
+    font: 15px -apple-system, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; }
+</style>
+<script>__POST_JS__</script>
+<script>
+  function onLoad() {
+    const id = hcaptcha.render('captcha', {
+      sitekey: __SITEKEY__,
+      theme: 'dark',
+      callback: (token) => emeraldPost(token),
+    });
+    const rqdata = __RQDATA__;
+    if (rqdata) hcaptcha.setData(id, { rqdata });
+  }
+</script>
+<script src="https://js.hcaptcha.com/1/api.js?onload=onLoad&render=explicit" async defer></script>
+</head><body>
+  <div>__PROMPT__</div>
+  <div id="captcha"></div>
+</body></html>

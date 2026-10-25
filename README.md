@@ -160,46 +160,80 @@ instead of going out again, an expired copy is served while it refreshes, and wh
 fails (network error, 5xx, rate limited) a recent copy stands in. Writing to a channel
 drops what was cached for it. On a burst, Discord sees one request instead of several.
 
+The code is a Cargo workspace of six crates at the root. Each depends only on the
+ones above it, and `emerald-webview` on nothing of Emerald's. Large areas are folders
+of small modules, one concern each:
+
 ```
-src/
-├── main.rs              entry point, webview child modes, login cycle
-├── i18n.rs              interface text per language, the `t!` macro
-├── logging.rs           tracing to stderr and a daily log file, panics included
-├── paths.rs             per-platform config, cache and log directories
-├── settings.rs          JSON preferences
-├── webview/             login and captcha webview (child process)
-│   ├── mod.rs           shared scripts and flows
-│   ├── macos.rs         WKWebView backend
-│   └── webview2.rs      WebView2 backend (Windows)
-├── discord/             everything that talks to Discord, no UI
-│   ├── protocol.rs      Command, NetEvent, Snapshot: the UI ↔ network contract
-│   ├── commands.rs      runs each Command against the REST API
-│   ├── gateway.rs       zlib-stream WebSocket, resume, heartbeat, ops 8 and 37
-│   ├── rest/            HTTP client: `Call` builder, RateLimiter, microcache, typed errors
-│   ├── model/           Discord payloads, only the fields in use
-│   ├── permissions.rs   role and overwrite permission algorithm
-│   ├── identity.rs      headers and super properties matching the web client
-│   ├── build.rs         current web client build number, read from discord.com/app
-│   ├── token.rs         token storage: Keychain, Credential Manager or file
-│   └── cache.rs         SQLite disk cache
-└── ui/
-    ├── markdown.rs      Discord markdown parser
-    ├── text_input.rs    text field
-    ├── theme.rs, icons.rs, time.rs
+emerald-core/            shared by every crate, no network and no UI
+├── locales/             interface text, one TOML file per language
+├── build.rs             embeds every file in locales/
+└── src/
+    ├── i18n.rs          interface text per language, the `t!` macro
+    ├── paths.rs         per-platform config, cache and log directories
+    ├── frames.rs        GIF and WebP frames, decoded and scaled off the UI thread
+    └── process.rs       child runs of this executable (webviews) and restarts
+emerald-http/            HTTP transport, nothing Discord-specific in its API
+└── src/
+    ├── base_url.rs      `BaseUrl`: a host written once, joined with each path
+    ├── client.rs        `Client` under one BaseUrl, `Call` builder, `Session` headers
+    ├── downloads.rs     whole-URL downloads (CDN, media) through the disk cache
+    ├── ratelimit.rs     per-bucket and global limits, 429 handling, invalid-request guard
+    ├── microcache.rs    one-second GET cache with request coalescing and stale copies
+    ├── cache.rs         SQLite disk cache
+    └── error.rs         typed failures and the captcha round trip
+emerald-discord/         everything that talks to Discord, no UI
+└── src/
+    ├── lib.rs           `spawn`: the network thread; `sign_out`
+    ├── protocol/        Command, NetEvent, Action: the UI ↔ network contract
+    ├── commands/        runs each Command: one module per area, shared error handling
+    │                    (`outcome.rs`) and the captcha retry (`captcha.rs`)
+    ├── rest/            every REST endpoint as the web client calls it, by area
+    │                    (messages, threads, users, guilds, apps, expressions)
+    ├── gateway/         the reconnect loop, one connection, dispatch and zlib inflate
+    ├── packets/         what goes on the wire: gateway frames, REST bodies, context headers
+    ├── model/           Discord payloads, only the fields in use (message/ by part)
+    ├── token/           `Token`, the `Store` trait (file, Keychain, Credential
+    │                    Manager) and the `Vault` that picks one
+    ├── urls.rs          Discord's hosts (web, API, CDN, media, gateway) as BaseUrls
+    ├── permissions.rs   role and overwrite permission algorithm
+    ├── identity.rs      headers and super properties matching the web client
+    └── client_build.rs  current web client build number, read from discord.com/app
+emerald-ui/              the gpui interface
+├── assets/icons/        monochrome SVG icons, embedded
+└── src/
+    ├── settings.rs      JSON preferences
+    ├── markdown.rs      Discord markdown parser (blocks, inline spans, links)
+    ├── text_input.rs    text field (editing, offsets, layout, element, IME)
+    ├── theme.rs, icons.rs, time.rs, emoji.rs, lottie.rs
+    ├── app.rs           `Emerald`: composes the stores; the window is drawn in app/render.rs
     └── app/             the main window
-        ├── app.rs       `Emerald`: composes the stores and lays out the window
         ├── state/       UI-free stores, tested in isolation
-        ├── events.rs    hands each NetEvent to the stores
+        ├── events.rs    hands each NetEvent to the stores (handlers in events/)
         ├── navigation.rs, composer.rs
         └── sidebar.rs, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
+emerald-webview/         a blocking native webview window, generic: `WebView` builder,
+└── src/                 a `Backend` per platform, posts back one string
+    ├── lib.rs           `WebView`, `Page`, `POST_JS`
+    ├── trust.rs         which pages may post back
+    ├── macos.rs         WKWebView backend
+    └── windows/         WebView2 backend: the Win32 window and the engine
+emerald-bin/             the `emerald` executable
+├── assets/              app icon, the Windows resource file, the login capture
+│                        script and the captcha page
+├── build.rs             embeds the icon into the Windows .exe
+└── src/
+    ├── main.rs          entry point, webview child modes, login cycle
+    ├── login.rs         the login and captcha flows, on emerald-webview
+    └── logging.rs       tracing to stderr and a daily log file, panics included
 ```
 
 ## Translations
 
-Interface text lives in `locales/<code>.toml`, one file per language, with Discord's
+Interface text lives in `emerald-core/locales/<code>.toml`, one file per language, with Discord's
 locale codes (`en-US`, `pt-BR`, `de`, …). Code reads it with `t!("friends.add")`, or
-`t!("composer.dm", name = name)` for text with arguments. `build.rs` embeds every file in
-`locales/`, so adding a language means adding a file. A key a language lacks falls back to
+`t!("composer.dm", name = name)` for text with arguments. `emerald-core/build.rs` embeds every
+file in `locales/`, so adding a language means adding a file. A key a language lacks falls back to
 English. The language follows the system until one is picked in Language & Time; switching
 applies at once, and Discord's own answers (errors, for one) follow it too.
 

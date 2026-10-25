@@ -1,0 +1,390 @@
+//! A message as the chat list draws it, resolved once when it arrives.
+
+mod media;
+mod reactions;
+
+pub use media::*;
+pub use reactions::*;
+
+use gpui::SharedString;
+
+use super::super::super::time;
+use emerald_discord::model::{
+    Attachment, Channel, Embed, Emoji, Message, Poll, PollAnswerCount, PollResults, REFERENCE_FORWARD, Reaction,
+    Snowflake, StickerItem, User, iso_secs, message_flags, message_kind,
+};
+
+/// Largest size an attached image is shown at, as in the web client.
+const IMAGE_MAX: (f32, f32) = (400., 300.);
+
+pub struct Msg {
+    pub id: Snowflake,
+    pub author_id: Snowflake,
+    pub author: SharedString,
+    pub avatar_url: SharedString,
+    pub secs: i64,
+    pub time: SharedString,
+    pub short_time: SharedString,
+    pub content: SharedString,
+    /// Local calendar day, for day separators.
+    pub day: i32,
+    pub stickers: Vec<Sticker>,
+    /// `message_kind`; system kinds render as one muted line.
+    pub kind: u8,
+    /// Names of the users mentioned, for `<@id>` in the content.
+    pub mentions: Vec<(Snowflake, SharedString)>,
+    pub mention_roles: Vec<Snowflake>,
+    pub mention_everyone: bool,
+    pub pinned: bool,
+    /// The author changed the text after sending it.
+    pub edited: bool,
+    pub reply: Option<Reply>,
+    pub images: Vec<Picture>,
+    /// Attachments that are not drawn as images.
+    pub files: Vec<FileCard>,
+    pub embeds: Vec<Embed>,
+    /// The message this one forwards, as it was then.
+    pub forward: Option<Box<Forward>>,
+    pub poll: Option<Poll>,
+    /// The thread this message started.
+    pub thread: Option<Channel>,
+    /// In the order they were first added, as Discord shows them.
+    pub reactions: Vec<Reacted>,
+    /// Set on our own sends until the server confirms them.
+    pub nonce: Option<String>,
+    /// Sent but not yet confirmed; drawn dimmed.
+    pub pending: bool,
+}
+
+pub struct Sticker {
+    pub name: SharedString,
+    /// `None` for formats this client cannot draw.
+    pub url: Option<SharedString>,
+    /// A Lottie animation rather than an image.
+    pub lottie: bool,
+}
+
+impl Sticker {
+    pub fn new(sticker: &StickerItem) -> Self {
+        Self {
+            name: sticker.name.clone().into(),
+            url: sticker.url().map(Into::into),
+            lottie: sticker.is_lottie(),
+        }
+    }
+}
+
+/// The message a reply points at; `content` is `None` once it is deleted.
+#[derive(Clone)]
+pub struct Reply {
+    /// The original message, to jump to; `None` once it is deleted.
+    pub id: Option<Snowflake>,
+    pub author_id: Snowflake,
+    pub author: SharedString,
+    pub avatar_url: SharedString,
+    pub content: Option<SharedString>,
+}
+
+impl Reply {
+    /// A preview of `msg`, as a reply to it shows it.
+    pub fn of(msg: &Msg) -> Self {
+        Self {
+            id: Some(msg.id),
+            author_id: msg.author_id,
+            author: msg.author.clone(),
+            avatar_url: msg.avatar_url.clone(),
+            content: Some(preview(&msg.content).into()),
+        }
+    }
+}
+
+/// The first line of a message, or a stand-in when it has no text.
+fn preview(content: &str) -> String {
+    content
+        .lines()
+        .next()
+        .map_or_else(|| t!("chat.attachment").to_owned(), str::to_owned)
+}
+
+impl Msg {
+    /// Our own message as typed, shown until the server echoes it.
+    pub fn pending(me: &User, content: String, nonce: String, reply: Option<Reply>) -> Self {
+        Self {
+            nonce: Some(nonce),
+            pending: true,
+            reply,
+            ..Self::blank(me, Snowflake(0), time::now_secs(), content)
+        }
+    }
+
+    fn blank(author: &User, id: Snowflake, secs: i64, content: String) -> Self {
+        Self {
+            id,
+            author_id: author.id,
+            author: author.display_name().to_owned().into(),
+            avatar_url: author.avatar_url().into(),
+            secs,
+            time: time::header(secs).into(),
+            short_time: time::short(secs).into(),
+            content: content.into(),
+            day: time::day_key(secs),
+            stickers: Vec::new(),
+            kind: message_kind::DEFAULT,
+            mentions: Vec::new(),
+            mention_roles: Vec::new(),
+            mention_everyone: false,
+            pinned: false,
+            edited: false,
+            reply: None,
+            images: Vec::new(),
+            files: Vec::new(),
+            embeds: Vec::new(),
+            forward: None,
+            poll: None,
+            thread: None,
+            reactions: Vec::new(),
+            nonce: None,
+            pending: false,
+        }
+    }
+
+    pub fn is_pending(&self, nonce: &str) -> bool {
+        self.pending && self.nonce.as_deref() == Some(nonce)
+    }
+
+    /// Pings `me`, by name, through one of `my_roles`, or with @everyone.
+    pub fn mentions_user(&self, me: Snowflake, my_roles: &[Snowflake]) -> bool {
+        self.mention_everyone
+            || self.mentions.iter().any(|(id, _)| *id == me)
+            || self.mention_roles.iter().any(|role| my_roles.contains(role))
+    }
+
+    /// Plain text the author can edit here: the message box is one line.
+    pub fn editable_text(&self) -> Option<&str> {
+        let text = self.content.as_ref();
+        let regular = matches!(self.kind, message_kind::DEFAULT | message_kind::REPLY);
+        (regular && !self.pending && !text.contains('\n')).then_some(text)
+    }
+}
+
+/// The names of `users`, for the mentions in a message.
+pub fn mention_names(users: &[User]) -> Vec<(Snowflake, SharedString)> {
+    users.iter().map(|u| (u.id, u.display_name().to_owned().into())).collect()
+}
+
+impl From<Message> for Msg {
+    fn from(message: Message) -> Self {
+        let voice = message.flags & message_flags::IS_VOICE_MESSAGE != 0;
+        let (images, files) = sort_attachments(&message.attachments, voice);
+        let forward = message
+            .message_reference
+            .as_ref()
+            .filter(|reference| reference.kind == REFERENCE_FORWARD)
+            .zip(message.message_snapshots.into_iter().next())
+            .map(|(reference, snapshot)| {
+                let original = snapshot.message;
+                let (images, files) = sort_attachments(&original.attachments, false);
+                Box::new(Forward {
+                    content: original.content.into(),
+                    mentions: mention_names(&original.mentions),
+                    images,
+                    files,
+                    embeds: original.embeds,
+                    stickers: original.sticker_items.iter().map(Sticker::new).collect(),
+                    guild: reference.guild_id,
+                    channel: reference.channel_id,
+                    message: reference.message_id,
+                    secs: original.timestamp.as_deref().and_then(iso_secs),
+                })
+            });
+        let reply = match message.referenced_message {
+            Some(original) => Some(Reply {
+                id: Some(original.id),
+                author_id: original.author.id,
+                author: original.author.display_name().to_owned().into(),
+                avatar_url: original.author.avatar_url().into(),
+                // One line, like Discord's reply preview.
+                content: Some(preview(&original.content).into()),
+            }),
+            None if message.kind == message_kind::REPLY => Some(Reply {
+                id: None,
+                author_id: Snowflake(0),
+                author: SharedString::default(),
+                avatar_url: SharedString::default(),
+                content: None,
+            }),
+            None => None,
+        };
+        Self {
+            stickers: message
+                .sticker_items
+                .iter()
+                .map(Sticker::new)
+                .collect(),
+            kind: message.kind,
+            mentions: mention_names(&message.mentions),
+            mention_roles: message.mention_roles,
+            mention_everyone: message.mention_everyone,
+            pinned: message.pinned,
+            edited: message.edited_timestamp.is_some(),
+            reply,
+            images,
+            files,
+            embeds: message.embeds,
+            forward,
+            poll: message.poll,
+            thread: message.thread.map(|t| *t),
+            reactions: message.reactions.into_iter().map(Into::into).collect(),
+            nonce: message.nonce,
+            ..Self::blank(&message.author, message.id, message.id.unix_secs(), message.content)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn images_fit_the_frame_and_fetch_at_2x() {
+        let attachment = Attachment {
+            filename: "a.png".into(),
+            url: "https://cdn/a.png".into(),
+            proxy_url: Some("https://media/a.png?ex=1".into()),
+            size: 10,
+            duration_secs: None,
+            content_type: Some("image/png".into()),
+            width: Some(1600),
+            height: Some(600),
+            description: Some("a cat".into()),
+            flags: 0,
+        };
+        let picture = image_attachment(&attachment).unwrap();
+        assert_eq!((picture.width, picture.height), (400., 150.));
+        assert_eq!(picture.url.as_ref(), "https://media/a.png?ex=1&width=800&height=300");
+        assert_eq!(picture.alt.as_ref().map(|a| a.as_ref()), Some("a cat"));
+        assert!(!picture.spoiler);
+    }
+
+    #[test]
+    fn spoilers_by_flag_or_name() {
+        let attachment: Attachment = serde_json::from_str(r#"{"filename":"a.png","flags":8}"#).unwrap();
+        assert!(attachment.spoiler());
+        let attachment: Attachment = serde_json::from_str(r#"{"filename":"SPOILER_a.png"}"#).unwrap();
+        assert!(attachment.spoiler());
+        let attachment: Attachment = serde_json::from_str(r#"{"filename":"a.png"}"#).unwrap();
+        assert!(!attachment.spoiler());
+    }
+
+    fn me() -> User {
+        serde_json::from_str(r#"{"id":"1","username":"me"}"#).unwrap()
+    }
+
+    #[test]
+    fn reactions_count_and_ignore_our_echo() {
+        let mut msg = Msg::pending(&me(), String::new(), "n".into(), None);
+        let thumbs = Emoji::unicode("👍");
+        assert!(msg.react(&thumbs, false, true, true));
+        // The gateway echo of our own reaction.
+        assert!(!msg.react(&thumbs, false, true, true));
+        assert!(msg.react(&thumbs, false, false, true));
+        assert_eq!((msg.reactions[0].normal, msg.reactions[0].me), (2, true));
+        assert!(msg.react(&thumbs, false, true, false));
+        assert!(!msg.react(&thumbs, false, true, false));
+        assert_eq!((msg.reactions[0].normal, msg.reactions[0].me), (1, false));
+        assert!(msg.react(&thumbs, false, false, false));
+        assert!(msg.reactions.is_empty());
+    }
+
+    #[test]
+    fn super_reactions_count_apart() {
+        let mut msg = Msg::pending(&me(), String::new(), "n".into(), None);
+        let heart = Emoji::unicode("❤️");
+        msg.react(&heart, false, false, true);
+        msg.react(&heart, true, false, true);
+        assert_eq!((msg.reactions[0].normal, msg.reactions[0].burst), (1, 1));
+        msg.react(&heart, false, false, false);
+        assert_eq!(msg.reactions.len(), 1);
+        assert!(msg.clear_reactions(Some(&heart)));
+        assert!(!msg.clear_reactions(None));
+    }
+
+    fn parsed(json: serde_json::Value) -> Msg {
+        let mut message = serde_json::json!({ "id": "10", "channel_id": "2", "author": { "id": "3", "username": "a" } });
+        message.as_object_mut().unwrap().extend(json.as_object().unwrap().clone());
+        serde_json::from_value::<Message>(message).unwrap().into()
+    }
+
+    #[test]
+    fn forwards_carry_the_original_and_its_origin() {
+        let msg = parsed(serde_json::json!({
+            "message_reference": { "type": 1, "guild_id": "7", "channel_id": "8", "message_id": "9" },
+            "message_snapshots": [{ "message": {
+                "content": "oi", "timestamp": "1970-01-01T00:01:00+00:00",
+                "attachments": [{ "filename": "a.txt", "url": "https://cdn/a.txt", "size": 3 }]
+            }}]
+        }));
+        let forward = msg.forward.unwrap();
+        assert_eq!(forward.content.as_ref(), "oi");
+        assert_eq!((forward.guild, forward.channel, forward.message), (Some(Snowflake(7)), Some(Snowflake(8)), Some(Snowflake(9))));
+        assert_eq!(forward.secs, Some(60));
+        assert_eq!(forward.files[0].name.as_ref(), "a.txt");
+        // A reply's reference is no forward.
+        let reply = parsed(serde_json::json!({ "message_reference": { "type": 0, "message_id": "9" } }));
+        assert!(reply.forward.is_none());
+    }
+
+    #[test]
+    fn voice_messages_videos_and_file_spoilers() {
+        let msg = parsed(serde_json::json!({
+            "flags": 8192,
+            "attachments": [{ "filename": "voice-message.ogg", "content_type": "audio/ogg", "duration_secs": 4.5 }]
+        }));
+        assert_eq!(msg.files[0].kind, FileKind::Voice(4.5));
+        let msg = parsed(serde_json::json!({
+            "attachments": [
+                { "filename": "a.mp4", "content_type": "video/mp4", "url": "https://cdn/a.mp4",
+                  "proxy_url": "https://media/a.mp4", "width": 800, "height": 600 },
+                { "filename": "SPOILER_b.zip", "content_type": "application/zip" }
+            ]
+        }));
+        let video = &msg.images[0];
+        assert_eq!(video.url.as_ref(), "https://media/a.mp4?format=webp&width=800&height=600");
+        assert_eq!(video.video.as_ref().map(|v| v.as_ref()), Some("https://cdn/a.mp4"));
+        assert!(msg.files[0].spoiler && msg.files[0].kind == FileKind::Other);
+    }
+
+    #[test]
+    fn poll_votes_count_and_ignore_our_echo() {
+        let mut msg = parsed(serde_json::json!({ "poll": {
+            "question": { "text": "?" },
+            "answers": [{ "answer_id": 1, "poll_media": { "text": "a" } }, { "answer_id": 2, "poll_media": { "text": "b" } }],
+            "allow_multiselect": false,
+            "results": { "is_finalized": false, "answer_counts": [{ "id": 1, "count": 2, "me_voted": false }] }
+        }}));
+        assert!(msg.poll_vote(2, true, true));
+        assert!(!msg.poll_vote(2, true, true));
+        assert!(msg.poll_vote(1, false, false));
+        assert!(!msg.poll_vote(5, false, true));
+        let counts = &msg.poll.as_ref().unwrap().results.as_ref().unwrap().answer_counts;
+        let pairs: Vec<_> = counts.iter().map(|c| (c.id, c.count, c.me_voted)).collect();
+        assert_eq!(pairs, [(1, 1, false), (2, 1, true)]);
+    }
+
+    #[test]
+    fn non_images_are_files() {
+        let attachment = Attachment {
+            filename: "a.zip".into(),
+            url: "https://cdn/a.zip".into(),
+            proxy_url: Some("https://media/a.zip".into()),
+            size: 10,
+            duration_secs: None,
+            content_type: Some("application/zip".into()),
+            width: None,
+            height: None,
+            description: None,
+            flags: 0,
+        };
+        assert!(image_attachment(&attachment).is_none());
+    }
+}

@@ -1,0 +1,25 @@
+[package]
+name = "emerald-bin"
+description = "The Emerald executable: joins the network thread and the interface."
+version.workspace = true
+edition.workspace = true
+
+# The binary keeps its name: `target/debug/emerald`.
+[[bin]]
+name = "emerald"
+path = "src/main.rs"
+
+[dependencies]
+emerald-core.workspace = true
+emerald-discord.workspace = true
+emerald-ui.workspace = true
+emerald-webview.workspace = true
+gpui.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+
+# Embeds assets/emerald.ico into the Windows executable (see build.rs).
+[target.'cfg(windows)'.build-dependencies]
+embed-resource.workspace = true

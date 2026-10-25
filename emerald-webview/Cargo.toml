@@ -1,0 +1,31 @@
+[package]
+name = "emerald-webview"
+description = "A blocking native webview window that returns the first message its page posts: WKWebView on macOS, WebView2 on Windows."
+version.workspace = true
+edition.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = [
+    "NSString", "NSURL", "NSURLRequest", "NSDate", "NSRunLoop", "NSGeometry",
+    "NSObjCRuntime", "NSNotification",
+] }
+objc2-app-kit = { workspace = true, features = [
+    "NSApplication", "NSWindow", "NSView", "NSResponder", "NSEvent",
+    "NSGraphics", "NSRunningApplication",
+] }
+objc2-web-kit = { workspace = true, features = [
+    "WKWebView", "WKWebViewConfiguration", "WKUserContentController",
+    "WKUserScript", "WKScriptMessageHandler", "WKScriptMessage", "WKWebsiteDataStore",
+    "WKFrameInfo", "WKSecurityOrigin",
+] }
+
+# WebView2 (Edge/Chromium), the runtime Windows 11 already ships.
+[target.'cfg(windows)'.dependencies]
+webview2-com.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com",
+    "Win32_System_LibraryLoader", "Win32_UI_HiDpi", "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+windows-core.workspace = true

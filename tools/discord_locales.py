@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fills locales/<code>.toml from the translations Discord's web client ships.
+"""Fills emerald-core/locales/<code>.toml from the translations Discord's web client ships.
 
 Discord bundles its interface text per language as webpack chunks of JSON,
 keyed by opaque hashes, with ICU-like syntax trees as values. This script
@@ -28,7 +28,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LOCALES = ROOT / "locales"
+LOCALES = ROOT / "emerald-core" / "locales"
 HAND_WRITTEN = {"en-US", "pt-BR"}
 ORIGIN = "https://discord.com"
 USER_AGENT = (
