@@ -12,7 +12,7 @@ use super::super::super::{theme, time};
 use super::super::{Emerald, widgets};
 use super::super::state::Msg;
 use emerald_discord::model::{Channel, Message, Snowflake};
-use emerald_discord::{Command, ThreadPage};
+use emerald_discord::{Command, ThreadPage, ThreadQuery};
 
 /// First messages asked for at once, as the web client batches them.
 const POST_BATCH: usize = 10;
@@ -20,47 +20,78 @@ const POST_BATCH: usize = 10;
 const PINNED: u64 = 1 << 1;
 const THUMBNAIL: f32 = 72.;
 
+mod toolbar;
+
 /// What this client knows of one forum beyond its active posts.
 pub(in super::super) struct Forum {
     /// First messages, once Discord answered for the post.
     first: HashMap<Snowflake, Msg>,
     asked: HashSet<Snowflake>,
-    /// Archived posts loaded so far, and whether there are more.
+    /// Posts loaded from the thread search so far, and whether there are
+    /// more: archived ones, or the matches of a name search.
     archived: usize,
     more: bool,
     loading: bool,
+    /// The sort, tag filter and name search in effect.
+    query: ThreadQuery,
+    /// Posts a name search found, in its order.
+    found: Vec<Snowflake>,
     list: ListState,
 }
 
 impl Forum {
-    fn new() -> Self {
+    fn new(by_creation: bool) -> Self {
         Self {
             first: HashMap::new(),
             asked: HashSet::new(),
             archived: 0,
             more: true,
             loading: false,
+            query: ThreadQuery {
+                by_creation,
+                ..ThreadQuery::default()
+            },
+            found: Vec::new(),
             list: ListState::new(0, ListAlignment::Top, px(400.)),
         }
+    }
+
+    /// Starts paging again for a new sort, filter or search.
+    fn restart(&mut self, query: ThreadQuery) {
+        self.query = query;
+        self.archived = 0;
+        self.more = true;
+        self.loading = false;
+        self.found.clear();
+        self.list.reset(0);
     }
 }
 
 impl Emerald {
     /// The forum was opened.
     pub(in super::super) fn open_forum(&mut self, forum: Snowflake, cx: &mut Context<Self>) {
-        self.forums.entry(forum).or_insert_with(Forum::new);
+        let by_creation = self.spaces.current().channels().iter().any(|c| c.id == forum && c.default_sort_order == Some(1));
+        let state = self.forums.entry(forum).or_insert_with(|| Forum::new(by_creation));
+        let name = state.query.name.clone().unwrap_or_default();
+        self.forum_query.update(cx, |input, cx| input.set_text(name, cx));
         cx.notify();
     }
 
     /// The forum's posts as the web client lists them: pinned first, then
-    /// by latest activity or by creation, as the forum is set.
+    /// by latest activity or by creation; only those with a picked tag, or
+    /// those a name search found.
     fn forum_posts(&self, forum: Snowflake) -> Vec<&Channel> {
         let space = self.spaces.current();
-        let by_creation = space.channels().iter().any(|c| c.id == forum && c.default_sort_order == Some(1));
+        let Some(state) = self.forums.get(&forum) else { return Vec::new() };
+        let by_creation = state.query.by_creation;
+        let tags = &state.query.tags;
+        let searching = state.query.name.is_some();
         let mut posts: Vec<&Channel> = space
             .channels()
             .iter()
             .filter(|c| c.kind.is_thread() && c.parent_id == Some(forum))
+            .filter(|c| !searching || state.found.contains(&c.id))
+            .filter(|c| tags.is_empty() || c.applied_tags.iter().any(|t| tags.contains(t)))
             .collect();
         posts.sort_by_key(|c| {
             let pinned = c.flags & PINNED != 0;
@@ -77,9 +108,10 @@ impl Emerald {
         }
     }
 
-    pub(in super::super) fn on_archived_posts(&mut self, forum: Snowflake, offset: usize, page: Option<ThreadPage>) {
+    /// A page of the forum's posts from the thread search.
+    pub(in super::super) fn on_forum_page(&mut self, forum: Snowflake, query: ThreadQuery, offset: usize, page: Option<ThreadPage>) {
         let Some(state) = self.forums.get_mut(&forum) else { return };
-        if offset != state.archived {
+        if offset != state.archived || query != state.query {
             return;
         }
         state.loading = false;
@@ -89,6 +121,9 @@ impl Emerald {
         };
         state.archived += page.threads.len();
         state.more = page.has_more && !page.threads.is_empty();
+        if state.query.name.is_some() {
+            state.found.extend(page.threads.iter().map(|t| t.id));
+        }
         for message in page.first {
             state.asked.insert(message.channel_id);
             state.first.insert(message.channel_id, Msg::from(message));
@@ -127,8 +162,13 @@ impl Emerald {
             return;
         }
         state.loading = true;
-        self.net.post(Command::ArchivedPosts { forum, offset: state.archived });
+        self.net.post(Command::ThreadSearch {
+            channel: forum,
+            query: state.query.clone(),
+            offset: state.archived,
+        });
     }
+
 
     /// The post list, in place of messages.
     pub(super) fn render_forum(&self, forum: Snowflake, cx: &mut Context<Self>) -> AnyElement {
@@ -152,21 +192,12 @@ impl Emerald {
         .flex_1()
         .px_4()
         .py_2();
-        let postable = self.can_send(forum);
         div()
             .flex_1()
             .min_h(px(0.))
             .flex()
             .flex_col()
-            .when(postable, |column| {
-                column.child(
-                    div().flex().justify_end().px_4().pt_3().child(
-                        widgets::button("new-post", t!("forum.new_post"), widgets::ButtonKind::Brand)
-                            .h(px(32.))
-                            .on_click(cx.listener(move |this, _, window, cx| this.open_create_post(forum, window, cx))),
-                    ),
-                )
-            })
+            .child(self.render_forum_toolbar(forum, state, cx))
             .child(posts)
             .into_any_element()
     }

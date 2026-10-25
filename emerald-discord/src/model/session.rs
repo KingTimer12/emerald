@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use super::{Channel, Guild, Member, Presence, Relationship, Snowflake, User};
+use super::{Channel, Guild, GuildSettingsList, Member, Presence, Relationship, Snowflake, User};
 
 #[derive(Debug, Deserialize)]
 pub struct Ready {
@@ -24,6 +24,26 @@ pub struct Ready {
     pub read_state: ReadStates,
     #[serde(default)]
     pub auth_token: Option<String>,
+    /// Mutes and notification levels per guild, and for DMs.
+    #[serde(default)]
+    pub user_guild_settings: GuildSettingsList,
+    /// `PreloadedUserSettings`, base64 protobuf; the server folders are in it.
+    #[serde(default)]
+    pub user_settings_proto: Option<String>,
+}
+
+/// USER_SETTINGS_PROTO_UPDATE: settings changed, here or on another device.
+#[derive(Debug, Deserialize)]
+pub struct SettingsProtoUpdate {
+    pub settings: SettingsProto,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SettingsProto {
+    /// 1 is `PreloadedUserSettings`, the one with the folders.
+    #[serde(rename = "type")]
+    pub kind: u8,
+    pub proto: String,
 }
 
 #[derive(Debug, Default, Deserialize)]

@@ -132,13 +132,13 @@ impl Space {
 
     /// Indices of the rows outside collapsed categories, plus those `keep`
     /// pins in place (the selected and unread channels, as on Discord).
-    pub fn expanded(&self, collapsed: &HashSet<Snowflake>, keep: impl Fn(Snowflake) -> bool) -> Vec<usize> {
+    pub fn expanded(&self, collapsed: impl Fn(Snowflake) -> bool, keep: impl Fn(Snowflake) -> bool) -> Vec<usize> {
         self.matching(|row| match row {
             Row::Channel(ChannelRow {
                 id,
                 parent: Some(parent),
                 ..
-            }) => !collapsed.contains(parent) || keep(*id),
+            }) => !collapsed(*parent) || keep(*id),
             _ => true,
         })
     }

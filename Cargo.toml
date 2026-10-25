@@ -6,10 +6,13 @@
 # - emerald-discord: Discord's REST API, gateway, models and wire packets
 # - emerald-ui: the gpui interface, its components and the settings
 # - emerald-webview: a blocking native webview window (macOS and Windows)
+# - emerald-notify: desktop notifications and the unread badge on the app icon
 # - emerald-bin: the executable, the login and captcha flows, logging
 [workspace]
 resolver = "3"
-members = ["emerald-core", "emerald-http", "emerald-discord", "emerald-ui", "emerald-webview", "emerald-bin"]
+members = [
+    "emerald-core", "emerald-http", "emerald-discord", "emerald-ui", "emerald-webview", "emerald-notify", "emerald-bin",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -21,6 +24,7 @@ emerald-http = { path = "emerald-http" }
 emerald-discord = { path = "emerald-discord" }
 emerald-ui = { path = "emerald-ui" }
 emerald-webview = { path = "emerald-webview" }
+emerald-notify = { path = "emerald-notify" }
 
 # runtime_shaders: compiles Metal shaders at runtime (no full Xcode needed).
 gpui = { version = "0.2.2", features = ["runtime_shaders"] }

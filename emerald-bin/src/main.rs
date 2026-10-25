@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate emerald_core;
 
+mod alerts;
 mod logging;
 mod login;
 
@@ -91,6 +92,10 @@ fn main() {
             cx.quit()
         });
 
+        // Before the window opens, so the taskbar groups it under the
+        // notifications' app id.
+        let alerts = alerts::DesktopAlerts::new();
+        let clicks = alerts.clicks();
         let bounds = Bounds::centered(None, size(px(1200.), px(780.)), cx);
         let window = cx
             .open_window(
@@ -102,7 +107,7 @@ fn main() {
                     }),
                     ..Default::default()
                 },
-                |window, cx| cx.new(|cx| emerald_ui::Emerald::new(commands, settings, window, cx)),
+                |window, cx| cx.new(|cx| emerald_ui::Emerald::new(commands, alerts, settings, window, cx)),
             )
             .expect("open window");
 
@@ -112,6 +117,21 @@ fn main() {
                 cx.activate(true);
             })
             .ok();
+
+        // A click on a notification brings the window up on its channel.
+        cx.spawn(async move |cx| {
+            while let Ok(tag) = clicks.recv().await {
+                let Ok(channel) = tag.parse().map(discord::model::Snowflake) else { continue };
+                let alive = window.update(cx, |view, window, cx| {
+                    window.activate_window();
+                    view.open_notified(channel, window, cx);
+                });
+                if alive.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
 
         // Drain network events in batches so a burst triggers a single re-render.
         // A rejected token sends the user back to the login webview.

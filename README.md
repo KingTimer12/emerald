@@ -93,11 +93,34 @@ CPU near zero when idle.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
 - **Unread state** synced with other devices, with read receipts batched; mention counts
-  on channels, DMs and servers, and messages that ping you highlighted.
+  on channels, DMs and servers, and messages that ping you highlighted. "Mark As Read"
+  on a channel, DM or server from its right-click menu.
+- **Notifications**: desktop notifications for new messages, following each place's
+  settings as the web client does (muted places and `@silent` messages stay quiet,
+  "Only @mentions" with @everyone and role pings suppressible, nothing in Do Not
+  Disturb, nothing for the channel on screen); clicking one opens its channel (Windows).
+  Unread mentions and friend requests as a count on the taskbar button or Dock icon.
+- **Mute and notification settings** per server, category, channel and DM from the
+  right-click menu: mute for 15 minutes up to "until I turn it back on", All / Only
+  @mentions / Nothing / the category's default, suppress @everyone and role pings,
+  hide muted channels. Synced with Discord both ways; muted channels show dimmed and
+  without unread marks. Folded categories are synced too.
+- **Server folders** and order as arranged on any device: folders show their first four
+  servers, open into a column of their color, and carry the unread dot and mentions.
+- **Quick switcher** (Ctrl+K / Cmd+K): channels, threads, DMs and servers by name, the
+  recent ones first; `#`, `@` and `*` narrow to channels, people or servers.
+- **Pinned messages**, **search** and **inbox** panels from the channel header. Search
+  takes Discord's filters (`from:`, `mentions:`, `in:`, `has:`, `before:`, `during:`,
+  `after:`, `pinned:`), in a server or a DM; the inbox lists recent mentions and the
+  unread channels. A result jumps to its message.
+- **Threads browser**: a channel's active and older threads, and a search by name.
+  Forums sort by activity or by date, filter by tags and search posts by name.
 - **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
 
 Not there yet: voice; playing video and audio inside the app; animated avatars in the
-chat list (still there, as Discord shows them until hovered).
+chat list (still there, as Discord shows them until hovered). On macOS, notifications go
+through `osascript` (Notification Center only takes bundled apps), so clicking one does
+not open its channel; search dates are taken in UTC.
 
 ## Requirements
 
@@ -145,6 +168,7 @@ cargo test
 | `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
 | `~/Library/Caches/emerald/cache.sqlite` | `%LOCALAPPDATA%\emerald\cache.sqlite` | SQLite cache, readable only by you: CDN images (capped at 200 MB, least recently used out first) and the last profiles fetched, cleared on sign-out. |
 | `~/Library/Caches/emerald/build_number` | `%LOCALAPPDATA%\emerald\build_number` | Last web client build number seen. |
+| | `HKCU\Software\Classes\AppUserModelId\Emerald.Desktop` | Registry key naming the app on its notifications. |
 | `~/Library/Logs/Emerald/emerald.YYYY-MM-DD.log` | `%LOCALAPPDATA%\emerald\logs\…` | One log per day, the last 7 kept, in a folder only you can read. They start with the version, platform and folders in use; they never hold the token, and name people and channels only by id. |
 | | `%LOCALAPPDATA%\emerald\WebView2` | WebView2 browser profile; the login session itself is InPrivate. |
 
@@ -160,8 +184,8 @@ instead of going out again, an expired copy is served while it refreshes, and wh
 fails (network error, 5xx, rate limited) a recent copy stands in. Writing to a channel
 drops what was cached for it. On a burst, Discord sees one request instead of several.
 
-The code is a Cargo workspace of six crates at the root. Each depends only on the
-ones above it, and `emerald-webview` on nothing of Emerald's. Large areas are folders
+The code is a Cargo workspace of seven crates at the root. Each depends only on the
+ones above it, and `emerald-webview` and `emerald-notify` on nothing of Emerald's. Large areas are folders
 of small modules, one concern each:
 
 ```
@@ -211,13 +235,22 @@ emerald-ui/              the gpui interface
         ├── state/       UI-free stores, tested in isolation
         ├── events.rs    hands each NetEvent to the stores (handlers in events/)
         ├── navigation.rs, composer.rs
-        └── sidebar.rs, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
+        ├── alerts.rs    which messages notify, and the count on the app icon
+        ├── panels/      pins, search, inbox and threads beside the chat
+        ├── place_menu.rs  right-click menu: mark read, mute, notification levels
+        ├── switcher.rs  the quick switcher (Ctrl/Cmd+K)
+        └── sidebar/, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
 emerald-webview/         a blocking native webview window, generic: `WebView` builder,
 └── src/                 a `Backend` per platform, posts back one string
     ├── lib.rs           `WebView`, `Page`, `POST_JS`
     ├── trust.rs         which pages may post back
     ├── macos.rs         WKWebView backend
     └── windows/         WebView2 backend: the Win32 window and the engine
+emerald-notify/          desktop notifications and a count on the app icon, generic
+└── src/
+    ├── lib.rs           `Notifier`, `Notice`, clicked notifications as a channel
+    ├── macos.rs         Dock badge, notifications through osascript
+    └── windows/         toasts under a registered app id, taskbar overlay badge
 emerald-bin/             the `emerald` executable
 ├── assets/              app icon, the Windows resource file, the login capture
 │                        script and the captcha page
@@ -225,6 +258,7 @@ emerald-bin/             the `emerald` executable
 └── src/
     ├── main.rs          entry point, webview child modes, login cycle
     ├── login.rs         the login and captcha flows, on emerald-webview
+    ├── alerts.rs        emerald-notify behind the interface's `Alerts`
     └── logging.rs       tracing to stderr and a daily log file, panics included
 ```
 

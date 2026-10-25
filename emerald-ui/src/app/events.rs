@@ -78,7 +78,14 @@ impl Emerald {
                 self.on_action_result(action, Err(error), window, cx)
             }
             NetEvent::GuildCreate(guild) => {
+                let id = guild.id;
+                self.notify.set_default(id, guild.default_notify());
                 let added = self.spaces.upsert_guild(guild, self.people.my_id());
+                // A new server takes its place in the user's order.
+                let added = added.and_then(|_| {
+                    self.reorder_spaces();
+                    self.spaces.index(id)
+                });
                 if let Some(ix) = added.filter(|_| std::mem::take(&mut self.select_new_guild)) {
                     self.select_space(ix, window, cx);
                 }
@@ -122,7 +129,29 @@ impl Emerald {
                 self.refresh_composer(cx);
             }
             NetEvent::ForumPosts { forum, first } => self.on_forum_posts(forum, first),
-            NetEvent::ArchivedPosts { forum, offset, page } => self.on_archived_posts(forum, offset, page),
+            NetEvent::ThreadSearch {
+                channel,
+                query,
+                offset,
+                mut page,
+            } => {
+                if !self.on_thread_panel_page(channel, &query, offset, &mut page) {
+                    self.on_forum_page(channel, query, offset, page);
+                }
+            }
+            NetEvent::Pins { channel, before, page } => self.on_pins(channel, before, page),
+            NetEvent::SearchResults {
+                scope,
+                query,
+                offset,
+                page,
+            } => self.on_search_results(scope, query, offset, page),
+            NetEvent::Mentions { before, messages } => self.on_mentions(before, messages),
+            NetEvent::GuildSettings(settings) => self.notify.update(settings),
+            NetEvent::Folders(folders) => {
+                self.server_list.set(Some(folders));
+                self.reorder_spaces();
+            }
             NetEvent::MessageCreate(message) => self.on_message(*message, cx),
             NetEvent::MessageUpdate(update) => {
                 let view = shown(&self.messages, self.selected_channel, update.channel_id);
@@ -194,5 +223,12 @@ impl Emerald {
                 error,
             } => self.on_send_failed(channel, &nonce, content, files, error, cx),
         }
+        self.refresh_badge();
+    }
+
+    /// Puts the servers in the user's order, folders flattened.
+    pub(super) fn reorder_spaces(&mut self) {
+        let order = self.server_list.order(&self.spaces.guild_ids());
+        self.spaces.reorder(&order);
     }
 }

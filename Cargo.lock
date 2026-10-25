@@ -1531,9 +1531,11 @@ dependencies = [
 name = "emerald-bin"
 version = "0.1.0"
 dependencies = [
+ "async-channel 2.5.0",
  "embed-resource",
  "emerald-core",
  "emerald-discord",
+ "emerald-notify",
  "emerald-ui",
  "emerald-webview",
  "gpui",
@@ -1591,6 +1593,19 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "emerald-notify"
+version = "0.1.0"
+dependencies = [
+ "async-channel 2.5.0",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "tracing",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

@@ -132,6 +132,10 @@ content_required = "Escreva a primeira mensagem do post."
 files_required = "Posts aqui precisam de pelo menos um arquivo."
 empty = "Ainda não há posts aqui."
 pinned = "Fixado"
+search = "Buscar publicações"
+sort = "Ordenar por"
+sort_activity = "Atividade recente"
+sort_created = "Data de publicação"
 
 [chat]
 alt = "ALT"
@@ -374,3 +378,73 @@ unit.year = "{count} anos"
 
 [number]
 group_separator = "."
+
+[switcher]
+empty = "Não encontramos nada parecido."
+placeholder = "Aonde você gostaria de ir?"
+tip = "Comece a busca com # para canais, @ para pessoas e * para servidores."
+
+[inbox]
+mentions = "Menções"
+no_mentions = "Tudo em dia. Nenhuma menção recente."
+no_unreads = "Tudo em dia. Nada não lido."
+title = "Caixa de entrada"
+unreads = "Não lidas"
+
+[mute]
+category = "Silenciar categoria"
+channel = "Silenciar canal"
+conversation = "Silenciar conversa"
+forever = "Até eu reativar"
+hour_1 = "Por 1 hora"
+hours_24 = "Por 24 horas"
+hours_3 = "Por 3 horas"
+hours_8 = "Por 8 horas"
+minutes_15 = "Por 15 minutos"
+server = "Silenciar servidor"
+unmute_category = "Reativar categoria"
+unmute_channel = "Reativar canal"
+unmute_conversation = "Reativar conversa"
+unmute_server = "Reativar servidor"
+until = "Silenciado até {time}"
+
+[notify]
+all = "Todas as mensagens"
+attachment = "Enviou um anexo"
+default = "Usar padrão da categoria"
+hide_muted = "Ocultar canais silenciados"
+mentions = "Somente @menções"
+message = "Enviou uma mensagem"
+nothing = "Nada"
+settings = "Configurações de notificação"
+sticker = "Enviou uma figurinha"
+suppress_everyone = "Suprimir @everyone e @here"
+suppress_roles = "Suprimir todas as @menções de cargos"
+
+[panel]
+attachments = "{count} anexos"
+load_more = "Carregar mais"
+
+[pins]
+empty = "Este canal ainda não tem nenhuma mensagem fixada."
+title = "Mensagens fixadas"
+
+[read]
+mark_read = "Marcar como lido"
+
+[search]
+bad_filter = "A busca do Discord não entende \"{filter}\"."
+empty = "Nenhum resultado encontrado."
+indexing = "O Discord ainda está indexando este servidor. Tente de novo daqui a pouco."
+placeholder = "Buscar"
+results = "{count} resultados"
+unknown_channel = "Nenhum canal aqui se chama #{name}."
+unknown_user = "Ninguém conhecido aqui se chama {name}."
+
+[threads]
+active = "TÓPICOS ATIVOS"
+archived = "TÓPICOS ANTIGOS"
+empty = "Ainda não há tópicos aqui."
+found = "TÓPICOS ENCONTRADOS"
+search = "Buscar pelo nome do tópico"
+title = "Tópicos"

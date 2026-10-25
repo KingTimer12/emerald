@@ -1,150 +1,26 @@
 //! The two left columns: the server list and the current space's channel
 //! sidebar (friends entry and DMs, or a guild's categories and channels).
+//! The server list, with its folders, is in [`servers`].
 
 use gpui::{
-    AnyElement, Context, FontWeight, SharedString, Transformation, div, img, prelude::*, px, radians, rgb,
+    AnyElement, Context, FontWeight, MouseButton, SharedString, Transformation, div, img, prelude::*, px, radians, rgb,
     uniform_list,
 };
 
 use super::super::icons::{self, icon};
 use super::super::theme;
+use super::place_menu::Target;
+use super::state::folders::Item;
 use super::state::{ChannelRow, Row, Space};
+use emerald_discord::model::Snowflake;
 use super::{Emerald, widgets};
 
 /// Height of the floating user panel plus its margins; lists pad by this.
 pub(super) const PANEL_CLEARANCE: f32 = 72.;
 
+mod servers;
+
 impl Emerald {
-    pub(super) fn render_servers(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut items = Vec::with_capacity(self.spaces.len() + 1);
-        for (ix, space) in self.spaces.iter().enumerate() {
-            items.push(self.render_space(ix, space, cx).into_any_element());
-            if space.is_dms() {
-                // Divider between direct messages and servers.
-                items.push(
-                    div()
-                        .flex_none()
-                        .w(px(32.))
-                        .h(px(1.))
-                        .bg(theme::selected())
-                        .into_any_element(),
-                );
-            }
-        }
-
-        div()
-            .id("servers")
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap_2()
-            .pt_1()
-            .pb(px(PANEL_CLEARANCE))
-            .w(px(72.))
-            .h_full()
-            .flex_none()
-            .overflow_y_scroll()
-            .children(items)
-            .child(
-                div()
-                    .id("add-server")
-                    .flex_none()
-                    .size(px(40.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(12.))
-                    .bg(rgb(theme::BASE_LOW))
-                    .text_color(rgb(theme::ONLINE))
-                    .text_size(px(24.))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::ONLINE)).text_color(rgb(theme::TEXT_STRONG)))
-                    .child("+")
-                    .on_click(cx.listener(|this, _, window, cx| this.open_add_server(window, cx))),
-            )
-    }
-
-    fn render_space(&self, ix: usize, space: &Space, cx: &mut Context<Self>) -> impl IntoElement {
-        let selected = ix == self.spaces.selected();
-        let unread = !selected && space.channels().iter().any(|c| self.reads.is_unread(c.id));
-        let mentions = self.reads.total_mentions(space.channels().iter());
-        let group: SharedString = format!("space-{ix}").into();
-        // White pill on the left edge: full height when selected, a dot when
-        // unread, half height on hover.
-        let (pill_height, pill_top) = match (selected, unread) {
-            (true, _) => (40., 0.),
-            (false, true) => (8., 16.),
-            (false, false) => (0., 20.),
-        };
-        let pill = div()
-            .absolute()
-            .left_0()
-            .top(px(pill_top))
-            .w(px(4.))
-            .h(px(pill_height))
-            .rounded_r(px(4.))
-            .bg(rgb(theme::TEXT_STRONG))
-            .when(!selected, |pill| {
-                pill.group_hover(group.clone(), |s| s.top(px(10.)).h(px(20.)))
-            });
-        let initials_size = if space.initials.chars().count() > 2 { 12. } else { 14. };
-        let image = space.icon_url.as_ref().and_then(|url| self.avatar_image(url));
-
-        div()
-            .group(group.clone())
-            .relative()
-            .flex_none()
-            .w_full()
-            .h(px(40.))
-            .flex()
-            .justify_center()
-            .child(pill)
-            .child(
-                div()
-                    .id(("space", ix))
-                    .size(px(40.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(12.))
-                    .overflow_hidden()
-                    .bg(rgb(if selected { theme::BRAND } else { theme::BASE_LOW }))
-                    .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
-                    .text_size(px(initials_size))
-                    .font_weight(FontWeight::MEDIUM)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::BRAND)).text_color(rgb(theme::TEXT_STRONG)))
-                    .tooltip(widgets::tooltip(space.name.clone()))
-                    .map(|icon| match image {
-                        Some(image) => icon.child(img(image).size_full()),
-                        // Svg colors are not inherited, so hover is restated.
-                        None if space.is_dms() => icon.child(
-                            icons::icon(
-                                icons::EMERALD,
-                                24.,
-                                if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE },
-                            )
-                            .group_hover(group.clone(), |s| s.text_color(rgb(theme::TEXT_STRONG))),
-                        ),
-                        None => icon.child(space.initials.clone()),
-                    })
-                    .on_click(cx.listener(move |this, _, window, cx| this.select_space(ix, window, cx))),
-            )
-            // Mention count in the icon's corner, ringed with the background.
-            .when(mentions > 0, |space| {
-                space.child(
-                    div()
-                        .absolute()
-                        .bottom(px(-4.))
-                        .right(px(10.))
-                        .rounded_full()
-                        .border_4()
-                        .border_color(rgb(theme::BASE_LOWEST))
-                        .child(widgets::badge(mentions as usize)),
-                )
-            })
-    }
-
     pub(super) fn render_channels(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let space = self.spaces.current();
         let dms = space.is_dms();
@@ -254,7 +130,8 @@ impl Emerald {
             }
             Row::Category { id, title } => {
                 let category = *id;
-                let collapsed = category.is_some_and(|c| self.spaces.is_collapsed(c));
+                let guild = self.spaces.current().id;
+                let collapsed = category.is_some_and(|c| self.notify.is_collapsed(guild, c));
                 let group: SharedString = format!("category-{ix}").into();
                 row.group(group.clone())
                     .items_end()
@@ -279,10 +156,19 @@ impl Emerald {
                                         }),
                                 ),
                             )
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.spaces.toggle_collapsed(category);
-                                cx.notify();
-                            }))
+                            .on_click(cx.listener(move |this, _, _, cx| this.toggle_category(guild, category, cx)))
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                    let target = Target::Channel {
+                                        guild: Some(guild),
+                                        channel: category,
+                                        category: true,
+                                        thread: false,
+                                    };
+                                    this.open_place_menu(target, event.position, cx)
+                                }),
+                            )
                     })
                     .into_any_element()
             }
@@ -300,10 +186,14 @@ impl Emerald {
                 let opens = kind.is_openable();
                 let thread = kind.is_thread();
                 let selected = self.selected_channel == Some(id) && !self.friends_open;
-                let unread = self.reads.is_unread(id);
+                let space = self.spaces.current();
+                let guild = (!space.is_dms()).then_some(space.id);
+                let muted = self.notify.muted(&self.place_of(guild, id), crate::time::now_secs());
+                // Muted channels show no unread state, only mentions.
+                let unread = self.reads.is_unread(id) && !muted;
                 let mentions = self.reads.mentions(id);
                 let forbidden = self.history.is_forbidden(id);
-                let (color, icon_color) = if forbidden {
+                let (color, icon_color) = if forbidden || (muted && !selected) {
                     (theme::INTERACTIVE_MUTED, theme::INTERACTIVE_MUTED)
                 } else if selected || unread {
                     (theme::TEXT_STRONG, theme::CHANNELS_DEFAULT)
@@ -359,6 +249,18 @@ impl Emerald {
                     })
                     .child(div().flex_1().min_w(px(0.)).truncate().child(name.clone()))
                     .when(mentions > 0 && !selected, |r| r.child(widgets::badge(mentions as usize)))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                            let target = Target::Channel {
+                                guild,
+                                channel: id,
+                                category: false,
+                                thread,
+                            };
+                            this.open_place_menu(target, event.position, cx)
+                        }),
+                    )
                     .map(|r| {
                         if opens {
                             r.on_click(cx.listener(move |this, _, window, cx| {

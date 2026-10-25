@@ -8,6 +8,8 @@ mod guild;
 mod media;
 mod message;
 mod outcome;
+mod search;
+mod settings;
 mod thread;
 mod user;
 
@@ -57,7 +59,12 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::Typing { channel } => message::typing(rest, channel).await,
 
         Command::ForumPosts { forum, threads } => Some(thread::forum_posts(rest, forum, threads).await),
-        Command::ArchivedPosts { forum, offset } => Some(thread::archived_posts(rest, forum, offset).await),
+        Command::ThreadSearch { channel, query, offset } => Some(thread::search(rest, channel, query, offset).await),
+        Command::Pins { channel, before } => Some(search::pins(rest, channel, before).await),
+        Command::Search { scope, query, offset } => Some(search::messages(rest, scope, query, offset).await),
+        Command::Mentions { before } => Some(search::mentions(rest, before).await),
+        Command::GuildSettings { guild, change } => Some(settings::guild(rest, guild, change).await),
+        Command::AckBulk { channels } => settings::ack_bulk(rest, channels).await,
         Command::CreateThread {
             parent,
             message,

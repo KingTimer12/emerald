@@ -89,7 +89,10 @@ impl Emerald {
     /// edit box, then the reply.
     pub(in super::super) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_reaction_picker(window, cx) || self.dismiss_suggestions(cx) {
-        } else if self.message_menu.take().is_some() || std::mem::take(&mut self.plus_menu) {
+        } else if self.message_menu.take().is_some()
+            || self.place_menu.take().is_some()
+            || std::mem::take(&mut self.plus_menu)
+        {
             cx.notify();
         } else if self.overlay.is_some() {
             self.close_overlay(window, cx);

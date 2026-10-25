@@ -56,6 +56,11 @@ pub fn scrim() -> Rgba {
     rgba(0x000000b8)
 }
 
+/// `color` (RGB) at `alpha`, for tints such as a folder's color.
+pub fn with_alpha(color: u32, alpha: f32) -> Rgba {
+    rgba(color << 8 | (alpha.clamp(0., 1.) * 255.) as u32)
+}
+
 /// Every hover, selection and border token is `#97979f` at some alpha.
 fn overlay(alpha: u32) -> Rgba {
     rgba(0x97979f00 | alpha)

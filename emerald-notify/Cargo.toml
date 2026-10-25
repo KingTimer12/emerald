@@ -1,0 +1,22 @@
+[package]
+name = "emerald-notify"
+description = "Desktop notifications and an unread badge on the app icon: toasts and a taskbar overlay on Windows, Notification Center and the Dock on macOS."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-channel.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = ["NSString"] }
+objc2-app-kit = { workspace = true, features = ["NSApplication", "NSDockTile", "NSResponder"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Data_Xml_Dom", "Foundation", "UI_Notifications",
+    "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_Com", "Win32_System_Registry", "Win32_System_Threading",
+    "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
+] }
+windows-core.workspace = true

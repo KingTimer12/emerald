@@ -4,11 +4,13 @@
 //! The endpoints are grouped by area, one module each.
 
 mod apps;
-mod encoding;
+pub(crate) mod encoding;
 mod expressions;
 mod guilds;
 mod ids;
 mod messages;
+mod search;
+mod settings;
 mod threads;
 mod users;
 
@@ -162,6 +164,3 @@ impl Rest {
         self.cdn.get(url, MAX_ANIMATION_BYTES).await
     }
 }
-
-/// Archived forum posts per page, as the web client loads them.
-pub const FORUM_PAGE: usize = 25;

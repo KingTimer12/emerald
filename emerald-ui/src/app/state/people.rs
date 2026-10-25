@@ -47,6 +47,17 @@ impl People {
         self.users.get(&id)
     }
 
+    /// A user whose username or display name is `name`, ignoring case;
+    /// the signed-in user included.
+    pub fn find(&self, name: &str) -> Option<Snowflake> {
+        let name = name.to_lowercase();
+        self.me
+            .iter()
+            .chain(self.users.values())
+            .find(|u| u.username.to_lowercase() == name || u.global_name.as_ref().is_some_and(|g| g.to_lowercase() == name))
+            .map(|u| u.id)
+    }
+
     pub fn display_name(&self, id: Snowflake) -> Option<&str> {
         self.user(id).map(User::display_name)
     }

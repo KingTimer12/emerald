@@ -12,6 +12,8 @@ impl Emerald {
             relationships,
             members,
             read_states,
+            guild_settings,
+            folders,
         } = snapshot;
         self.connection.set_link(Link::Connected);
         let me_id = me.id;
@@ -20,6 +22,9 @@ impl Emerald {
         for dm in &mut dms {
             self.people.adopt_dm(dm);
         }
+        let defaults: Vec<_> = guilds.iter().map(|g| (g.id, g.default_notify())).collect();
+        self.notify.load(guild_settings, defaults.into_iter());
+        self.server_list.set(folders);
         let mut my_roles: HashMap<_, _> = members
             .into_iter()
             .map(|(guild, member)| (guild, member.roles))
@@ -29,6 +34,7 @@ impl Emerald {
             Space::guild(guild, me_id, roles)
         });
         self.spaces.reset(std::iter::once(Space::dms(dms)).chain(guilds).collect());
+        self.reorder_spaces();
         self.reads
             .load(read_states, self.spaces.iter().flat_map(Space::readable));
         // A new session (not a resume) may have missed messages and holds
@@ -103,6 +109,7 @@ impl Emerald {
             }
         }
         if !mine {
+            self.alert_message(&message, self.window_active);
             if self.selected_channel == Some(channel) && !self.friends_open {
                 self.ack(channel, message.id, cx);
             } else if self.pings_me(&message) {
@@ -229,6 +236,11 @@ impl Emerald {
                     _ => self.composer.error = Some(error.into()),
                 },
             },
+            Action::Settings => {
+                if let Err(error) = result {
+                    self.connection.set_message(t!("common.error", error = error));
+                }
+            }
             Action::ThreadMembership | Action::RunCommand => {
                 if let Err(error) = result {
                     self.composer.error = Some(error.into());

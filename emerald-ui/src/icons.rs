@@ -30,8 +30,13 @@ pub const SETTINGS: &str = "icons/settings.svg";
 pub const PLAY: &str = "icons/play.svg";
 pub const FILE: &str = "icons/file.svg";
 pub const FORWARD: &str = "icons/forward.svg";
+pub const SEARCH: &str = "icons/search.svg";
+pub const INBOX: &str = "icons/inbox.svg";
+pub const FOLDER: &str = "icons/folder.svg";
+pub const CHECK: &str = "icons/check.svg";
+pub const CHEVRON_RIGHT: &str = "icons/chevron_right.svg";
 
-const ALL: [(&str, &[u8]); 24] = [
+const ALL: [(&str, &[u8]); 29] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -56,6 +61,11 @@ const ALL: [(&str, &[u8]); 24] = [
     (PLAY, include_bytes!("../assets/icons/play.svg")),
     (FILE, include_bytes!("../assets/icons/file.svg")),
     (FORWARD, include_bytes!("../assets/icons/forward.svg")),
+    (SEARCH, include_bytes!("../assets/icons/search.svg")),
+    (INBOX, include_bytes!("../assets/icons/inbox.svg")),
+    (FOLDER, include_bytes!("../assets/icons/folder.svg")),
+    (CHECK, include_bytes!("../assets/icons/check.svg")),
+    (CHEVRON_RIGHT, include_bytes!("../assets/icons/chevron_right.svg")),
 ];
 
 pub struct Icons;

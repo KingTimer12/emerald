@@ -26,15 +26,18 @@ impl Render for Emerald {
             Some(Overlay::CreateThread(modal)) => Some(self.render_thread_modal(modal, cx)),
             Some(Overlay::CreatePost(modal)) => Some(self.render_post_modal(modal, cx)),
             Some(Overlay::CreatePoll(modal)) => Some(self.render_poll_modal(modal, cx)),
+            Some(Overlay::Switcher(switcher)) => Some(self.render_switcher(switcher, cx)),
             None => None,
         };
         let menu = self.render_message_menu(cx);
         let picker = self.render_reaction_picker(cx);
+        let place_menu = self.render_place_menu(cx);
         div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.dismiss(window, cx)))
             .on_action(cx.listener(|this, _: &EditLast, window, cx| this.edit_last(window, cx)))
+            .on_action(cx.listener(|this, _: &QuickSwitch, window, cx| this.open_switcher(window, cx)))
             .on_action(cx.listener(|this, _: &crate::text_input::Copy, _, cx| {
                 this.copy_selection(cx);
             }))
@@ -65,5 +68,6 @@ impl Render for Emerald {
             .children(overlay)
             .children(menu)
             .children(picker)
+            .children(place_menu)
     }
 }

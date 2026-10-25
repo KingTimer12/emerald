@@ -18,4 +18,6 @@ pub enum Action {
     RunCommand,
     /// Posting a poll.
     CreatePoll,
+    /// Changing mutes and notification levels.
+    Settings,
 }

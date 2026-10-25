@@ -1,8 +1,8 @@
 //! Events from the network thread to the UI.
 
-use super::{Action, IndexTarget, Page, Upload};
+use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Upload};
 use crate::model::{
-    Channel, CommandIndex, Emoji, Gif, Guild, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
+    Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
     MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, PollVote, Profile, ReactionAddMany,
     ReactionClear, ReactionUpdate, Relationship, RoleDelete, RoleUpdate, Snowflake, StickerPack, ThreadListSync,
     ThreadMemberEntry, ThreadMembersUpdate, TypingStart, User,
@@ -126,12 +126,37 @@ pub enum NetEvent {
         forum: Snowflake,
         first: Vec<(Snowflake, Message)>,
     },
-    ArchivedPosts {
-        forum: Snowflake,
+    /// Answer to `Command::ThreadSearch`.
+    ThreadSearch {
+        channel: Snowflake,
+        query: ThreadQuery,
         offset: usize,
         /// `None` when the request failed.
         page: Option<ThreadPage>,
     },
+    /// Answer to `Command::Pins`.
+    Pins {
+        channel: Snowflake,
+        before: Option<String>,
+        page: Result<PinPage, String>,
+    },
+    /// Answer to `Command::Search`.
+    SearchResults {
+        scope: SearchScope,
+        query: SearchQuery,
+        offset: usize,
+        page: Result<SearchPage, String>,
+    },
+    /// Answer to `Command::Mentions`.
+    Mentions {
+        before: Option<Snowflake>,
+        messages: Result<Vec<Message>, String>,
+    },
+    /// A server's notification settings, or the DMs', changed here or on
+    /// another device.
+    GuildSettings(GuildSettings),
+    /// The server list's folders and order changed.
+    Folders(Vec<GuildFolder>),
     /// The message with `nonce` was not sent; `content` lets the UI give
     /// the text back to the user.
     SendFailed {
@@ -165,6 +190,25 @@ pub struct Snapshot {
     pub members: Vec<(Snowflake, Member)>,
     /// Per channel: the last read message and the unread mentions.
     pub read_states: Vec<(Snowflake, Snowflake, u32)>,
+    /// Notification settings per server, and the DMs'.
+    pub guild_settings: Vec<GuildSettings>,
+    /// The server list's folders; `None` when READY had none to give.
+    pub folders: Option<Vec<GuildFolder>>,
+}
+
+/// Pinned messages, newest pin first.
+pub struct PinPage {
+    /// Each message with when it was pinned, as Discord writes it.
+    pub pins: Vec<(Message, String)>,
+    pub has_more: bool,
+}
+
+/// A page of search results.
+pub struct SearchPage {
+    pub messages: Vec<Message>,
+    pub total: u32,
+    /// Discord is still indexing this server; try again in a moment.
+    pub indexing: bool,
 }
 
 /// The gateway's reaction events.

@@ -29,6 +29,7 @@ impl Emerald {
             return;
         }
         let guild = space.id;
+        self.reveal_guild(guild);
         if self.spaces.subscribe(guild) {
             self.net.post(Command::SubscribeGuild { guild, members: None });
         }
@@ -42,6 +43,15 @@ impl Emerald {
         }
     }
 
+    /// A server in a closed folder opens the folder, as on Discord.
+    fn reveal_guild(&mut self, guild: Snowflake) {
+        if let Some(folder) = self.server_list.folder_of(guild)
+            && !self.server_list.is_open(folder)
+        {
+            self.server_list.toggle(folder);
+        }
+    }
+
     pub(super) fn select_channel(&mut self, id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_channel != Some(id) {
             // The divider marks what was unread when the channel opened,
@@ -52,6 +62,8 @@ impl Emerald {
         self.friends_open = false;
         self.selected_channel = Some(id);
         self.spaces.remember_channel(id);
+        self.recent.visit(id);
+        self.panel_follow(id);
         self.reads.seen(id);
         let kind = self.spaces.channel(id).map(|c| c.kind).unwrap_or_default();
         let current = self.spaces.current().id;
@@ -124,6 +136,7 @@ impl Emerald {
         if ix != self.spaces.selected() {
             self.spaces.select(ix);
             let (is_dms, guild) = (self.spaces.current().is_dms(), self.spaces.current().id);
+            self.reveal_guild(guild);
             if !is_dms && self.spaces.subscribe(guild) {
                 self.net.post(Command::SubscribeGuild { guild, members: None });
             }
@@ -188,9 +201,23 @@ impl Emerald {
         if space.is_dms() {
             return space.search(self.dm_search.read(cx).text());
         }
-        space.expanded(self.spaces.collapsed(), |id| {
-            self.selected_channel == Some(id) || self.reads.is_unread(id)
-        })
+        let guild = space.id;
+        let now = crate::time::now_secs();
+        let pinned = |id| self.selected_channel == Some(id) || self.reads.is_unread(id) || self.reads.mentions(id) > 0;
+        let rows = space.expanded(|category| self.notify.is_collapsed(guild, category), pinned);
+        if !self.notify.hides_muted(guild) {
+            return rows;
+        }
+        // "Hide Muted Channels": unless open or pinging the user.
+        rows.into_iter()
+            .filter(|ix| match &space.rows()[*ix] {
+                Row::Channel(row) => {
+                    let pinging = self.selected_channel == Some(row.id) || self.reads.mentions(row.id) > 0;
+                    pinging || !self.notify.muted(&self.place_of(Some(guild), row.id), now)
+                }
+                _ => true,
+            })
+            .collect()
     }
 
     pub(super) fn can_send(&self, channel: Snowflake) -> bool {
@@ -204,7 +231,7 @@ impl Emerald {
 
     /// Newest known message in `channel`: the loaded log, else the channel's
     /// `last_message_id`.
-    fn newest_message(&self, channel: Snowflake) -> Option<Snowflake> {
+    pub(super) fn newest_message(&self, channel: Snowflake) -> Option<Snowflake> {
         let listed = self.spaces.channel(channel).and_then(|c| c.last_message_id);
         self.history.newest(channel).max(listed)
     }

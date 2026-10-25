@@ -133,6 +133,10 @@ content_required = "Write the post's first message."
 files_required = "Posts here need at least one file."
 empty = "There are no posts here yet."
 pinned = "Pinned"
+search = "Search for posts"
+sort = "Sort by"
+sort_activity = "Latest activity"
+sort_created = "Date posted"
 
 [chat]
 alt = "ALT"
@@ -375,3 +379,73 @@ unit.year = "{count} years"
 
 [number]
 group_separator = ","
+
+[switcher]
+empty = "Can't find anything like that."
+placeholder = "Where would you like to go?"
+tip = "Start searches with # for channels, @ for people and * for servers."
+
+[inbox]
+mentions = "Mentions"
+no_mentions = "You're all caught up. No recent mentions."
+no_unreads = "You're all caught up. Nothing unread."
+title = "Inbox"
+unreads = "Unreads"
+
+[mute]
+category = "Mute Category"
+channel = "Mute Channel"
+conversation = "Mute Conversation"
+forever = "Until I turn it back on"
+hour_1 = "For 1 Hour"
+hours_24 = "For 24 Hours"
+hours_3 = "For 3 Hours"
+hours_8 = "For 8 Hours"
+minutes_15 = "For 15 Minutes"
+server = "Mute Server"
+unmute_category = "Unmute Category"
+unmute_channel = "Unmute Channel"
+unmute_conversation = "Unmute Conversation"
+unmute_server = "Unmute Server"
+until = "Muted until {time}"
+
+[notify]
+all = "All Messages"
+attachment = "Sent an attachment"
+default = "Use Category Default"
+hide_muted = "Hide Muted Channels"
+mentions = "Only @mentions"
+message = "Sent a message"
+nothing = "Nothing"
+settings = "Notification Settings"
+sticker = "Sent a sticker"
+suppress_everyone = "Suppress @everyone and @here"
+suppress_roles = "Suppress All Role @mentions"
+
+[panel]
+attachments = "{count} attachments"
+load_more = "Load more"
+
+[pins]
+empty = "This channel doesn't have any pinned messages... yet."
+title = "Pinned Messages"
+
+[read]
+mark_read = "Mark As Read"
+
+[search]
+bad_filter = "Discord's search can't read \"{filter}\"."
+empty = "No results found."
+indexing = "Discord is still indexing this server. Try again in a moment."
+placeholder = "Search"
+results = "{count} results"
+unknown_channel = "No channel here is called #{name}."
+unknown_user = "No one known here is called {name}."
+
+[threads]
+active = "ACTIVE THREADS"
+archived = "OLDER THREADS"
+empty = "There are no threads here yet."
+found = "THREADS FOUND"
+search = "Search for thread name"
+title = "Threads"

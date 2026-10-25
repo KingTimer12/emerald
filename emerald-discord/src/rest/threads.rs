@@ -2,10 +2,12 @@
 
 use anyhow::Result;
 
-use super::{DiscordCall, FORUM_PAGE, Rest};
+use super::{DiscordCall, Rest};
 use crate::model::{Channel, ChannelKind, Message, Snowflake};
 use crate::packets::message::Outgoing;
+use crate::packets::search;
 use crate::packets::thread::{self, PostData, ThreadSearch};
+use crate::protocol::ThreadQuery;
 use emerald_http::{Call, Policy, Solution};
 
 impl Rest {
@@ -27,13 +29,11 @@ impl Rest {
             .collect())
     }
 
-    /// A page of a forum's archived posts, newest activity first.
-    pub async fn archived_posts(&self, forum: Snowflake, offset: usize) -> Result<ThreadSearch> {
-        let path = format!(
-            "/channels/{forum}/threads/search?archived=true&sort_by=last_message_time&sort_order=desc\
-             &limit={FORUM_PAGE}&tag_setting=match_some&offset={offset}"
-        );
-        self.api.fetch(Call::get("/channels/{id}/threads/search", path).major(forum).cached(Policy::MICRO))
+    /// A page of `channel`'s threads: archived ones, or those named like
+    /// the query's name.
+    pub async fn thread_search(&self, channel: Snowflake, query: &ThreadQuery, offset: usize) -> Result<ThreadSearch> {
+        let path = format!("/channels/{channel}/threads/search?{}", search::threads(query, offset));
+        self.api.fetch(Call::get("/channels/{id}/threads/search", path).major(channel).cached(Policy::MICRO))
             .await
     }
 

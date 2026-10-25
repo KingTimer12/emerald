@@ -82,7 +82,7 @@ impl Emerald {
     }
 
     /// Message text in full, for previews: blocks drawn, nothing clickable.
-    pub(super) fn rich_text(
+    pub(in super::super) fn rich_text(
         &self,
         id: impl Into<ElementId>,
         content: &str,

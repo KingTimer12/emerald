@@ -3,7 +3,7 @@
 use super::captcha::with_captcha;
 use super::outcome::failure;
 use crate::model::{ChannelKind, Snowflake};
-use crate::protocol::{Action, NetEvent, ThreadPage, Upload};
+use crate::protocol::{Action, NetEvent, ThreadPage, ThreadQuery, Upload};
 use crate::rest::{Outgoing, Rest, ThreadSearch};
 
 /// First messages of these posts; those that fail come back without one.
@@ -18,14 +18,19 @@ pub async fn forum_posts(rest: &Rest, forum: Snowflake, threads: Vec<Snowflake>)
     NetEvent::ForumPosts { forum, first }
 }
 
-pub async fn archived_posts(rest: &Rest, forum: Snowflake, offset: usize) -> NetEvent {
+pub async fn search(rest: &Rest, channel: Snowflake, query: ThreadQuery, offset: usize) -> NetEvent {
     let page = rest
-        .archived_posts(forum, offset)
+        .thread_search(channel, &query, offset)
         .await
-        .map_err(|e| tracing::warn!("archived posts of {forum}: {e:#}"))
+        .map_err(|e| tracing::warn!("threads of {channel}: {e:#}"))
         .ok()
         .map(thread_page);
-    NetEvent::ArchivedPosts { forum, offset, page }
+    NetEvent::ThreadSearch {
+        channel,
+        query,
+        offset,
+        page,
+    }
 }
 
 /// A search page with our memberships folded into the threads they belong to.

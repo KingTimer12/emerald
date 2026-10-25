@@ -6,7 +6,9 @@ use serde_json::value::RawValue;
 
 use super::{Events, Session, State};
 use crate::identity::Identity;
-use crate::model::{Guild, Presence, Ready, ReadySupplemental, RelationshipRemove, Snowflake};
+use crate::model::{
+    Guild, Presence, Ready, ReadySupplemental, RelationshipRemove, SettingsProtoUpdate, Snowflake, guild_folders,
+};
 use crate::protocol::{Link, NetEvent, ReactionEvent, Snapshot};
 
 /// Sends the event a dispatch of type `kind` stands for, if the UI wants
@@ -76,6 +78,16 @@ fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Opti
         "MESSAGE_POLL_VOTE_ADD" => decode(kind, data, |vote| NetEvent::PollVote { vote, add: true }),
         "MESSAGE_POLL_VOTE_REMOVE" => decode(kind, data, |vote| NetEvent::PollVote { vote, add: false }),
         "TYPING_START" => decode(kind, data, NetEvent::TypingStart),
+        "USER_GUILD_SETTINGS_UPDATE" => decode(kind, data, NetEvent::GuildSettings),
+        "USER_SETTINGS_PROTO_UPDATE" => {
+            let update: SettingsProtoUpdate = decode(kind, data, std::convert::identity)?;
+            // Only the preloaded settings hold folders, and a partial update
+            // may leave them out.
+            (update.settings.kind == 1)
+                .then(|| guild_folders(&update.settings.proto))
+                .flatten()
+                .map(NetEvent::Folders)
+        }
         _ => None,
     }
 }
@@ -121,6 +133,7 @@ fn ready(r: Ready, identity: &Identity, state: &mut State) -> NetEvent {
         .filter(|state| state.read_state_type == 0)
         .filter_map(|state| Some((state.id, state.last_message_id?, state.mention_count)))
         .collect();
+    let folders = r.user_settings_proto.as_deref().and_then(guild_folders);
     NetEvent::Ready(Box::new(Snapshot {
         me: r.user,
         guilds: r.guilds,
@@ -129,6 +142,8 @@ fn ready(r: Ready, identity: &Identity, state: &mut State) -> NetEvent {
         relationships: r.relationships,
         members,
         read_states,
+        guild_settings: r.user_guild_settings.entries,
+        folders,
     }))
 }
 

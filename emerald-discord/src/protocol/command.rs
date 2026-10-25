@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use super::{SearchQuery, SearchScope, SettingsChange, ThreadQuery};
 use crate::model::{ChannelKind, Emoji, Gif, Snowflake, Status};
 
 /// Requests flowing from the UI to the network thread.
@@ -15,10 +16,38 @@ pub enum Command {
         forum: Snowflake,
         threads: Vec<Snowflake>,
     },
-    /// The page of archived posts of `forum` starting at `offset`.
-    ArchivedPosts {
-        forum: Snowflake,
+    /// A page of `channel`'s threads matching `query`, from `offset`:
+    /// archived ones when no name is given, else any whose name matches.
+    ThreadSearch {
+        channel: Snowflake,
+        query: ThreadQuery,
         offset: usize,
+    },
+    /// Pinned messages of `channel`, pinned before `before` (the
+    /// `pinned_at` of the last one shown) when paging.
+    Pins {
+        channel: Snowflake,
+        before: Option<String>,
+    },
+    /// A page of messages matching `query`, from `offset`.
+    Search {
+        scope: SearchScope,
+        query: SearchQuery,
+        offset: usize,
+    },
+    /// Recent mentions of the user, older than `before` when paging.
+    Mentions {
+        before: Option<Snowflake>,
+    },
+    /// Changes the notification settings of a server, or of the DMs.
+    GuildSettings {
+        guild: Option<Snowflake>,
+        change: SettingsChange,
+    },
+    /// Marks these channels read, each up to its message, as "Mark As
+    /// Read" on a server does.
+    AckBulk {
+        channels: Vec<(Snowflake, Snowflake)>,
     },
     Send {
         channel: Snowflake,

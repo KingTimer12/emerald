@@ -9,6 +9,8 @@ pub mod gateway;
 pub mod guild;
 pub mod interaction;
 pub mod message;
+pub mod search;
+pub mod settings;
 pub mod thread;
 pub mod upload;
 pub mod user;

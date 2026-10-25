@@ -28,8 +28,6 @@ pub const DMS: Snowflake = Snowflake(0);
 pub struct Spaces {
     list: Vec<Space>,
     selected: usize,
-    /// Collapsed guild categories.
-    collapsed: HashSet<Snowflake>,
     /// Last channel opened per guild.
     last_channel: HashMap<Snowflake, Snowflake>,
     /// Guilds already subscribed to with op 37 this session.
@@ -41,7 +39,6 @@ impl Default for Spaces {
         Self {
             list: vec![Space::dms(Vec::new())],
             selected: 0,
-            collapsed: HashSet::new(),
             last_channel: HashMap::new(),
             subscribed: HashSet::new(),
         }
@@ -56,6 +53,21 @@ impl Spaces {
         self.list = list;
         self.selected = self.index(previous).unwrap_or(0);
         self.subscribed.clear();
+    }
+
+    /// Puts the guilds in `order` (the server list's, folders flattened),
+    /// keeping the DMs first and the selected space selected. Guilds
+    /// missing from `order` keep their place before the rest.
+    pub fn reorder(&mut self, order: &[Snowflake]) {
+        let selected = self.current().id;
+        let rank = |id: Snowflake| order.iter().position(|o| *o == id).map_or(0, |ix| ix + 1);
+        self.list[1..].sort_by_key(|space| rank(space.id));
+        self.selected = self.index(selected).unwrap_or(0);
+    }
+
+    /// The guilds in list order.
+    pub fn guild_ids(&self) -> Vec<Snowflake> {
+        self.list[1..].iter().map(|s| s.id).collect()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Space> {
@@ -175,20 +187,6 @@ impl Spaces {
             if self.selected >= ix {
                 self.selected = self.selected.saturating_sub(1);
             }
-        }
-    }
-
-    pub fn is_collapsed(&self, category: Snowflake) -> bool {
-        self.collapsed.contains(&category)
-    }
-
-    pub fn collapsed(&self) -> &HashSet<Snowflake> {
-        &self.collapsed
-    }
-
-    pub fn toggle_collapsed(&mut self, category: Snowflake) {
-        if !self.collapsed.remove(&category) {
-            self.collapsed.insert(category);
         }
     }
 
@@ -332,8 +330,7 @@ mod tests {
             channel(2, ChannelKind::GUILD_TEXT, Some(1), 0),
             channel(3, ChannelKind::GUILD_TEXT, Some(1), 1),
         ]);
-        let collapsed = HashSet::from([Snowflake(1)]);
-        let rows = space.expanded(&collapsed, |id| id == Snowflake(3));
+        let rows = space.expanded(|category| category == Snowflake(1), |id| id == Snowflake(3));
         assert_eq!(names(&space, &rows), ["C1", "c3"]);
     }
 

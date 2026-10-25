@@ -48,11 +48,12 @@ account must survive the whole project, so treat it as fragile.
 
 ## How to work here
 
-- **Crates.** The workspace is six crates at the root (see the README's Architecture):
+- **Crates.** The workspace is seven crates at the root (see the README's Architecture):
   `emerald-core` (paths, i18n, frames, processes), `emerald-http` (transport, caches,
   rate limits), `emerald-discord` (endpoints, gateway, models), `emerald-ui` (interface),
-  `emerald-webview` (generic native webview, no Emerald code) and `emerald-bin` (the
-  executable and the login/captcha flows). A crate depends only on the ones before it in
+  `emerald-webview` (generic native webview, no Emerald code), `emerald-notify`
+  (generic notifications and icon badge) and `emerald-bin` (the executable, the
+  login/captcha flows, and what joins the UI to the platform). A crate depends only on the ones before it in
   that list. New request bodies and gateway frames go in `emerald-discord/src/packets/`;
   Discord hosts come from `urls.rs`, never as literal URLs.
 - **Small modules.** Keep files to one concern, roughly under 400 lines. When an area
@@ -131,19 +132,20 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 3 — getting around
 
-19. [ ] Desktop notifications for DMs and mentions, honoring mute settings, plus an
+19. [x] Desktop notifications for DMs and mentions, honoring mute settings, plus an
     unread badge on the Dock / taskbar icon.
-20. [ ] Mute and notification settings per server, channel and thread (read from and
-    written to user guild settings, as the web client does).
-21. [ ] Quick switcher (Cmd/Ctrl+K) across servers, channels and DMs.
-22. [ ] Pinned messages panel per channel.
-23. [ ] Search: messages in a server or DM with filters (from, in, has, before/after),
+20. [x] Mute and notification settings per server, channel and thread (read from and
+    written to user guild settings, as the web client does). Threads still only
+    inherit from their channel: their own mute lives on the thread membership.
+21. [x] Quick switcher (Cmd/Ctrl+K) across servers, channels and DMs.
+22. [x] Pinned messages panel per channel.
+23. [x] Search: messages in a server or DM with filters (from, in, has, before/after),
     results that jump to the message.
-24. [ ] Threads browser: active and archived threads of a channel; forum sort, tag
+24. [x] Threads browser: active and archived threads of a channel; forum sort, tag
     filter and search.
-25. [ ] Inbox: recent mentions and unreads.
-26. [ ] Server folders and order in the server list, as synced in user settings.
-27. [ ] Mark channel/server as read; collapse state and hidden muted channels.
+25. [x] Inbox: recent mentions and unreads.
+26. [x] Server folders and order in the server list, as synced in user settings.
+27. [x] Mark channel/server as read; collapse state and hidden muted channels.
 
 ### Phase 4 — people and DMs
 

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod add_server;
+mod alerts;
 mod attachments;
 mod chat;
 mod composer;
@@ -18,6 +19,8 @@ mod images;
 mod members;
 mod navigation;
 mod outbox;
+mod place_menu;
+mod panels;
 mod profile;
 mod render;
 mod settings;
@@ -25,6 +28,7 @@ mod sidebar;
 mod slash;
 mod state;
 mod suggestions;
+mod switcher;
 mod user_panel;
 mod widgets;
 
@@ -44,16 +48,21 @@ use add_server::AddServer;
 use composer::Composer;
 use friends::Friends;
 use images::Images;
+pub use alerts::Alerts;
 pub use outbox::Outbox;
 use settings::SettingsView;
-use state::{Autocomplete, History, MemberLists, MemberSearch, MessageView, People, ReadStates, Spaces, TtlCache, Typing};
+use state::{
+    Autocomplete, History, MemberLists, MemberSearch, MessageView, NotifySettings, People, ReadStates, ServerList, Spaces,
+    TtlCache, Typing,
+};
 
-actions!(emerald_ui, [Dismiss, EditLast]);
+actions!(emerald_ui, [Dismiss, EditLast, QuickSwitch]);
 
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Dismiss, Some("Emerald")),
         KeyBinding::new("up", EditLast, Some("Emerald")),
+        KeyBinding::new("secondary-k", QuickSwitch, Some("Emerald")),
         // Selected message text; inputs handle it first when they have a selection.
         KeyBinding::new("secondary-c", crate::text_input::Copy, Some("Emerald")),
     ]);
@@ -78,10 +87,20 @@ enum Overlay {
     CreateThread(chat::NewThread),
     CreatePost(chat::NewPost),
     CreatePoll(chat::NewPoll),
+    /// The quick switcher (Ctrl/Cmd+K).
+    Switcher(switcher::Switcher),
 }
 
 pub struct Emerald {
     net: Box<dyn Outbox>,
+    /// Desktop notifications and the count on the app icon.
+    alerts: Box<dyn Alerts>,
+    /// The count last put on the app icon.
+    badge_shown: Option<u32>,
+    /// Mutes, notification levels and folded categories, synced with Discord.
+    notify: NotifySettings,
+    /// The server list's folders and order.
+    server_list: ServerList,
     settings: Settings,
     connection: Connection,
     people: People,
@@ -98,6 +117,8 @@ pub struct Emerald {
     history: History,
     reads: ReadStates,
     typing: Typing,
+    /// Channels opened lately, offered first by the quick switcher.
+    recent: state::switcher::Recent,
     /// The chat column shows the friends list instead of a channel.
     friends_open: bool,
     selected_channel: Option<Snowflake>,
@@ -120,6 +141,16 @@ pub struct Emerald {
     alt_input: Entity<TextInput>,
     message_menu: Option<chat::MessageMenu>,
     reaction_picker: Option<chat::ReactionPicker>,
+    /// Pins, search results, the inbox or threads, beside the chat.
+    panel: Option<panels::Panel>,
+    /// The search box in the channel header.
+    search_input: Entity<TextInput>,
+    /// The search box of the threads panel.
+    thread_query: Entity<TextInput>,
+    /// The search box of an open forum.
+    forum_query: Entity<TextInput>,
+    /// The right-click menu of a server, category or channel.
+    place_menu: Option<place_menu::PlaceMenu>,
     /// Forums opened this session, by channel.
     forums: HashMap<Snowflake, chat::Forum>,
     /// Spoiler images the user clicked open, by URL.
@@ -175,6 +206,7 @@ pub struct Emerald {
 impl Emerald {
     pub fn new(
         net: impl Outbox + 'static,
+        alerts: impl Alerts + 'static,
         settings: Settings,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -190,6 +222,9 @@ impl Emerald {
         let edit_input = cx.new(|cx| TextInput::new("", cx).multiline(composer::MAX_ROWS));
         let alt_input = cx.new(|cx| TextInput::new(t!("upload.description_placeholder"), cx).keep_on_submit().submit_empty());
         let emoji_query = cx.new(|cx| TextInput::new(t!("reaction.search"), cx).keep_on_submit().compact());
+        let search_input = cx.new(|cx| TextInput::new(t!("search.placeholder"), cx).keep_on_submit().compact());
+        let thread_query = cx.new(|cx| TextInput::new(t!("threads.search"), cx).keep_on_submit().submit_empty().compact());
+        let forum_query = cx.new(|cx| TextInput::new(t!("forum.search"), cx).keep_on_submit().submit_empty().compact());
         let subscriptions = vec![
             cx.subscribe_in(&alt_input, window, |this, _, _: &Submitted, window, cx| {
                 this.save_attachment(window, cx)
@@ -214,6 +249,9 @@ impl Emerald {
             }),
             cx.observe(&composer.input, |this, _, cx| this.on_draft_changed(cx)),
             cx.subscribe(&composer.input, |this, _, key: &MenuKey, cx| this.on_menu_key(*key, cx)),
+            cx.subscribe(&search_input, |this, _, event: &Submitted, cx| this.submit_search(event.0.clone(), cx)),
+            cx.subscribe(&thread_query, |this, _, event: &Submitted, cx| this.search_threads(event.0.clone(), cx)),
+            cx.subscribe(&forum_query, |this, _, event: &Submitted, cx| this.search_forum(event.0.clone(), cx)),
             cx.subscribe(&friends.input, |this, _, event: &Submitted, cx| {
                 this.send_friend_request(event.0.clone(), cx)
             }),
@@ -246,6 +284,10 @@ impl Emerald {
 
         Self {
             net: Box::new(net),
+            alerts: Box::new(alerts),
+            badge_shown: None,
+            notify: NotifySettings::default(),
+            server_list: ServerList::default(),
             settings,
             connection: Connection {
                 link: Link::Connecting,
@@ -264,6 +306,7 @@ impl Emerald {
             history: History::default(),
             reads: ReadStates::default(),
             typing: Typing::default(),
+            recent: Default::default(),
             friends_open: true,
             selected_channel: None,
             friends,
@@ -286,6 +329,11 @@ impl Emerald {
             window_active: window.is_window_active(),
             weak: cx.entity().downgrade(),
             forums: HashMap::new(),
+            panel: None,
+            search_input,
+            thread_query,
+            forum_query,
+            place_menu: None,
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
             dm_search,

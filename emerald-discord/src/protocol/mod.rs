@@ -4,7 +4,9 @@
 mod action;
 mod command;
 mod event;
+mod query;
 
 pub use action::Action;
 pub use command::{Command, IndexTarget, NewPoll, Page, ReactionSource, ReplyTo, Upload};
-pub use event::{Link, NetEvent, ReactionEvent, Snapshot, ThreadPage};
+pub use event::{Link, NetEvent, PinPage, ReactionEvent, SearchPage, Snapshot, ThreadPage};
+pub use query::{MUTE_WINDOWS, SearchQuery, SearchScope, SettingsChange, ThreadQuery};

@@ -165,7 +165,8 @@ impl Emerald {
                     }),
                 )),
                 _ => d,
-            });
+            })
+            .child(self.render_header_tools(self.selected_channel, cx));
 
         let body = if self.selected_channel.is_none() {
             div()
@@ -278,10 +279,17 @@ impl Emerald {
                     .flex_1()
                     .min_h(px(0.))
                     .child(column)
-                    .when_some(user.filter(|_| wide && self.settings.show_profile), |row, user| {
-                        row.child(self.render_profile_panel(user, cx))
-                    })
-                    .when(wide && self.members.current().is_some(), |row| row.child(self.render_member_list(cx))),
+                    .map(|row| match self.render_panel(cx) {
+                        // A panel takes the place of the profile or member list.
+                        Some(panel) => row.child(panel),
+                        None => row
+                            .when_some(user.filter(|_| wide && self.settings.show_profile), |row, user| {
+                                row.child(self.render_profile_panel(user, cx))
+                            })
+                            .when(wide && self.members.current().is_some(), |row| {
+                                row.child(self.render_member_list(cx))
+                            }),
+                    }),
             )
             .into_any_element()
     }

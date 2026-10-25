@@ -113,6 +113,8 @@ pub struct GuildProperties {
     pub owner_id: Option<Snowflake>,
     #[serde(default)]
     pub features: Vec<String>,
+    #[serde(default)]
+    pub default_message_notifications: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +147,10 @@ pub struct Guild {
     pub threads: Vec<Channel>,
     #[serde(default)]
     pub unavailable: bool,
+    /// What members are notified of when they chose nothing: 0 every
+    /// message, 1 mentions only.
+    #[serde(default)]
+    pub default_message_notifications: Option<u8>,
 }
 
 impl Guild {
@@ -174,6 +180,14 @@ impl Guild {
             .as_deref()
             .or(self.properties.as_ref().and_then(|p| p.icon.as_deref()))?;
         Some(CDN.join(format_args!("/icons/{}/{hash}.png?size=96", self.id)))
+    }
+
+    /// Every message when the guild says so, else mentions only.
+    pub fn default_notify(&self) -> super::Notify {
+        let level = self
+            .default_message_notifications
+            .or(self.properties.as_ref().and_then(|p| p.default_message_notifications));
+        if level == Some(0) { super::Notify::All } else { super::Notify::Mentions }
     }
 
     pub fn owner(&self) -> Option<Snowflake> {

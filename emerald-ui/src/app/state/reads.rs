@@ -45,6 +45,11 @@ impl ReadStates {
         self.mentions.get(&channel).copied().unwrap_or(0)
     }
 
+    /// Unread mentions in every channel, for the count on the app icon.
+    pub fn all_mentions(&self) -> u32 {
+        self.mentions.values().sum()
+    }
+
     /// Unread mentions across `channels`.
     pub fn total_mentions<'a>(&self, channels: impl Iterator<Item = &'a Channel>) -> u32 {
         channels.map(|c| self.mentions(c.id)).sum()
