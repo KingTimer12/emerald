@@ -27,6 +27,19 @@ pub struct Profile {
     /// Bio and pronouns the user set for that guild only.
     #[serde(default)]
     pub guild_member_profile: Option<UserProfileDetails>,
+    /// Servers both share; only when asked for.
+    #[serde(default)]
+    pub mutual_guilds: Option<Vec<MutualGuild>>,
+    #[serde(default)]
+    pub mutual_friends_count: Option<u32>,
+}
+
+/// A server the user shares with someone, with their nickname there.
+#[derive(Clone, Debug, Deserialize)]
+pub struct MutualGuild {
+    pub id: Snowflake,
+    #[serde(default)]
+    pub nick: Option<String>,
 }
 
 /// A user's membership of the guild the profile was requested for.

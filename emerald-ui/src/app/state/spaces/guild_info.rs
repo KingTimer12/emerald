@@ -28,6 +28,10 @@ impl GuildInfo {
         self.roles.iter().find(|r| r.id == role).map_or(0, |r| r.permissions)
     }
 
+    pub fn owner(&self) -> Option<Snowflake> {
+        self.owner
+    }
+
     pub fn upload_limit(&self) -> Option<u64> {
         self.upload_limit
     }

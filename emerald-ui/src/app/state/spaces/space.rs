@@ -14,6 +14,8 @@ pub struct Space {
     pub(super) guild: Option<GuildInfo>,
     /// The open thread, listed under its parent even when not joined.
     pub(super) shown_thread: Option<Snowflake>,
+    /// DMs: what each is called, from its people's names.
+    pub(super) labels: HashMap<Snowflake, SharedString>,
 }
 
 impl Space {
@@ -29,6 +31,7 @@ impl Space {
             rows: Vec::new(),
             guild: None,
             shown_thread: None,
+            labels: HashMap::new(),
         };
         space.rebuild();
         space
@@ -57,6 +60,7 @@ impl Space {
             channels: guild.channels,
             rows: Vec::new(),
             shown_thread: None,
+            labels: HashMap::new(),
         };
         for mut thread in guild.threads {
             thread.guild_id = Some(space.id);
@@ -68,6 +72,34 @@ impl Space {
 
     pub fn is_dms(&self) -> bool {
         self.id == DMS
+    }
+
+    /// Names the DMs with `label`, which reads their people's names; run
+    /// again when those names change.
+    pub fn label_dms(&mut self, label: impl Fn(&Channel) -> String) {
+        self.labels = self.channels.iter().map(|c| (c.id, label(c).into())).collect();
+        self.rebuild();
+    }
+
+    /// The DM `id` as the sidebar calls it.
+    pub fn label(&self, id: Snowflake) -> Option<&SharedString> {
+        self.labels.get(&id)
+    }
+
+    /// Message requests waiting (`spam` false) or in the spam inbox.
+    pub fn requests(&self, spam: bool) -> impl Iterator<Item = &Channel> {
+        self.channels
+            .iter()
+            .filter(move |c| if spam { c.is_spam_request() } else { c.is_request() })
+    }
+
+    pub fn channel_mut(&mut self, id: Snowflake) -> Option<&mut Channel> {
+        self.channels.iter_mut().find(|c| c.id == id)
+    }
+
+    /// Redraws the rows after a channel was changed in place.
+    pub fn refresh(&mut self) {
+        self.rebuild();
     }
 
     pub fn info(&self) -> Option<&GuildInfo> {

@@ -213,3 +213,14 @@ fn fenced_code_blocks() {
     // Unclosed: literal text.
     assert_eq!(outline("```x"), ["Paragraph:```x"]);
 }
+
+#[test]
+fn invite_links_are_found_once() {
+    assert_eq!(invite_link("https://discord.gg/rust"), Some("rust"));
+    assert_eq!(invite_link("https://discord.com/invite/abc-1?event=2"), Some("abc-1"));
+    assert_eq!(invite_link("https://discord.com/channels/1/2"), None);
+    assert_eq!(invite_link("https://evil.gg/rust"), None);
+    let text = "join <https://discord.gg/a> or https://discord.gg/a and (https://discord.com/invite/b)";
+    assert_eq!(invite_codes(text, 3), ["a", "b"]);
+    assert_eq!(invite_codes(text, 1), ["a"]);
+}

@@ -52,6 +52,7 @@ pub fn avatar_url(id: Snowflake, hash: Option<&str>) -> String {
 
 pub mod relationship_kind {
     pub const FRIEND: u8 = 1;
+    pub const BLOCKED: u8 = 2;
     pub const INCOMING: u8 = 3;
     pub const OUTGOING: u8 = 4;
 }
@@ -67,6 +68,12 @@ pub struct Relationship {
     pub kind: u8,
     #[serde(default)]
     pub user: Option<User>,
+    /// The name the user gave this friend, shown in place of theirs.
+    #[serde(default)]
+    pub nickname: Option<String>,
+    /// Their messages fold away and they cannot ping the user.
+    #[serde(default)]
+    pub user_ignored: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +103,16 @@ impl Presence {
     pub fn user(&self) -> Option<Snowflake> {
         self.user_id.or(self.user.as_ref().map(|u| u.id))
     }
+}
+
+/// USER_NOTE_UPDATE, and the answer to reading a note.
+#[derive(Debug, Deserialize)]
+pub struct NoteUpdate {
+    /// Whom the note is about.
+    #[serde(alias = "note_user_id")]
+    pub id: Snowflake,
+    #[serde(default)]
+    pub note: String,
 }
 
 /// Presence the user picks; sent in IDENTIFY and in presence updates (op 3).

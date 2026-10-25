@@ -35,8 +35,10 @@ pub const INBOX: &str = "icons/inbox.svg";
 pub const FOLDER: &str = "icons/folder.svg";
 pub const CHECK: &str = "icons/check.svg";
 pub const CHEVRON_RIGHT: &str = "icons/chevron_right.svg";
+pub const USER_ADD: &str = "icons/user_add.svg";
+pub const PLUS: &str = "icons/plus.svg";
 
-const ALL: [(&str, &[u8]); 29] = [
+const ALL: [(&str, &[u8]); 31] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -66,6 +68,8 @@ const ALL: [(&str, &[u8]); 29] = [
     (FOLDER, include_bytes!("../assets/icons/folder.svg")),
     (CHECK, include_bytes!("../assets/icons/check.svg")),
     (CHEVRON_RIGHT, include_bytes!("../assets/icons/chevron_right.svg")),
+    (USER_ADD, include_bytes!("../assets/icons/user_add.svg")),
+    (PLUS, include_bytes!("../assets/icons/plus.svg")),
 ];
 
 pub struct Icons;

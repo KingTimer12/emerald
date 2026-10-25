@@ -13,22 +13,29 @@ mod attachments;
 mod chat;
 mod composer;
 mod connection;
+mod dialogs;
 mod events;
 mod friends;
+mod group_members;
+mod group_picker;
 mod images;
+mod invites;
 mod members;
 mod navigation;
 mod outbox;
+mod place_actions;
 mod place_menu;
 mod panels;
 mod profile;
 mod render;
+mod requests;
 mod settings;
 mod sidebar;
 mod slash;
 mod state;
 mod suggestions;
 mod switcher;
+mod user_menu;
 mod user_panel;
 mod widgets;
 
@@ -89,6 +96,14 @@ enum Overlay {
     CreatePoll(chat::NewPoll),
     /// The quick switcher (Ctrl/Cmd+K).
     Switcher(switcher::Switcher),
+    /// A question before leaving, blocking or removing someone.
+    Confirm(dialogs::Ask),
+    /// A name to type: a group's, a friend's nickname.
+    Prompt(dialogs::Prompt),
+    /// Friends to start a group with, or to add to a DM.
+    GroupPicker(group_picker::GroupPicker),
+    /// "Invite People".
+    Invite(invites::InviteModal),
 }
 
 pub struct Emerald {
@@ -121,6 +136,9 @@ pub struct Emerald {
     recent: state::switcher::Recent,
     /// The chat column shows the friends list instead of a channel.
     friends_open: bool,
+    /// The chat column shows the message requests, or the spam inbox.
+    requests_open: bool,
+    requests_spam: bool,
     selected_channel: Option<Snowflake>,
     friends: Friends,
     composer: Composer,
@@ -151,6 +169,24 @@ pub struct Emerald {
     forum_query: Entity<TextInput>,
     /// The right-click menu of a server, category or channel.
     place_menu: Option<place_menu::PlaceMenu>,
+    /// The right-click menu of a person.
+    user_menu: Option<user_menu::UserMenu>,
+    /// The text field of a name dialog.
+    prompt_input: Entity<TextInput>,
+    /// The search box of the friend picker.
+    picker_query: Entity<TextInput>,
+    /// The note on the open profile.
+    note_input: Entity<TextInput>,
+    /// Whose note `note_input` holds, to save it on Enter.
+    note_user: Option<Snowflake>,
+    /// The tab of the full profile.
+    profile_tab: profile::ProfileTab,
+    /// Friends in common, per user, once asked for.
+    mutual_friends: HashMap<Snowflake, Vec<Snowflake>>,
+    /// Invites linked in messages, resolved for their cards.
+    invite_cards: invites::InviteCards,
+    /// Runs of blocked or ignored messages opened, by their first message.
+    revealed_hidden: HashSet<Snowflake>,
     /// Forums opened this session, by channel.
     forums: HashMap<Snowflake, chat::Forum>,
     /// Spoiler images the user clicked open, by URL.
@@ -225,6 +261,9 @@ impl Emerald {
         let search_input = cx.new(|cx| TextInput::new(t!("search.placeholder"), cx).keep_on_submit().compact());
         let thread_query = cx.new(|cx| TextInput::new(t!("threads.search"), cx).keep_on_submit().submit_empty().compact());
         let forum_query = cx.new(|cx| TextInput::new(t!("forum.search"), cx).keep_on_submit().submit_empty().compact());
+        let prompt_input = cx.new(|cx| TextInput::new("", cx).keep_on_submit().submit_empty());
+        let picker_query = cx.new(|cx| TextInput::new(t!("group.search"), cx).keep_on_submit().compact());
+        let note_input = cx.new(|cx| TextInput::new(t!("note.placeholder"), cx).keep_on_submit().submit_empty().compact());
         let subscriptions = vec![
             cx.subscribe_in(&alt_input, window, |this, _, _: &Submitted, window, cx| {
                 this.save_attachment(window, cx)
@@ -252,6 +291,9 @@ impl Emerald {
             cx.subscribe(&search_input, |this, _, event: &Submitted, cx| this.submit_search(event.0.clone(), cx)),
             cx.subscribe(&thread_query, |this, _, event: &Submitted, cx| this.search_threads(event.0.clone(), cx)),
             cx.subscribe(&forum_query, |this, _, event: &Submitted, cx| this.search_forum(event.0.clone(), cx)),
+            cx.subscribe_in(&prompt_input, window, |this, _, _: &Submitted, window, cx| this.submit_prompt(window, cx)),
+            cx.observe(&picker_query, |_, _, cx| cx.notify()),
+            cx.subscribe(&note_input, |this, _, event: &Submitted, cx| this.save_note(event.0.clone(), cx)),
             cx.subscribe(&friends.input, |this, _, event: &Submitted, cx| {
                 this.send_friend_request(event.0.clone(), cx)
             }),
@@ -308,6 +350,8 @@ impl Emerald {
             typing: Typing::default(),
             recent: Default::default(),
             friends_open: true,
+            requests_open: false,
+            requests_spam: false,
             selected_channel: None,
             friends,
             composer,
@@ -334,6 +378,15 @@ impl Emerald {
             thread_query,
             forum_query,
             place_menu: None,
+            user_menu: None,
+            prompt_input,
+            picker_query,
+            note_input,
+            note_user: None,
+            profile_tab: profile::ProfileTab::About,
+            mutual_friends: HashMap::new(),
+            invite_cards: Default::default(),
+            revealed_hidden: HashSet::new(),
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
             dm_search,

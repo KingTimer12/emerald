@@ -7,6 +7,7 @@ pub mod commands;
 pub mod drafts;
 pub mod expiry;
 pub mod folders;
+pub mod hidden;
 pub mod history;
 pub mod member_search;
 pub mod members;

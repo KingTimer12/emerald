@@ -29,17 +29,35 @@ impl Emerald {
                 if self.people.add_relationship(relationship) && self.spaces.dm_with(user).is_none() {
                     self.net.post(Command::OpenDm { user, select: false });
                 }
+                self.label_dms();
+                self.redraw_chat();
             }
             NetEvent::RelationshipRemove(user) => {
                 self.people.remove_relationship(user);
                 self.friends.forget(user);
+                self.label_dms();
+                self.redraw_chat();
             }
+            NetEvent::Recipient { channel, user, added } => self.on_recipient(channel, user, added),
+            NetEvent::Note { user, note } => self.on_note(user, note, window, cx),
+            NetEvent::MutualFriends { user, friends } => {
+                let friends = friends.unwrap_or_default();
+                let ids = friends.iter().map(|u| u.id).collect();
+                for friend in friends {
+                    self.people.remember_new(&friend);
+                }
+                self.mutual_friends.insert(user, ids);
+            }
+            NetEvent::InviteCreated { channel, invite } => self.on_invite_created(channel, invite),
+            NetEvent::Invite { code, invite } => self.invite_cards.store(code, invite),
             NetEvent::UserUpdate(user) => self.people.update(user),
             NetEvent::DmOpened { mut channel, select } => {
                 self.people.adopt_dm(&mut channel);
                 let id = channel.id;
                 self.spaces.dms_mut().upsert_channel(channel);
+                self.label_dms();
                 if select {
+                    self.requests_open = false;
                     self.spaces.select_dms();
                     self.select_channel(id, window, cx);
                 }
@@ -212,8 +230,16 @@ impl Emerald {
                 self.connection.set_message(t!("common.error", error = error));
             }
             NetEvent::TypingStart(typing) => self.on_typing(typing, cx),
-            NetEvent::Profile { guild, profile } => {
-                self.profiles.fill((profile.user.id, guild), profile, Instant::now())
+            NetEvent::Profile { guild, mut profile } => {
+                let key = (profile.user.id, guild);
+                // The DM panel's copy leaves out what the full one had.
+                if profile.mutual_guilds.is_none()
+                    && let Some(old) = self.profiles.get(&key)
+                {
+                    profile.mutual_guilds = old.mutual_guilds.clone();
+                    profile.mutual_friends_count = old.mutual_friends_count;
+                }
+                self.profiles.fill(key, profile, Instant::now())
             }
             NetEvent::SendFailed {
                 channel,
@@ -224,6 +250,38 @@ impl Emerald {
             } => self.on_send_failed(channel, &nonce, content, files, error, cx),
         }
         self.refresh_badge();
+    }
+
+    /// Names the DMs after their people again, after a name, nickname or
+    /// member changed.
+    pub(super) fn label_dms(&mut self) {
+        let people = &self.people;
+        self.spaces.dms_mut().label_dms(|channel| people.dm_name(channel));
+    }
+
+    /// Redraws the open chat, whose blocked and ignored messages fold
+    /// differently once a relationship changed.
+    fn redraw_chat(&self) {
+        if let Some(channel) = self.selected_channel {
+            self.history.redraw_all(channel, shown(&self.messages, self.selected_channel, channel));
+        }
+    }
+
+    /// Someone joined or left a group DM; the user leaving drops it.
+    fn on_recipient(&mut self, channel: emerald_discord::model::Snowflake, user: emerald_discord::model::User, added: bool) {
+        let id = user.id;
+        let me = self.people.is_me(id);
+        self.people.remember_new(&user);
+        let dms = self.spaces.dms_mut();
+        if me && !added {
+            dms.remove_channel(channel);
+        } else if let Some(group) = dms.channel_mut(channel) {
+            group.recipient_ids.retain(|r| *r != id);
+            if added {
+                group.recipient_ids.push(id);
+            }
+        }
+        self.label_dms();
     }
 
     /// Puts the servers in the user's order, folders flattened.

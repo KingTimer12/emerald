@@ -195,24 +195,47 @@ impl Guild {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct InviteGuild {
     pub id: Snowflake,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+impl InviteGuild {
+    pub fn icon_url(&self) -> Option<String> {
+        let hash = self.icon.as_deref()?;
+        Some(CDN.join(format_args!("/icons/{}/{hash}.png?size=96", self.id)))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct InviteChannel {
     pub id: Snowflake,
     #[serde(rename = "type")]
     pub kind: u8,
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+/// An invite as `GET /invites/{code}` resolves it.
+#[derive(Clone, Debug, Deserialize)]
 pub struct Invite {
+    #[serde(default)]
+    pub code: String,
     #[serde(default)]
     pub guild: Option<InviteGuild>,
     #[serde(default)]
     pub channel: Option<InviteChannel>,
+    #[serde(default)]
+    pub approximate_member_count: Option<u64>,
+    #[serde(default)]
+    pub approximate_presence_count: Option<u64>,
+    /// ISO time it stops working; `None` never expires.
+    #[serde(default)]
+    pub expires_at: Option<String>,
 }
 
 #[cfg(test)]

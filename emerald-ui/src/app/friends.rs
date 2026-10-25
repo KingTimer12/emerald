@@ -47,6 +47,7 @@ pub enum FriendsTab {
     Online,
     All,
     Pending,
+    Blocked,
     Add,
 }
 
@@ -71,14 +72,17 @@ impl Emerald {
                 FriendsTab::Pending => {
                     matches!(*kind, relationship_kind::INCOMING | relationship_kind::OUTGOING)
                 }
+                FriendsTab::Blocked => *kind == relationship_kind::BLOCKED,
                 FriendsTab::Add => false,
             })
             .map(|(id, kind)| {
                 let user = self.people.user(id);
                 Entry {
                     id,
-                    name: user
-                        .map_or_else(|| id.to_string(), |u| u.display_name().to_owned())
+                    name: self
+                        .people
+                        .friend_name(id)
+                        .map_or_else(|| id.to_string(), str::to_owned)
                         .into(),
                     username: user.map(|u| u.username.clone()).unwrap_or_default().into(),
                     kind,
@@ -150,6 +154,7 @@ impl Emerald {
                 tab("tab-pending", t!("friends.tab_pending"), FriendsTab::Pending, cx)
                     .when(pending > 0, |t| t.child(widgets::badge(pending))),
             )
+            .child(tab("tab-blocked", t!("friends.tab_blocked"), FriendsTab::Blocked, cx))
             .child(
                 // Green call-to-action that turns into green text when open.
                 div()

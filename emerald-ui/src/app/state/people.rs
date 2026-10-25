@@ -1,7 +1,8 @@
 //! Everyone the client knows about: the signed-in user, the users seen in
-//! payloads, friend relationships and presences.
+//! payloads, relationships (friends, requests, blocks) with their
+//! nicknames, who is ignored, notes and presences.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use gpui::SharedString;
 
@@ -15,6 +16,12 @@ pub struct People {
     relationships: HashMap<Snowflake, u8>,
     /// Friend presences; missing means offline.
     presences: HashMap<Snowflake, SharedString>,
+    /// Names the user gave their friends.
+    nicknames: HashMap<Snowflake, String>,
+    /// Users whose messages fold away, short of blocking them.
+    ignored: HashSet<Snowflake>,
+    /// The user's notes on profiles, as read so far; empty for none.
+    notes: HashMap<Snowflake, String>,
 }
 
 impl People {
@@ -22,11 +29,13 @@ impl People {
     pub fn load(&mut self, me: User, users: Vec<User>, relationships: Vec<Relationship>) {
         self.users = users.into_iter().map(|u| (u.id, u)).collect();
         self.relationships.clear();
+        self.nicknames.clear();
+        self.ignored.clear();
+        // Notes come back with each profile; another device may have
+        // changed them meanwhile.
+        self.notes.clear();
         for relationship in relationships {
-            self.relationships.insert(relationship.id, relationship.kind);
-            if let Some(user) = relationship.user {
-                self.users.insert(user.id, user);
-            }
+            self.add_relationship(relationship);
         }
         self.me = Some(me);
     }
@@ -108,9 +117,20 @@ impl People {
         }
     }
 
-    /// RELATIONSHIP_ADD; true when it made the user a friend just now.
+    /// RELATIONSHIP_ADD and _UPDATE; true when it made the user a friend
+    /// just now.
     pub fn add_relationship(&mut self, relationship: Relationship) -> bool {
-        let previous = self.relationships.insert(relationship.id, relationship.kind);
+        let id = relationship.id;
+        let previous = self.relationships.insert(id, relationship.kind);
+        match relationship.nickname.filter(|n| !n.is_empty()) {
+            Some(nickname) => self.nicknames.insert(id, nickname),
+            None => self.nicknames.remove(&id),
+        };
+        if relationship.user_ignored {
+            self.ignored.insert(id);
+        } else {
+            self.ignored.remove(&id);
+        }
         if let Some(user) = relationship.user {
             self.remember(user);
         }
@@ -119,6 +139,50 @@ impl People {
 
     pub fn remove_relationship(&mut self, id: Snowflake) {
         self.relationships.remove(&id);
+        self.nicknames.remove(&id);
+        self.ignored.remove(&id);
+    }
+
+    /// The relationship kind with `id`, if any (`relationship_kind`).
+    pub fn relationship(&self, id: Snowflake) -> Option<u8> {
+        self.relationships.get(&id).copied()
+    }
+
+    pub fn is_friend(&self, id: Snowflake) -> bool {
+        self.relationship(id) == Some(relationship_kind::FRIEND)
+    }
+
+    pub fn is_blocked(&self, id: Snowflake) -> bool {
+        self.relationship(id) == Some(relationship_kind::BLOCKED)
+    }
+
+    /// Ignored and not blocked, as the web client counts it.
+    pub fn is_ignored(&self, id: Snowflake) -> bool {
+        self.ignored.contains(&id) && !self.is_blocked(id)
+    }
+
+    /// Whether `id`'s messages fold away in the chat.
+    pub fn is_hidden(&self, id: Snowflake) -> bool {
+        self.is_blocked(id) || self.ignored.contains(&id)
+    }
+
+    pub fn nickname(&self, id: Snowflake) -> Option<&str> {
+        self.nicknames.get(&id).map(String::as_str)
+    }
+
+    /// The name a friend goes by here: the nickname the user gave them,
+    /// else their display name.
+    pub fn friend_name(&self, id: Snowflake) -> Option<&str> {
+        self.nickname(id).or_else(|| self.display_name(id))
+    }
+
+    /// The note on `id`'s profile; `None` until read.
+    pub fn note(&self, id: Snowflake) -> Option<&str> {
+        self.notes.get(&id).map(String::as_str)
+    }
+
+    pub fn set_note(&mut self, id: Snowflake, note: String) {
+        self.notes.insert(id, note);
     }
 
     pub fn relationships(&self) -> impl Iterator<Item = (Snowflake, u8)> + '_ {
@@ -133,7 +197,7 @@ impl People {
     }
 
     /// Moves a DM's embedded recipients into the user table, keeping only
-    /// their ids, and names the channel after them.
+    /// their ids.
     pub fn adopt_dm(&mut self, channel: &mut Channel) {
         if !channel.recipients.is_empty() {
             channel.recipient_ids = channel.recipients.iter().map(|u| u.id).collect();
@@ -141,14 +205,16 @@ impl People {
                 self.users.insert(user.id, user);
             }
         }
-        if channel.name.as_deref().is_none_or(str::is_empty) {
-            let names: Vec<&str> = channel
-                .recipient_ids
-                .iter()
-                .filter_map(|id| self.display_name(*id))
-                .collect();
-            channel.name = Some(if names.is_empty() { "?".into() } else { names.join(", ") });
+    }
+
+    /// What a DM is called: its name when a group has one, else its
+    /// people, by the nicknames the user gave them.
+    pub fn dm_name(&self, channel: &Channel) -> String {
+        if let Some(name) = channel.name.as_deref().filter(|n| !n.is_empty()) {
+            return name.to_owned();
         }
+        let names: Vec<&str> = channel.recipient_ids.iter().filter_map(|id| self.friend_name(*id)).collect();
+        if names.is_empty() { "?".into() } else { names.join(", ") }
     }
 }
 
@@ -176,6 +242,8 @@ mod tests {
             id: Snowflake(2),
             kind,
             user: None,
+            nickname: None,
+            user_ignored: false,
         };
         assert!(!people.add_relationship(friend(relationship_kind::OUTGOING)));
         assert!(people.add_relationship(friend(relationship_kind::FRIEND)));
@@ -194,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn adopted_dms_are_named_after_recipients() {
+    fn unnamed_dms_are_named_after_recipients() {
         let mut people = People::default();
         let mut dm = Channel {
             kind: ChannelKind::GROUP_DM,
@@ -202,8 +270,35 @@ mod tests {
             ..Channel::default()
         };
         people.adopt_dm(&mut dm);
-        assert_eq!(dm.name.as_deref(), Some("ana, bia"));
         assert!(dm.recipients.is_empty());
         assert_eq!(people.display_name(Snowflake(3)), Some("bia"));
+        people.add_relationship(Relationship {
+            id: Snowflake(3),
+            kind: relationship_kind::FRIEND,
+            user: None,
+            nickname: Some("Bibi".into()),
+            user_ignored: false,
+        });
+        assert_eq!(people.dm_name(&dm), "ana, Bibi");
+        dm.name = Some("Grupo".into());
+        assert_eq!(people.dm_name(&dm), "Grupo");
+    }
+
+    #[test]
+    fn blocked_and_ignored_users_are_hidden() {
+        let mut people = People::default();
+        let relationship = |id, kind, ignored| Relationship {
+            id: Snowflake(id),
+            kind,
+            user: None,
+            nickname: None,
+            user_ignored: ignored,
+        };
+        people.add_relationship(relationship(2, relationship_kind::BLOCKED, false));
+        people.add_relationship(relationship(3, 0, true));
+        assert!(people.is_blocked(Snowflake(2)) && people.is_hidden(Snowflake(2)));
+        assert!(people.is_ignored(Snowflake(3)) && people.is_hidden(Snowflake(3)));
+        people.remove_relationship(Snowflake(3));
+        assert!(!people.is_hidden(Snowflake(3)));
     }
 }

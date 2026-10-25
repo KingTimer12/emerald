@@ -20,4 +20,10 @@ pub enum Action {
     CreatePoll,
     /// Changing mutes and notification levels.
     Settings,
+    /// Making or changing a group DM, closing a DM, answering a request.
+    Channel,
+    /// Writing a note on a profile.
+    Note,
+    /// Leaving a server.
+    LeaveGuild,
 }

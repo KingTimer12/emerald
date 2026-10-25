@@ -209,6 +209,7 @@ impl Emerald {
         if matches!(target, Target::Channel { thread: true, .. }) {
             return;
         }
+        let more = |this: &Self, items: &mut Vec<AnyElement>, cx: &mut Context<Self>| this.more_place_items(target, items, cx);
         items.push(separator());
         let mute_label = match target {
             Target::Guild(_) => t!("mute.server"),
@@ -259,10 +260,11 @@ impl Emerald {
                 );
             }
         }
+        more(self, items, cx);
     }
 }
 
-fn item(id: (&'static str, usize), label: SharedString, trailing: Option<&'static str>) -> gpui::Stateful<gpui::Div> {
+pub(super) fn item(id: (&'static str, usize), label: SharedString, trailing: Option<&'static str>) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .h(px(32.))

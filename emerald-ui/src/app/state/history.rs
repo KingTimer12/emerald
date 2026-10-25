@@ -236,6 +236,16 @@ impl History {
         }
     }
 
+    /// Redraws every message of the log `view` shows, after something that
+    /// changes how many of them look (blocking someone, say).
+    pub fn redraw_all(&self, channel: Snowflake, view: Option<&dyn MessageView>) {
+        if let (Some(log), Some(view)) = (self.logs.get(&channel), view) {
+            for ix in 0..log.messages.len() {
+                view.refresh(ix);
+            }
+        }
+    }
+
     pub fn delete(&mut self, delete: MessageDelete, view: Option<&dyn MessageView>) {
         let Some(log) = self.logs.get_mut(&delete.channel_id) else { return };
         if let Some(ix) = log.position(delete.id) {

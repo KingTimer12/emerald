@@ -264,6 +264,7 @@ mod tests {
                 Row::Channel(c) => c.name.to_string(),
                 Row::Category { title, .. } => title.to_string(),
                 Row::Friends => "friends".into(),
+                Row::Requests => "requests".into(),
             })
             .collect()
     }
@@ -350,6 +351,26 @@ mod tests {
         let found = space.search("an");
         assert_eq!(names(&space, &found), ["Ana"]);
         assert_eq!(space.search("").get(2).map(|ix| names(&space, &[*ix])), Some(vec!["Ana".into()]));
+    }
+
+    #[test]
+    fn message_requests_stay_out_of_the_dm_list() {
+        let dm = |id: u64, request: bool, spam: bool| Channel {
+            id: Snowflake(id),
+            kind: ChannelKind::DM,
+            name: Some(format!("d{id}")),
+            is_message_request: request,
+            is_spam: spam,
+            ..Channel::default()
+        };
+        let mut space = Space::dms(vec![dm(1, false, false), dm(2, true, false), dm(3, true, true)]);
+        let all = space.search("");
+        assert_eq!(names(&space, &all), ["friends", "requests", t!("dm.header"), "d1"]);
+        assert_eq!(space.requests(false).map(|c| c.id.0).collect::<Vec<_>>(), [2]);
+        assert_eq!(space.requests(true).map(|c| c.id.0).collect::<Vec<_>>(), [3]);
+        space.label_dms(|c| format!("label {}", c.id));
+        assert_eq!(space.label(Snowflake(1)).map(|l| l.as_ref()), Some("label 1"));
+        assert_eq!(names(&space, &space.search("")).last().map(String::as_str), Some("label 1"));
     }
 
     #[test]

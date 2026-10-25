@@ -14,6 +14,10 @@ impl Emerald {
                 t!("friends.all_header"),
                 t!("friends.empty_all"),
             ),
+            FriendsTab::Blocked => (
+                t!("friends.blocked_header"),
+                t!("friends.empty_blocked"),
+            ),
             _ => (
                 t!("friends.pending_header"),
                 t!("friends.empty_pending"),
@@ -55,6 +59,7 @@ impl Emerald {
         let subtitle: SharedString = match entry.kind {
             relationship_kind::INCOMING => t!("friends.incoming").into(),
             relationship_kind::OUTGOING => t!("friends.outgoing").into(),
+            relationship_kind::BLOCKED => t!("friends.blocked").into(),
             _ => widgets::status_label(entry.status.as_ref().map(|s| -> &str { s.as_ref() })).into(),
         };
         let small = |button: gpui::Stateful<gpui::Div>| button.h(px(32.)).px_3();
@@ -65,8 +70,16 @@ impl Emerald {
                 this.open_dm(id, window, cx);
             }));
 
-        let actions = div().flex().flex_none().gap_2().child(message);
+        let blocked = entry.kind == relationship_kind::BLOCKED;
+        let actions = div().flex().flex_none().gap_2().when(!blocked, |a| a.child(message));
         let actions = match entry.kind {
+            relationship_kind::BLOCKED => actions.child(
+                small(widgets::button(("unblock", id.0 as usize), t!("user_menu.unblock"), ButtonKind::Secondary))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.net.post(Command::Block { user: id, block: false });
+                    })),
+            ),
             relationship_kind::INCOMING => actions
                 .child(
                     small(widgets::button(("accept", id.0 as usize), t!("friends.accept"), ButtonKind::Positive))
@@ -170,8 +183,11 @@ impl Emerald {
             )
             .child(actions)
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_dm(id, window, cx);
+                if !blocked {
+                    this.open_dm(id, window, cx);
+                }
             }))
+            .on_mouse_down(gpui::MouseButton::Right, self.on_user_right_click(id, None, None, cx))
             .into_any_element()
     }
 }

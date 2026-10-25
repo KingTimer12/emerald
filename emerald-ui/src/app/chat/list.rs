@@ -12,6 +12,7 @@ use gpui::{
 };
 
 use super::super::super::{icons, theme, time};
+use super::super::state::hidden::{self, Fold};
 use super::super::state::{Log, MessageView, Msg, Reply, Sticker};
 use super::super::{Emerald, widgets};
 use super::jump::unread_divider;
@@ -144,6 +145,18 @@ impl Emerald {
 
     fn render_message(&self, log: &Log, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let msg = &log.messages[ix];
+        let fold = hidden::fold(
+            ix,
+            log.messages.len(),
+            |ix| (log.messages[ix].id, log.messages[ix].author_id),
+            |author| self.people.is_hidden(author),
+            |head| self.revealed_hidden.contains(&head),
+        );
+        match fold {
+            Fold::Folded => return div().into_any_element(),
+            Fold::Head { count } => return self.render_hidden_bar(msg, count, ix, cx),
+            Fold::Shown => {}
+        }
         let previous = ix.checked_sub(1).map(|ix| &log.messages[ix]);
         let new_day = previous.is_none_or(|p| p.day != msg.day);
         let (author, author_color) = self.author_style(msg);
@@ -153,6 +166,12 @@ impl Emerald {
         let flashed = self.flash == Some(msg.id);
         let group: SharedString = format!("message-{ix}").into();
         let toolbar = self.message_toolbar(msg, ix, group.clone(), cx);
+        let author_id = msg.author_id;
+        let space = self.spaces.current();
+        let guild = (!space.is_dms()).then_some(space.id);
+        let dm_group = self
+            .selected_channel
+            .filter(|c| self.spaces.channel(*c).is_some_and(|c| c.kind == emerald_discord::model::ChannelKind::GROUP_DM));
         // Pings get Discord's gold tint and a bar on the left edge.
         let row = div()
             .id(("message", ix))
@@ -270,13 +289,23 @@ impl Emerald {
                             div()
                                 .flex()
                                 .gap_4()
-                                .child(div().mt(px(2.)).child(widgets::avatar(
-                                    &author,
-                                    msg.author_id,
-                                    self.avatar_image(&msg.avatar_url),
-                                    40.,
-                                    None,
-                                )))
+                                .child(
+                                    div()
+                                        .id(("author-avatar", ix))
+                                        .mt(px(2.))
+                                        .cursor_pointer()
+                                        .child(widgets::avatar(
+                                            &author,
+                                            msg.author_id,
+                                            self.avatar_image(&msg.avatar_url),
+                                            40.,
+                                            None,
+                                        ))
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_profile(author_id, guild, window, cx)
+                                        }))
+                                        .on_mouse_down(MouseButton::Right, self.on_user_right_click(author_id, guild, dm_group, cx)),
+                                )
                                 .child(
                                     div()
                                         .flex()
@@ -320,6 +349,50 @@ impl Emerald {
             .when(new_day, |column| column.child(day_separator(time::day_label(msg.secs))))
             .children(divider)
             .child(message)
+            .into_any_element()
+    }
+
+    /// "2 blocked messages — Show messages": a run of messages from people
+    /// the user blocked or ignored, folded until asked, as on Discord. An
+    /// opened run shows each message with the bar's "Collapse" on top.
+    fn render_hidden_bar(&self, msg: &Msg, count: usize, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let head = msg.id;
+        let label = match (self.people.is_blocked(msg.author_id), count) {
+            (true, 1) => t!("block.one_message").to_owned(),
+            (true, _) => t!("block.messages", count = count),
+            (false, 1) => t!("block.one_ignored").to_owned(),
+            (false, _) => t!("block.ignored", count = count),
+        };
+        div()
+            .w_full()
+            .px_4()
+            .py_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_size(px(14.))
+                    .text_color(theme::muted())
+                    .child(label)
+                    .child("—")
+                    .child(
+                        div()
+                            .id(("show-hidden", ix))
+                            .cursor_pointer()
+                            .text_color(rgb(theme::LINK))
+                            .hover(|s| s.underline())
+                            .child(if count == 1 { t!("block.show_one") } else { t!("block.show") })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.revealed_hidden.insert(head);
+                                if let Some(channel) = this.selected_channel {
+                                    let view = super::super::shown(&this.messages, this.selected_channel, channel);
+                                    this.history.redraw_all(channel, view);
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
             .into_any_element()
     }
 }

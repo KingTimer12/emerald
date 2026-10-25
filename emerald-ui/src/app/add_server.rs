@@ -98,7 +98,7 @@ impl Emerald {
         if let Some(Overlay::AddServer(modal)) = &mut self.overlay {
             modal.error = None;
         }
-        if self.run(Action::JoinGuild, Command::JoinGuild { code }, cx) {
+        if self.run(Action::JoinGuild, Command::JoinGuild { code, message: None }, cx) {
             self.select_new_guild = true;
         }
     }

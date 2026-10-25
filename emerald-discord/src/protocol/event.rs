@@ -4,7 +4,7 @@ use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Up
 use crate::model::{
     Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
     MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, PollVote, Profile, ReactionAddMany,
-    ReactionClear, ReactionUpdate, Relationship, RoleDelete, RoleUpdate, Snowflake, StickerPack, ThreadListSync,
+    ReactionClear, ReactionUpdate, Relationship, Invite, RoleDelete, RoleUpdate, Snowflake, StickerPack, ThreadListSync,
     ThreadMemberEntry, ThreadMembersUpdate, TypingStart, User,
 };
 
@@ -35,6 +35,32 @@ pub enum NetEvent {
     RelationshipAdd(Relationship),
     RelationshipRemove(Snowflake),
     UserUpdate(User),
+    /// Someone joined (`added`) or left a group DM.
+    Recipient {
+        channel: Snowflake,
+        user: User,
+        added: bool,
+    },
+    /// The user's note about `user`, read or changed on any device.
+    Note {
+        user: Snowflake,
+        note: String,
+    },
+    /// Answer to `Command::MutualFriends`; `None` when it failed.
+    MutualFriends {
+        user: Snowflake,
+        friends: Option<Vec<User>>,
+    },
+    /// Answer to `Command::CreateInvite`.
+    InviteCreated {
+        channel: Snowflake,
+        invite: Result<Invite, String>,
+    },
+    /// Answer to `Command::ResolveInvite`; `None` for a dead or unknown one.
+    Invite {
+        code: String,
+        invite: Option<Invite>,
+    },
     /// A DM opened with `Command::OpenDm`; selected when `select` is set.
     DmOpened {
         channel: Channel,

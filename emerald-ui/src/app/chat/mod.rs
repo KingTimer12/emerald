@@ -14,6 +14,7 @@ mod reactions;
 mod rich;
 mod select;
 mod threads;
+mod typing;
 
 pub(super) use actions::{Editing, MessageMenu, Replying};
 pub(super) use forum::Forum;
@@ -26,7 +27,7 @@ pub(super) use select::TextSelection;
 pub(super) use threads::{NewPost, NewThread};
 
 use gpui::{
-    AnyElement, Context, ExternalPaths, FontWeight, HighlightStyle, SharedString, StyledText, div, list, prelude::*, px,
+    AnyElement, Context, ExternalPaths, FontWeight, SharedString, div, list, prelude::*, px,
     rgb,
 };
 
@@ -40,6 +41,9 @@ impl Emerald {
         if self.friends_open && self.spaces.current().is_dms() {
             return self.render_friends(cx).into_any_element();
         }
+        if self.requests_open && self.spaces.current().is_dms() {
+            return self.render_requests(cx);
+        }
         let space = self.spaces.current();
         let row = self.selected_channel.and_then(|id| space.row(id));
         let opened = self.selected_channel.and_then(|id| space.channels().iter().find(|c| c.id == id));
@@ -49,9 +53,16 @@ impl Emerald {
             (None, Some(channel)) if channel.kind.is_thread() => {
                 (icons::THREAD, channel.name.clone().unwrap_or_default().into(), None)
             }
+            // Nor have message requests.
+            (None, Some(channel)) if channel.kind.is_private() => {
+                let title = space.label(channel.id).cloned().unwrap_or_else(|| self.people.dm_name(channel).into());
+                (icons::FRIENDS, title, channel.recipient())
+            }
             _ => ("", SharedString::default(), None),
         };
         let forum = opened.filter(|c| c.kind.is_forum()).map(|c| c.id);
+        let group = opened.filter(|c| c.kind == emerald_discord::model::ChannelKind::GROUP_DM).map(|c| c.id);
+        let dm = opened.filter(|c| c.kind.is_private() && !c.is_message_request).map(|c| c.id);
         // A thread names its parent first, as the web client's header does.
         let parent: Option<SharedString> = opened
             .filter(|c| c.kind.is_thread())
@@ -142,6 +153,13 @@ impl Emerald {
             // Right-aligned toggle: the DM profile or the guild member list.
             .when(!has_topic, |d| d.child(div().flex_1()))
             .children(self.render_membership_button(cx))
+            .when_some(dm, |d, dm| {
+                d.child(
+                    widgets::svg_button("add-to-dm", icons::USER_ADD)
+                        .tooltip(widgets::tooltip(t!("group.add_friends")))
+                        .on_click(cx.listener(move |this, _, window, cx| this.open_group_picker(Some(dm), window, cx))),
+                )
+            })
             .map(|d| match (user, self.selected_channel) {
                 (Some(_), _) => d.child(header_toggle(
                     "toggle-profile",
@@ -153,7 +171,7 @@ impl Emerald {
                         this.save_settings(cx);
                     }),
                 )),
-                (None, Some(_)) if !space.is_dms() => d.child(header_toggle(
+                (None, Some(_)) if !space.is_dms() || group.is_some() => d.child(header_toggle(
                     "toggle-members",
                     icons::FRIENDS,
                     self.settings.show_members,
@@ -260,8 +278,13 @@ impl Emerald {
             .drag_over::<ExternalPaths>(|style, _, _, _| style.bg(theme::hover()))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.on_drop_files(paths, cx)))
             .child(body)
-            // Posts are made from the forum's own form, not the message box.
-            .when(forum.is_none(), |column| column.child(composer));
+            // Posts are made from the forum's own form, not the message box;
+            // a message request is answered before it can be replied to.
+            .map(|column| match self.selected_channel.and_then(|c| self.render_request_bar(c, cx)) {
+                Some(bar) => column.child(bar),
+                None if forum.is_none() => column.child(composer),
+                None => column,
+            });
 
         div()
             .flex()
@@ -288,6 +311,9 @@ impl Emerald {
                             })
                             .when(wide && self.members.current().is_some(), |row| {
                                 row.child(self.render_member_list(cx))
+                            })
+                            .when_some(group.filter(|_| wide && self.settings.show_members), |row, group| {
+                                row.child(self.render_group_members(group, cx))
                             }),
                     }),
             )
@@ -315,38 +341,6 @@ impl Emerald {
             .ok();
         })
         .detach();
-    }
-
-    /// "Paulo is typing…", in the web client's wording.
-    fn typing_text(&self) -> Option<StyledText> {
-        let channel = self.selected_channel?;
-        // Nicknames first, as the web client names typists in guilds.
-        let guild = self.spaces.current().info();
-        let names: Vec<&str> = self
-            .typing
-            .who(channel)
-            .map(|user| {
-                guild
-                    .and_then(|g| g.member_style(user).0)
-                    .or_else(|| self.people.display_name(user))
-                    .unwrap_or(t!("common.someone"))
-            })
-            .collect();
-        let (text, bold): (String, Vec<std::ops::Range<usize>>) = match names.as_slice() {
-            [] => return None,
-            [one] => t_spans!("chat.typing_one", name = one),
-            [a, b] => t_spans!("chat.typing_two", a = a, b = b),
-            _ => (t!("chat.typing_many").to_owned(), Vec::new()),
-        };
-        Some(StyledText::new(text).with_highlights(bold.into_iter().map(|range| {
-            (
-                range,
-                HighlightStyle {
-                    font_weight: Some(FontWeight::BOLD),
-                    ..Default::default()
-                },
-            )
-        })))
     }
 
     /// Author name and color: guild nickname and top role color when the

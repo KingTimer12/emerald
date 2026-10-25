@@ -60,6 +60,7 @@ impl Emerald {
             self.divider_seen = false;
         }
         self.friends_open = false;
+        self.requests_open = false;
         self.selected_channel = Some(id);
         self.spaces.remember_channel(id);
         self.recent.visit(id);
@@ -80,7 +81,7 @@ impl Emerald {
             self.edit = None;
         }
         if let Some(user) = user {
-            self.profile(user, None);
+            self.profile(user, None, false);
         }
         self.composer.open(id, placeholder, cx);
         self.autocomplete.close();
@@ -282,10 +283,17 @@ impl Emerald {
     }
 
     /// Requests the profile of `user` unless a recent copy is cached, like
-    /// the web client; a stale copy stays on screen until the answer.
-    pub(super) fn profile(&mut self, user: Snowflake, guild: Option<Snowflake>) {
-        if self.profiles.request((user, guild), Instant::now()) {
-            self.net.post(Command::FetchProfile { user, guild });
+    /// the web client; a stale copy stays on screen until the answer. The
+    /// `full` one, with the servers in common, is asked for again when the
+    /// copy came from the DM panel without them.
+    pub(super) fn profile(&mut self, user: Snowflake, guild: Option<Snowflake>, full: bool) {
+        let partial = full
+            && self
+                .profiles
+                .get(&(user, guild))
+                .is_some_and(|p| p.mutual_guilds.is_none() && !self.people.is_me(user));
+        if self.profiles.request((user, guild), Instant::now()) || partial {
+            self.net.post(Command::FetchProfile { user, guild, full });
         }
     }
 }

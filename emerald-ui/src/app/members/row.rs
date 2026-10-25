@@ -120,6 +120,7 @@ impl Emerald {
                     })),
             )
             .on_click(cx.listener(move |this, _, window, cx| this.open_profile(user, Some(guild), window, cx)))
+            .on_mouse_down(gpui::MouseButton::Right, self.on_user_right_click(user, Some(guild), None, cx))
             .into_any_element()
     }
 

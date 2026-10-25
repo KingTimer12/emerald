@@ -4,6 +4,7 @@
 //! The endpoints are grouped by area, one module each.
 
 mod apps;
+mod channels;
 pub(crate) mod encoding;
 mod expressions;
 mod guilds;

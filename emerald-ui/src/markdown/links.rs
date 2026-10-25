@@ -48,3 +48,40 @@ pub(super) fn host(url: &str) -> &str {
     let authority = &authority[..authority.find(['/', '?', '#']).unwrap_or(authority.len())];
     authority.rsplit('@').next().unwrap_or(authority)
 }
+
+/// The code of an invite link: `discord.gg/CODE`, or `/invite/CODE` on
+/// discord.com and its other hosts.
+pub fn invite_link(url: &str) -> Option<&str> {
+    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
+    let (host, path) = rest.split_once('/')?;
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    let path = path.split(['?', '#']).next()?.trim_end_matches('/');
+    let code = match host {
+        "discord.gg" => path,
+        "discord.com" | "discordapp.com" | "ptb.discord.com" | "canary.discord.com" => path.strip_prefix("invite/")?,
+        _ => return None,
+    };
+    let valid = !code.is_empty() && code.len() <= 64 && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+    valid.then_some(code)
+}
+
+/// Invite codes linked in a message's text, each once, in order; the
+/// cards under the message show at most `limit`.
+pub fn invite_codes(source: &str, limit: usize) -> Vec<&str> {
+    let mut codes: Vec<&str> = Vec::new();
+    let mut rest = source;
+    while let Some(start) = rest.find("http") {
+        let tail = &rest[start..];
+        let end = tail.find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | ')' | '|')).unwrap_or(tail.len());
+        if let Some(code) = invite_link(&tail[..end])
+            && !codes.contains(&code)
+        {
+            codes.push(code);
+        }
+        if codes.len() >= limit {
+            break;
+        }
+        rest = &tail[end.max(4)..];
+    }
+    codes
+}

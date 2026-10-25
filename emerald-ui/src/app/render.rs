@@ -27,11 +27,16 @@ impl Render for Emerald {
             Some(Overlay::CreatePost(modal)) => Some(self.render_post_modal(modal, cx)),
             Some(Overlay::CreatePoll(modal)) => Some(self.render_poll_modal(modal, cx)),
             Some(Overlay::Switcher(switcher)) => Some(self.render_switcher(switcher, cx)),
+            Some(Overlay::Confirm(ask)) => Some(self.render_confirm(*ask, cx)),
+            Some(Overlay::Prompt(prompt)) => Some(self.render_prompt(*prompt, cx)),
+            Some(Overlay::GroupPicker(picker)) => Some(self.render_group_picker(picker, cx)),
+            Some(Overlay::Invite(modal)) => Some(self.render_invite_modal(modal, cx)),
             None => None,
         };
         let menu = self.render_message_menu(cx);
         let picker = self.render_reaction_picker(cx);
         let place_menu = self.render_place_menu(cx);
+        let user_menu = self.render_user_menu(cx);
         div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
@@ -69,5 +74,6 @@ impl Render for Emerald {
             .children(menu)
             .children(picker)
             .children(place_menu)
+            .children(user_menu)
     }
 }

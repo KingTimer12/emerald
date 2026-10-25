@@ -1,5 +1,5 @@
-//! The account and the people around it: friends, DMs, profiles, the
-//! display name and logging out.
+//! The account and the people around it: friends, blocks, nicknames,
+//! notes, DMs, profiles, the display name and logging out.
 
 use super::Events;
 use super::captcha::with_captcha;
@@ -18,7 +18,46 @@ pub async fn accept_friend(rest: &Rest, user: Snowflake) -> NetEvent {
 
 /// Removes a friend, declines an incoming request or cancels an outgoing one.
 pub async fn remove_relationship(rest: &Rest, user: Snowflake) -> NetEvent {
-    outcome(Action::Relationship, rest.remove_relationship(user).await)
+    outcome(Action::Relationship, rest.remove_relationship(user, "Friends").await)
+}
+
+/// The gateway echoes the new relationship, or its removal.
+pub async fn block(rest: &Rest, user: Snowflake, block: bool) -> NetEvent {
+    let result = if block { rest.block(user).await } else { rest.remove_relationship(user, "ContextMenu").await };
+    outcome(Action::Relationship, result)
+}
+
+pub async fn ignore(rest: &Rest, user: Snowflake, ignore: bool) -> NetEvent {
+    outcome(Action::Relationship, rest.ignore(user, ignore).await)
+}
+
+pub async fn set_nickname(rest: &Rest, user: Snowflake, nickname: Option<String>) -> NetEvent {
+    outcome(Action::Relationship, rest.set_nickname(user, nickname.as_deref()).await)
+}
+
+/// A note that cannot be read is left out, not shown as empty.
+pub async fn note(rest: &Rest, user: Snowflake) -> Option<NetEvent> {
+    match rest.note(user).await {
+        Ok(note) => Some(NetEvent::Note { user, note }),
+        Err(e) => {
+            tracing::warn!("note on {user}: {e:#}");
+            None
+        }
+    }
+}
+
+/// The gateway echoes the note as USER_NOTE_UPDATE.
+pub async fn set_note(rest: &Rest, user: Snowflake, note: String) -> NetEvent {
+    outcome(Action::Note, rest.set_note(user, &note).await)
+}
+
+pub async fn mutual_friends(rest: &Rest, user: Snowflake) -> NetEvent {
+    let friends = rest
+        .mutual_friends(user)
+        .await
+        .map_err(|e| tracing::warn!("mutual friends with {user}: {e:#}"))
+        .ok();
+    NetEvent::MutualFriends { user, friends }
 }
 
 /// A DM to select runs as a user action, captcha included; one opened in
@@ -50,8 +89,8 @@ pub async fn set_global_name(rest: &Rest, name: Option<String>, events: &Events)
     }
 }
 
-pub async fn profile(rest: &Rest, user: Snowflake, guild: Option<Snowflake>) -> Option<NetEvent> {
-    match rest.profile(user, guild).await {
+pub async fn profile(rest: &Rest, user: Snowflake, guild: Option<Snowflake>, full: bool) -> Option<NetEvent> {
+    match rest.profile(user, guild, full).await {
         Ok(profile) => Some(NetEvent::Profile { guild, profile }),
         Err(e) => {
             tracing::warn!("profile of {user}: {e:#}");

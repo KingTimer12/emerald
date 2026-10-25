@@ -149,12 +149,12 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 4 — people and DMs
 
-28. [ ] Group DMs: open, list members, name/icon, add/remove people, leave.
-29. [ ] Close a DM; message requests and the spam inbox.
-30. [ ] Block/unblock and ignore, with blocked messages collapsed.
-31. [ ] Friend nicknames and user notes; mutual servers and friends in the profile.
-32. [ ] Invites: create one for a channel; open invite links in messages as cards.
-33. [ ] Leave a server.
+28. [x] Group DMs: open, list members, name/icon, add/remove people, leave.
+29. [x] Close a DM; message requests and the spam inbox.
+30. [x] Block/unblock and ignore, with blocked messages collapsed.
+31. [x] Friend nicknames and user notes; mutual servers and friends in the profile.
+32. [x] Invites: create one for a channel; open invite links in messages as cards.
+33. [x] Leave a server.
 
 ### Phase 5 — your account
 

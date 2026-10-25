@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use super::{Overwrite, Snowflake, User};
+use crate::urls::{CDN, WEB};
 
 /// Discord's channel `type`, with what this client does with each kind.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Deserialize)]
@@ -99,7 +100,31 @@ pub struct Channel {
     pub default_auto_archive_duration: Option<u32>,
     #[serde(default)]
     pub flags: u64,
+    /// Group DMs: the icon hash, and who may remove people.
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub owner_id: Option<Snowflake>,
+    /// A DM from someone the user has not accepted yet; with `is_spam`
+    /// it sits in the spam inbox instead.
+    #[serde(default)]
+    pub is_message_request: bool,
+    #[serde(default)]
+    pub is_spam: bool,
 }
+
+/// The web client's eight group DM pictures, for groups without an icon;
+/// one is picked by the channel's creation time.
+const DEFAULT_GROUP_ICONS: [&str; 8] = [
+    "b8c21efe7946ee22",
+    "392f18c1d7fa4cf1",
+    "f06f874912a9a404",
+    "84ada88a442f014d",
+    "adc958faf2495e83",
+    "e8a3e602806eb4e0",
+    "2ccd0ae2e8934844",
+    "95fad9fee060f9ae",
+];
 
 /// Channel flag on forums that refuse untagged posts.
 const REQUIRE_TAG: u64 = 1 << 4;
@@ -190,6 +215,28 @@ impl Channel {
             .or(self.recipients.first().map(|u| u.id))
     }
 
+    /// A group DM's picture: its icon, or the default its id picks.
+    pub fn group_icon_url(&self) -> String {
+        match &self.icon {
+            Some(hash) => CDN.join(format_args!("/channel-icons/{}/{hash}.png?size=64", self.id)),
+            None => {
+                let created_ms = (self.id.0 >> 22) + super::DISCORD_EPOCH_MS;
+                let ix = (created_ms % DEFAULT_GROUP_ICONS.len() as u64) as usize;
+                WEB.join(format_args!("/assets/{}.png", DEFAULT_GROUP_ICONS[ix]))
+            }
+        }
+    }
+
+    /// Waiting in "Message Requests", outside the DM list.
+    pub fn is_request(&self) -> bool {
+        self.is_message_request && !self.is_spam
+    }
+
+    /// Waiting in the spam inbox.
+    pub fn is_spam_request(&self) -> bool {
+        self.is_message_request && self.is_spam
+    }
+
     /// A thread that is not archived; archived ones leave the sidebar.
     pub fn is_active_thread(&self) -> bool {
         self.kind.is_thread() && !self.thread_metadata.as_ref().is_some_and(|m| m.archived)
@@ -208,5 +255,31 @@ impl Channel {
     /// was created, which its id encodes.
     pub fn activity(&self) -> Snowflake {
         self.last_message_id.unwrap_or(self.id)
+    }
+}
+
+/// CHANNEL_RECIPIENT_ADD and CHANNEL_RECIPIENT_REMOVE: someone joined or
+/// left a group DM.
+#[derive(Debug, Deserialize)]
+pub struct RecipientUpdate {
+    pub channel_id: Snowflake,
+    pub user: User,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn groups_without_icon_get_a_default_picture() {
+        let group = |icon: Option<&str>| Channel {
+            id: Snowflake(5 << 22),
+            kind: ChannelKind::GROUP_DM,
+            icon: icon.map(Into::into),
+            ..Channel::default()
+        };
+        assert_eq!(group(Some("h")).group_icon_url(), format!("https://cdn.discordapp.com/channel-icons/{}/h.png?size=64", 5u64 << 22));
+        let index = (5 + super::super::DISCORD_EPOCH_MS) % 8;
+        assert_eq!(group(None).group_icon_url(), format!("https://discord.com/assets/{}.png", DEFAULT_GROUP_ICONS[index as usize]));
     }
 }

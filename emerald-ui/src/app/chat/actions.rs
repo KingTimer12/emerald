@@ -91,6 +91,7 @@ impl Emerald {
         if self.close_reaction_picker(window, cx) || self.dismiss_suggestions(cx) {
         } else if self.message_menu.take().is_some()
             || self.place_menu.take().is_some()
+            || self.user_menu.take().is_some()
             || std::mem::take(&mut self.plus_menu)
         {
             cx.notify();

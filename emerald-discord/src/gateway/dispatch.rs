@@ -7,7 +7,8 @@ use serde_json::value::RawValue;
 use super::{Events, Session, State};
 use crate::identity::Identity;
 use crate::model::{
-    Guild, Presence, Ready, ReadySupplemental, RelationshipRemove, SettingsProtoUpdate, Snowflake, guild_folders,
+    Guild, NoteUpdate, Presence, Ready, ReadySupplemental, RecipientUpdate, RelationshipRemove, SettingsProtoUpdate,
+    Snowflake, guild_folders,
 };
 use crate::protocol::{Link, NetEvent, ReactionEvent, Snapshot};
 
@@ -44,6 +45,14 @@ fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Opti
         "RELATIONSHIP_ADD" | "RELATIONSHIP_UPDATE" => decode(kind, data, NetEvent::RelationshipAdd),
         "RELATIONSHIP_REMOVE" => decode(kind, data, |r: RelationshipRemove| NetEvent::RelationshipRemove(r.id)),
         "USER_UPDATE" => decode(kind, data, NetEvent::UserUpdate),
+        "USER_NOTE_UPDATE" => decode(kind, data, |n: NoteUpdate| NetEvent::Note { user: n.id, note: n.note }),
+        "CHANNEL_RECIPIENT_ADD" | "CHANNEL_RECIPIENT_REMOVE" => decode(kind, data, |r: RecipientUpdate| {
+            NetEvent::Recipient {
+                channel: r.channel_id,
+                user: r.user,
+                added: kind == "CHANNEL_RECIPIENT_ADD",
+            }
+        }),
         "GUILD_CREATE" => decode(kind, data, NetEvent::GuildCreate),
         "GUILD_DELETE" => {
             let guild: Guild = decode(kind, data, std::convert::identity)?;

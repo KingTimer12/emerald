@@ -34,6 +34,7 @@ impl Emerald {
             Space::guild(guild, me_id, roles)
         });
         self.spaces.reset(std::iter::once(Space::dms(dms)).chain(guilds).collect());
+        self.label_dms();
         self.reorder_spaces();
         self.reads
             .load(read_states, self.spaces.iter().flat_map(Space::readable));
@@ -80,6 +81,7 @@ impl Emerald {
             None => {
                 self.people.adopt_dm(&mut channel);
                 self.spaces.dms_mut().upsert_channel(channel);
+                self.label_dms();
             }
         }
     }
@@ -154,6 +156,7 @@ impl Emerald {
         }
         self.people.adopt_dm(&mut channel);
         self.spaces.dms_mut().upsert_channel(channel);
+        self.label_dms();
     }
 
     pub(super) fn on_typing(&mut self, typing: TypingStart, cx: &mut Context<Self>) {
@@ -236,7 +239,7 @@ impl Emerald {
                     _ => self.composer.error = Some(error.into()),
                 },
             },
-            Action::Settings => {
+            Action::Settings | Action::Channel | Action::Note | Action::LeaveGuild => {
                 if let Err(error) = result {
                     self.connection.set_message(t!("common.error", error = error));
                 }

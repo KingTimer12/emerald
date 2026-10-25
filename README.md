@@ -32,10 +32,23 @@ CPU near zero when idle.
   WebView2 on Windows), captcha included. The token is kept in the macOS Keychain or the Windows
   Credential Manager (see [Files](#files)), wiped from memory when dropped, and never
   logged; logging out revokes it on the server.
-- **Friends**: Online, All and Pending tabs; add by username, accept, decline, remove.
+- **Friends**: Online, All, Pending and Blocked tabs; add by username, accept, decline,
+  remove, unblock; friend nicknames, shown in the friends list and the DMs.
 - **Direct messages**: list ordered by activity, search, history, sending with optimistic
   confirmation, typing indicators, a profile panel (badges, bio, connected accounts)
-  and the full profile.
+  and the full profile with your note on the person and the servers and friends you
+  share. Close a DM from its right-click menu.
+- **Group DMs**: their picture and member count in the list, the members beside the
+  chat with the owner marked, start one or add friends to a DM ("Select Friends"),
+  rename it, change its icon, remove people (owner), leave it.
+- **Message requests** and the spam inbox: listed apart from the DMs; open one to read
+  it, then accept, ignore, or mark it not spam.
+- **People menu** (right-click a name or avatar): profile, message, note, friend
+  nickname, ignore, block. Messages from blocked or ignored people fold into
+  "N blocked messages — Show messages", as on Discord.
+- **Invites**: "Invite People" on a server or channel makes a seven-day link to copy;
+  invite links in messages show as cards with the server, its counts and Join.
+  "Leave Server" from a server's right-click menu, after asking.
 - **Servers**: channels and collapsible categories, permissions computed the way Discord
   does (hidden channels, sending blocked without permission), nicknames and role colors
   that follow live member and role changes, replies, images, embeds, stickers (Discord's
@@ -238,6 +251,12 @@ emerald-ui/              the gpui interface
         ├── alerts.rs    which messages notify, and the count on the app icon
         ├── panels/      pins, search, inbox and threads beside the chat
         ├── place_menu.rs  right-click menu: mark read, mute, notification levels
+        ├── place_actions.rs  …and invite, leave, close a DM, run a group DM
+        ├── user_menu.rs right-click menu of a person: note, nickname, ignore, block
+        ├── dialogs.rs   confirmations and one-field dialogs
+        ├── group_picker.rs, group_members.rs  group DMs
+        ├── requests.rs  message requests and the spam inbox
+        ├── invites.rs   "Invite People" and invite cards in messages
         ├── switcher.rs  the quick switcher (Ctrl/Cmd+K)
         └── sidebar/, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
 emerald-webview/         a blocking native webview window, generic: `WebView` builder,

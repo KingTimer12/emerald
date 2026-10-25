@@ -5,6 +5,8 @@ use super::*;
 pub enum Row {
     /// Entry point of the friends list, first row of the DM sidebar.
     Friends,
+    /// "Message Requests", under it while any wait.
+    Requests,
     /// Section title; guild categories carry their id so they can collapse.
     Category {
         id: Option<Snowflake>,
@@ -21,10 +23,14 @@ pub struct ChannelRow {
     pub parent: Option<Snowflake>,
     /// The other person in a 1:1 DM; drawn as their avatar.
     pub user: Option<Snowflake>,
+    /// A group DM's picture, and how many are in it.
+    pub picture: Option<SharedString>,
+    pub members: Option<usize>,
 }
 
 impl ChannelRow {
     pub(super) fn new(channel: &Channel) -> Self {
+        let group = channel.kind == ChannelKind::GROUP_DM;
         Self {
             id: channel.id,
             kind: channel.kind,
@@ -32,6 +38,9 @@ impl ChannelRow {
             name: channel.name.as_deref().unwrap_or("?").to_owned().into(),
             parent: channel.parent_id,
             user: channel.recipient(),
+            picture: group.then(|| channel.group_icon_url().into()),
+            // The recipients leave the user out.
+            members: group.then_some(channel.recipient_ids.len() + 1),
         }
     }
 }
@@ -55,12 +64,21 @@ impl Space {
             self.channels
                 .sort_unstable_by_key(|c| std::cmp::Reverse(c.activity()));
             self.rows.push(Row::Friends);
+            if self.channels.iter().any(|c| c.is_message_request) {
+                self.rows.push(Row::Requests);
+            }
             self.rows.push(Row::Category {
                 id: None,
                 title: t!("dm.header").into(),
             });
-            self.rows
-                .extend(self.channels.iter().map(|c| Row::Channel(ChannelRow::new(c))));
+            let labels = &self.labels;
+            self.rows.extend(self.channels.iter().filter(|c| !c.is_message_request).map(|c| {
+                let mut row = ChannelRow::new(c);
+                if let Some(label) = labels.get(&c.id) {
+                    row.name = label.clone();
+                }
+                Row::Channel(row)
+            }));
             return;
         };
 

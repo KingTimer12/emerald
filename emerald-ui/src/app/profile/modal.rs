@@ -144,11 +144,27 @@ impl Emerald {
                                             .child(p)
                                     })),
                             )
-                            .child(div().w_full().h(px(1.)).bg(theme::border()))
-                            .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
-                            .child(section(t!("profile.member_since"), member_since(user, &card, guild_name)))
-                            .children(roles)
-                            .children(accounts),
+                            .map(|body| {
+                                if self.people.is_me(user) {
+                                    return body
+                                        .child(div().w_full().h(px(1.)).bg(theme::border()))
+                                        .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
+                                        .child(section(t!("profile.member_since"), member_since(user, &card, guild_name)))
+                                        .children(roles)
+                                        .children(accounts);
+                                }
+                                let body = body.child(self.profile_tabs(user, guild, cx));
+                                match self.profile_tab {
+                                    ProfileTab::About => body
+                                        .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
+                                        .child(section(t!("profile.member_since"), member_since(user, &card, guild_name)))
+                                        .children(roles)
+                                        .children(accounts)
+                                        .child(self.note_section()),
+                                    ProfileTab::Servers => body.child(self.mutual_servers(user, guild, cx)),
+                                    ProfileTab::Friends => body.child(self.mutual_friends_list(user, cx)),
+                                }
+                            }),
                     ),
             )
     }

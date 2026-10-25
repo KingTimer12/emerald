@@ -100,6 +100,7 @@ impl Emerald {
                     .enumerate()
                     .filter_map(|(n, embed)| self.render_embed(embed, msg.id, &format!("message-{ix}"), n)),
             )
+            .children(self.render_invite_cards(&msg.content, msg.id, ix, cx))
             .children(msg.stickers.iter().map(|sticker| self.render_sticker(sticker, STICKER_SIZE)))
             .children(msg.thread.as_ref().map(|thread| self.render_thread_chip(thread, ix, cx)))
             .children(self.render_reactions(msg, ix, cx))

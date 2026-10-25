@@ -18,6 +18,7 @@ use super::{Emerald, widgets};
 /// Height of the floating user panel plus its margins; lists pad by this.
 pub(super) const PANEL_CLEARANCE: f32 = 72.;
 
+mod dms;
 mod servers;
 
 impl Emerald {
@@ -124,10 +125,12 @@ impl Emerald {
                     .when(pending > 0, |r| r.child(widgets::badge(pending)))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.friends_open = true;
+                        this.requests_open = false;
                         cx.notify();
                     }))
                     .into_any_element()
             }
+            Row::Requests => self.render_requests_row(row, cx),
             Row::Category { id, title } => {
                 let category = *id;
                 let guild = self.spaces.current().id;
@@ -142,6 +145,7 @@ impl Emerald {
                     .text_color(rgb(theme::CHANNELS_DEFAULT))
                     .hover(|s| s.text_color(rgb(theme::TEXT_DEFAULT)))
                     .child(div().truncate().child(title.clone()))
+                    .when(category.is_none() && self.spaces.current().is_dms(), |row| row.child(self.new_dm_button(cx)))
                     .when_some(category, |row, category| {
                         // Chevron after the name, pointing right when collapsed.
                         row.cursor_pointer()
@@ -178,6 +182,8 @@ impl Emerald {
                 icon: glyph,
                 name,
                 user,
+                picture,
+                members,
                 ..
             }) => {
                 let id = *id;
@@ -185,7 +191,7 @@ impl Emerald {
                 let glyph = *glyph;
                 let opens = kind.is_openable();
                 let thread = kind.is_thread();
-                let selected = self.selected_channel == Some(id) && !self.friends_open;
+                let selected = self.selected_channel == Some(id) && !self.friends_open && !self.requests_open;
                 let space = self.spaces.current();
                 let guild = (!space.is_dms()).then_some(space.id);
                 let muted = self.notify.muted(&self.place_of(guild, id), crate::time::now_secs());
@@ -245,9 +251,28 @@ impl Emerald {
                             32.,
                             Some((self.people.presence(user), theme::BASE_LOWEST)),
                         )),
-                        None => r.child(icon(glyph, 20., icon_color)),
+                        None => match picture {
+                            Some(url) => r.gap_3().child(self.group_picture(url)),
+                            None => r.child(icon(glyph, 20., icon_color)),
+                        },
                     })
-                    .child(div().flex_1().min_w(px(0.)).truncate().child(name.clone()))
+                    .child(match members {
+                        // Group DMs say how many are in them under the name.
+                        Some(count) => div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .child(div().truncate().line_height(px(18.)).child(name.clone()))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::NORMAL)
+                                    .text_color(rgb(theme::CHANNELS_DEFAULT))
+                                    .child(t!("group.member_count", count = count)),
+                            ),
+                        None => div().flex_1().min_w(px(0.)).truncate().child(name.clone()),
+                    })
                     .when(mentions > 0 && !selected, |r| r.child(widgets::badge(mentions as usize)))
                     .on_mouse_down(
                         MouseButton::Right,

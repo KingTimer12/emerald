@@ -161,14 +161,93 @@ pub enum Command {
     RemoveRelationship {
         user: Snowflake,
     },
+    /// Blocks `user`, or unblocks them.
+    Block {
+        user: Snowflake,
+        block: bool,
+    },
+    /// Ignores `user`, or stops.
+    Ignore {
+        user: Snowflake,
+        ignore: bool,
+    },
+    /// A friend's nickname; `None` clears it.
+    SetNickname {
+        user: Snowflake,
+        nickname: Option<String>,
+    },
+    /// The user's note about `user`, read when their profile opens.
+    FetchNote {
+        user: Snowflake,
+    },
+    /// Empty clears the note.
+    SetNote {
+        user: Snowflake,
+        note: String,
+    },
+    /// The friends the user shares with `user`.
+    MutualFriends {
+        user: Snowflake,
+    },
+    /// Starts a group DM with these friends; it opens when made.
+    CreateGroup {
+        users: Vec<Snowflake>,
+    },
+    /// Adds friends to a group DM, or to a 1:1 DM, which makes a new group
+    /// that then opens.
+    AddRecipients {
+        channel: Snowflake,
+        users: Vec<Snowflake>,
+    },
+    /// Removes someone from a group DM the user owns.
+    RemoveRecipient {
+        channel: Snowflake,
+        user: Snowflake,
+    },
+    /// Renames a group DM; `None` names it after its members again.
+    RenameGroup {
+        channel: Snowflake,
+        name: Option<String>,
+    },
+    /// A group DM's icon: an image's media type and bytes; `None`
+    /// removes it.
+    SetGroupIcon {
+        channel: Snowflake,
+        icon: Option<(&'static str, Arc<[u8]>)>,
+    },
+    /// Closes a DM, or leaves a group DM.
+    CloseChannel {
+        channel: Snowflake,
+    },
+    /// Accepts a message request (or a DM marked spam), or ignores it.
+    AnswerRequest {
+        channel: Snowflake,
+        accept: bool,
+    },
+    /// "Invite People" on `channel`, from the surface `location` names.
+    CreateInvite {
+        channel: Snowflake,
+        location: &'static str,
+    },
+    /// Resolves an invite for its card under a message.
+    ResolveInvite {
+        code: String,
+    },
+    /// "Leave Server".
+    LeaveGuild {
+        guild: Snowflake,
+    },
     /// Opens (or reopens) the DM with `user`. Unselected opens run in the
     /// background, so they never show a captcha and fail silently.
     OpenDm {
         user: Snowflake,
         select: bool,
     },
+    /// Joins through an invite; `message` is the one whose invite card was
+    /// clicked, if any.
     JoinGuild {
         code: String,
+        message: Option<Snowflake>,
     },
     CreateGuild {
         name: String,
@@ -212,10 +291,12 @@ pub enum Command {
     Typing {
         channel: Snowflake,
     },
-    /// With a `guild`, the profile as members of that guild see it.
+    /// With a `guild`, the profile as members of that guild see it; `full`
+    /// for the full profile, with the servers in common.
     FetchProfile {
         user: Snowflake,
         guild: Option<Snowflake>,
+        full: bool,
     },
     /// Downloads an avatar or sticker image.
     FetchAvatar {

@@ -4,6 +4,7 @@
 
 mod app;
 mod captcha;
+mod channel;
 mod guild;
 mod media;
 mod message;
@@ -15,6 +16,7 @@ mod user;
 
 use std::sync::Arc;
 
+use super::packets;
 use super::protocol::{Command, NetEvent};
 use super::rest::Rest;
 
@@ -101,13 +103,35 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::SendFriendRequest { username } => Some(user::friend_request(rest, username).await),
         Command::AcceptFriend { user } => Some(user::accept_friend(rest, user).await),
         Command::RemoveRelationship { user } => Some(user::remove_relationship(rest, user).await),
+        Command::Block { user, block } => Some(user::block(rest, user, block).await),
+        Command::Ignore { user, ignore } => Some(user::ignore(rest, user, ignore).await),
+        Command::SetNickname { user, nickname } => Some(user::set_nickname(rest, user, nickname).await),
+        Command::FetchNote { user } => user::note(rest, user).await,
+        Command::SetNote { user, note } => Some(user::set_note(rest, user, note).await),
+        Command::MutualFriends { user } => Some(user::mutual_friends(rest, user).await),
+
+        Command::CreateGroup { users } => Some(channel::create_group(rest, users).await),
+        Command::AddRecipients { channel, users } => Some(channel::add_recipients(rest, channel, users).await),
+        Command::RemoveRecipient { channel, user } => Some(channel::remove_recipient(rest, channel, user).await),
+        Command::RenameGroup { channel, name } => {
+            Some(channel::edit_group(rest, channel, packets::user::group_name(name.as_deref())).await)
+        }
+        Command::SetGroupIcon { channel, icon } => {
+            let uri = icon.map(|(mime, bytes)| packets::user::data_uri(mime, &bytes));
+            Some(channel::edit_group(rest, channel, packets::user::group_icon(uri.as_deref())).await)
+        }
+        Command::CloseChannel { channel } => Some(channel::close(rest, channel).await),
+        Command::AnswerRequest { channel, accept } => Some(channel::answer_request(rest, channel, accept).await),
         Command::OpenDm { user, select } => user::open_dm(rest, user, select).await,
         Command::SetGlobalName { name } => Some(user::set_global_name(rest, name, &events).await),
-        Command::FetchProfile { user, guild } => user::profile(rest, user, guild).await,
+        Command::FetchProfile { user, guild, full } => user::profile(rest, user, guild, full).await,
         Command::LogOut => Some(user::log_out(rest).await),
 
-        Command::JoinGuild { code } => Some(guild::join(rest, code).await),
+        Command::JoinGuild { code, message } => Some(guild::join(rest, code, message).await),
         Command::CreateGuild { name } => Some(guild::create(rest, name).await),
+        Command::CreateInvite { channel, location } => Some(guild::create_invite(rest, channel, location).await),
+        Command::ResolveInvite { code } => Some(guild::resolve_invite(rest, code).await),
+        Command::LeaveGuild { guild } => Some(guild::leave(rest, guild).await),
 
         // Routed to the gateway before spawning.
         Command::SetStatus(_)

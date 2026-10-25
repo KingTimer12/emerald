@@ -2,6 +2,9 @@
 //! fed by `GET /users/{id}/profile`.
 
 mod modal;
+mod social;
+
+pub(super) use social::ProfileTab;
 
 use gpui::{Context, Div, FontWeight, MouseButton, SharedString, Window, div, img, prelude::*, px, rgb};
 
@@ -144,6 +147,12 @@ impl Emerald {
     pub(super) fn render_profile_panel(&self, user: Snowflake, cx: &mut Context<Self>) -> impl IntoElement {
         let card = self.card(user, None);
         const BANNER: f32 = 120.;
+        // `self.card` names people by their own name; the panel sits by
+        // the DM, where a friend goes by the nickname given.
+        let card = Card {
+            name: self.people.nickname(user).map_or(card.name.clone(), |n| n.to_owned().into()),
+            ..card
+        };
         const AVATAR: f32 = 80.;
         const RING: f32 = 6.;
 
@@ -219,7 +228,8 @@ impl Emerald {
                                 .w_full()
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.open_profile(user, None, window, cx)
-                                })),
+                                }))
+                                .on_mouse_down(MouseButton::Right, self.on_user_right_click(user, None, None, cx)),
                         ),
                     ),
             )
@@ -232,10 +242,14 @@ impl Emerald {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.profile(user, guild);
+        self.profile(user, guild, true);
         // Badges and connected accounts only come with the global profile.
         if guild.is_some() {
-            self.profile(user, None);
+            self.profile(user, None, false);
+        }
+        self.profile_tab = ProfileTab::About;
+        if !self.people.is_me(user) {
+            self.load_note(user, cx);
         }
         self.overlay = Some(Overlay::Profile { user, guild });
         window.focus(&self.focus_handle);
