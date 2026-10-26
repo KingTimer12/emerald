@@ -44,7 +44,7 @@ impl Emerald {
                     nick: member.nick.as_deref(),
                     roles: &member.roles,
                     status: Some(presence.and_then(|p| p.status.as_deref()).unwrap_or("offline")),
-                    activity: presence.and_then(activity_text),
+                    activity: presence.and_then(|p| activity_text(&p.activities)),
                 };
                 row.child(self.render_member(("member", ix), row_data, cx)).into_any_element()
             }
@@ -152,30 +152,6 @@ pub(super) fn app_tag() -> impl IntoElement {
         .child("APP")
 }
 
-/// The line under a member's name: their custom status, else what they are
-/// doing, in the web client's wording.
-pub(super) fn activity_text(presence: &ListPresence) -> Option<String> {
-    let custom = presence.activities.iter().find_map(|a| {
-        (a.kind == activity_kind::CUSTOM)
-            .then(|| a.state.clone())
-            .flatten()
-            .filter(|s| !s.trim().is_empty())
-    });
-    custom.or_else(|| {
-        presence.activities.iter().find_map(|a| {
-            let name = &a.name;
-            Some(match a.kind {
-                activity_kind::PLAYING => t!("activity.playing", name = name),
-                activity_kind::STREAMING => t!("activity.streaming", name = name),
-                activity_kind::LISTENING => t!("activity.listening", name = name),
-                activity_kind::WATCHING => t!("activity.watching", name = name),
-                activity_kind::COMPETING => t!("activity.competing", name = name),
-                _ => return None,
-            })
-        })
-    })
-}
-
 /// `1234567` as `1.234.567` or `1,234,567`, as the language groups digits.
 pub(super) fn thousands(n: u64) -> String {
     group_digits(n, t!("number.group_separator"))
@@ -196,36 +172,11 @@ pub(super) fn group_digits(n: u64, separator: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emerald_discord::model::Activity;
 
     #[test]
     fn counts_use_dots() {
         assert_eq!(group_digits(0, "."), "0");
         assert_eq!(group_digits(999, "."), "999");
         assert_eq!(group_digits(1_234_567, "."), "1.234.567");
-    }
-
-    #[test]
-    fn custom_status_wins_over_games() {
-        let activity = |kind, name: &str, state: Option<&str>| Activity {
-            kind,
-            name: name.into(),
-            state: state.map(Into::into),
-        };
-        let presence = |activities| ListPresence {
-            status: Some("online".into()),
-            activities,
-        };
-        assert_eq!(
-            activity_text(&presence(vec![
-                activity(activity_kind::PLAYING, "VALORANT", None),
-                activity(activity_kind::CUSTOM, "Custom Status", Some("ranked")),
-            ])),
-            Some("ranked".into())
-        );
-        assert_eq!(
-            activity_text(&presence(vec![activity(activity_kind::LISTENING, "Spotify", None)])),
-            Some("Listening to Spotify".into())
-        );
     }
 }

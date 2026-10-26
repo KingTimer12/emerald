@@ -26,4 +26,8 @@ pub enum Action {
     Note,
     /// Leaving a server.
     LeaveGuild,
+    /// Saving the synced settings: status, custom status, privacy.
+    AccountSettings,
+    /// Logging other devices out.
+    Sessions,
 }

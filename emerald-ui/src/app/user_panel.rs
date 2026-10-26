@@ -21,8 +21,11 @@ impl Emerald {
         let me = self.people.me();
         let name: SharedString = me.map_or("—".into(), |me| me.display_name().to_owned().into());
         let status = self.own_status();
+        let custom = self.account.custom_status(super::account::now_ms()).map(|c| c.line());
         let (subtitle, subtitle_color) = match &self.connection.fatal {
             Some(fatal) => (fatal.clone(), theme::DANGER),
+            // Like the web client, the custom status stands in for the status.
+            None if status.is_some() && custom.is_some() => (custom.unwrap_or_default().into(), theme::TEXT_MUTED),
             None if status.is_some() => (widgets::status_label(status).into(), theme::TEXT_MUTED),
             None => (self.connection.status.clone(), theme::TEXT_MUTED),
         };

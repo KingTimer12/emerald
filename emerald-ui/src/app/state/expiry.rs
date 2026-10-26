@@ -43,6 +43,10 @@ impl<K: Eq + Hash, V> TtlCache<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         self.entries.get(key)?.1.as_ref()
     }
+
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        self.entries.get_mut(key)?.1.as_mut()
+    }
 }
 
 /// Keys that each lapse at their own deadline, in the order they were set.

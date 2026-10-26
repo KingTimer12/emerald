@@ -7,16 +7,17 @@ use windows::Win32::Security::Credentials::{
 };
 use windows::core::{HSTRING, PWSTR};
 
-use super::{ACCOUNT, Store, Token};
+use super::{Store, Token};
 
-/// A generic credential named `{service}:{ACCOUNT}`.
+/// A generic credential named `{service}:{account}`.
 pub struct CredentialManager {
     pub service: &'static str,
+    pub account: String,
 }
 
 impl CredentialManager {
     fn target(&self) -> HSTRING {
-        HSTRING::from(format!("{}:{ACCOUNT}", self.service))
+        HSTRING::from(format!("{}:{}", self.service, self.account))
     }
 }
 
@@ -51,7 +52,7 @@ impl Store for CredentialManager {
 
     fn write(&self, token: &Token) -> std::io::Result<()> {
         let target = self.target();
-        let user = HSTRING::from(ACCOUNT);
+        let user = HSTRING::from(self.account.as_str());
         let mut blob = token.expose().as_bytes().to_vec();
         let credential = CREDENTIALW {
             Type: CRED_TYPE_GENERIC,

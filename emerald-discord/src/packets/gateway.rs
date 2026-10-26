@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use crate::identity::CAPABILITIES;
 use crate::model::Snowflake;
+use crate::protocol::OwnPresence;
 
 /// Gateway opcodes this client sends or handles.
 pub mod op {
@@ -70,9 +71,13 @@ pub fn heartbeat(seq: Option<u64>) -> Value {
     json!({ "op": op::HEARTBEAT, "d": seq })
 }
 
-/// Op 3: our status, with no activities.
-pub fn presence_update(status: &str) -> Value {
-    json!({ "op": op::PRESENCE_UPDATE, "d": { "status": status, "since": 0, "activities": [], "afk": false } })
+/// Op 3: our status, with the custom status as the only activity.
+pub fn presence_update(presence: &OwnPresence) -> Value {
+    let activities: Vec<Value> = presence.custom.iter().map(super::account::custom_status_activity).collect();
+    json!({
+        "op": op::PRESENCE_UPDATE,
+        "d": { "status": presence.status.as_str(), "since": 0, "activities": activities, "afk": false },
+    })
 }
 
 /// Op 8 for specific users, the shape the web client uses for message authors.

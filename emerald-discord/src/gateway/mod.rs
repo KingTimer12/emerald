@@ -14,8 +14,7 @@ use tokio::sync::{mpsc, watch};
 use tokio::time::sleep;
 
 use crate::identity::Identity;
-use crate::model::Status;
-use crate::protocol::{Link, NetEvent};
+use crate::protocol::{Link, NetEvent, OwnPresence};
 use crate::urls;
 
 /// Raw gateway payloads from the UI (op 8, op 37), sent once a session is up.
@@ -23,7 +22,7 @@ pub type OpsRx = mpsc::UnboundedReceiver<serde_json::Value>;
 
 /// The user's chosen presence; `None` lets Discord apply the account's saved
 /// status, which is what the web client's `"unknown"` means.
-pub type PresenceRx = watch::Receiver<Option<Status>>;
+pub type PresenceRx = watch::Receiver<Option<OwnPresence>>;
 
 /// Where the gateway reports to the UI.
 type Events = async_channel::Sender<NetEvent>;

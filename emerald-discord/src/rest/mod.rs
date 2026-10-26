@@ -3,6 +3,7 @@
 //! limits, the microcache and typed errors; bodies come from `packets`.
 //! The endpoints are grouped by area, one module each.
 
+mod account;
 mod apps;
 mod channels;
 pub(crate) mod encoding;

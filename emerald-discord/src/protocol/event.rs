@@ -2,6 +2,7 @@
 
 use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Upload};
 use crate::model::{
+    AuthSession, FriendPresence, UserProfileDetails, UserSettings,
     Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
     MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, PollVote, Profile, ReactionAddMany,
     ReactionClear, ReactionUpdate, Relationship, Invite, RoleDelete, RoleUpdate, Snowflake, StickerPack, ThreadListSync,
@@ -30,11 +31,26 @@ pub enum NetEvent {
     RoleDelete(RoleDelete),
     /// A channel was read up to `message_id`, here or on another device.
     MessageAck(MessageAck),
-    /// Friend presences as `(user, status)`.
-    Presences(Vec<(Snowflake, String)>),
+    /// Friends' statuses and activities.
+    Presences(Vec<FriendPresence>),
     RelationshipAdd(Relationship),
     RelationshipRemove(Snowflake),
     UserUpdate(User),
+    /// The synced settings, saved here or changed on another device. A
+    /// partial update holds only the sections that changed.
+    UserSettings {
+        settings: UserSettings,
+        partial: bool,
+    },
+    /// The profile part of an `EditProfile`, as saved.
+    ProfileEdited {
+        guild: Option<Snowflake>,
+        details: UserProfileDetails,
+    },
+    /// Answer to `Command::Sessions`.
+    Sessions(Result<Vec<AuthSession>, String>),
+    /// These devices were signed out.
+    SessionsLoggedOut(Vec<String>),
     /// Someone joined (`added`) or left a group DM.
     Recipient {
         channel: Snowflake,
@@ -220,6 +236,10 @@ pub struct Snapshot {
     pub guild_settings: Vec<GuildSettings>,
     /// The server list's folders; `None` when READY had none to give.
     pub folders: Option<Vec<GuildFolder>>,
+    /// The synced settings; `None` when READY had none to give.
+    pub settings: Option<UserSettings>,
+    /// Names this device among the signed-in ones.
+    pub session_hash: Option<String>,
 }
 
 /// Pinned messages, newest pin first.

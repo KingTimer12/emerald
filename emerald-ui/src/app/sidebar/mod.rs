@@ -13,6 +13,7 @@ use super::place_menu::Target;
 use super::state::folders::Item;
 use super::state::{ChannelRow, Row, Space};
 use emerald_discord::model::Snowflake;
+use super::activity::activity_text;
 use super::{Emerald, widgets};
 
 /// Height of the floating user panel plus its margins; lists pad by this.
@@ -271,7 +272,24 @@ impl Emerald {
                                     .text_color(rgb(theme::CHANNELS_DEFAULT))
                                     .child(t!("group.member_count", count = count)),
                             ),
-                        None => div().flex_1().min_w(px(0.)).truncate().child(name.clone()),
+                        // A friend's custom status or game, under their name.
+                        None => match user.and_then(|u| activity_text(self.people.activities(u))) {
+                            Some(activity) => div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .flex()
+                                .flex_col()
+                                .child(div().truncate().line_height(px(18.)).child(name.clone()))
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_xs()
+                                        .font_weight(FontWeight::NORMAL)
+                                        .text_color(rgb(theme::CHANNELS_DEFAULT))
+                                        .child(activity),
+                                ),
+                            None => div().flex_1().min_w(px(0.)).truncate().child(name.clone()),
+                        },
                     })
                     .when(mentions > 0 && !selected, |r| r.child(widgets::badge(mentions as usize)))
                     .on_mouse_down(

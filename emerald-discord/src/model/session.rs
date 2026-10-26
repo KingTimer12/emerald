@@ -30,12 +30,18 @@ pub struct Ready {
     /// `PreloadedUserSettings`, base64 protobuf; the server folders are in it.
     #[serde(default)]
     pub user_settings_proto: Option<String>,
+    /// This session among those `GET /auth/sessions` lists.
+    #[serde(default)]
+    pub auth_session_id_hash: Option<String>,
 }
 
 /// USER_SETTINGS_PROTO_UPDATE: settings changed, here or on another device.
 #[derive(Debug, Deserialize)]
 pub struct SettingsProtoUpdate {
     pub settings: SettingsProto,
+    /// Only the sections that changed are in it.
+    #[serde(default)]
+    pub partial: bool,
 }
 
 #[derive(Debug, Deserialize)]

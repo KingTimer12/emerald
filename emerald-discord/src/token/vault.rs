@@ -1,8 +1,10 @@
-//! Where the token lives on this build and platform: the OS credential
+//! Where a token lives on this build and platform: the OS credential
 //! store in release builds that have one, the file otherwise, and the move
-//! from the file into the store.
+//! from the file into the store. Each signed-in account has its own vault;
+//! the [`Default`] one is where single-account builds kept the token.
 
-use super::{FileStore, SERVICE, Store, Token};
+use super::{ACCOUNT, FileStore, SERVICE, Store, Token};
+use crate::model::Snowflake;
 
 pub struct Vault {
     /// The OS credential store; `None` keeps the token in `file`.
@@ -13,29 +15,41 @@ pub struct Vault {
 
 impl Default for Vault {
     fn default() -> Self {
-        let secure = if cfg!(debug_assertions) { None } else { secure_store(SERVICE) };
-        let file = emerald_core::paths::config_dir().map(|dir| FileStore { path: dir.join("token") });
-        Self { secure, file }
+        Self::named(ACCOUNT.to_owned(), "token".into())
     }
 }
 
-/// The platform's credential store under `service`, if it has one.
+/// The platform's credential store item `account` under `service`, if it
+/// has one.
 #[cfg(target_os = "macos")]
-fn secure_store(service: &'static str) -> Option<Box<dyn Store>> {
-    Some(Box::new(super::keychain::Keychain { service }))
+fn secure_store(service: &'static str, account: String) -> Option<Box<dyn Store>> {
+    Some(Box::new(super::keychain::Keychain { service, account }))
 }
 
 #[cfg(windows)]
-fn secure_store(service: &'static str) -> Option<Box<dyn Store>> {
-    Some(Box::new(super::credential_manager::CredentialManager { service }))
+fn secure_store(service: &'static str, account: String) -> Option<Box<dyn Store>> {
+    Some(Box::new(super::credential_manager::CredentialManager { service, account }))
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
-fn secure_store(_service: &'static str) -> Option<Box<dyn Store>> {
+fn secure_store(_service: &'static str, _account: String) -> Option<Box<dyn Store>> {
     None
 }
 
 impl Vault {
+    /// The vault of one signed-in account.
+    pub fn account(id: Snowflake) -> Self {
+        Self::named(format!("{ACCOUNT}-{id}"), format!("tokens/{id}"))
+    }
+
+    /// The credential store item `account`, or the file at `file` under the
+    /// config directory.
+    fn named(account: String, file: String) -> Self {
+        let secure = if cfg!(debug_assertions) { None } else { secure_store(SERVICE, account) };
+        let file = emerald_core::paths::config_dir().map(|dir| FileStore { path: dir.join(file) });
+        Self { secure, file }
+    }
+
     /// The stored token. One found only in the old file moves into the
     /// credential store.
     pub fn load(&self) -> Option<Token> {
@@ -116,7 +130,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("token");
         let vault = Vault {
-            secure: secure_store("Emerald (test)"),
+            secure: secure_store("Emerald (test)", ACCOUNT.to_owned()),
             file: Some(FileStore { path: path.clone() }),
         };
         vault.forget();

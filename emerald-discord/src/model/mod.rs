@@ -4,6 +4,7 @@
 
 mod channel;
 mod command;
+mod devices;
 mod emoji;
 mod folders;
 mod guild;
@@ -11,12 +12,15 @@ mod member_list;
 mod message;
 mod notifications;
 mod profile;
+pub(crate) mod proto;
 mod session;
 mod snowflake;
 mod user;
+pub(crate) mod user_settings;
 
 pub use channel::*;
 pub use command::*;
+pub use devices::*;
 pub use emoji::*;
 pub use folders::*;
 pub use guild::*;
@@ -27,3 +31,4 @@ pub use profile::*;
 pub use session::*;
 pub use snowflake::{DISCORD_EPOCH_MS, Snowflake};
 pub use user::*;
+pub use user_settings::{CustomStatus, Privacy, UserSettings, friend_source};

@@ -2,9 +2,8 @@
 //! user's settings protobuf (`PreloadedUserSettings.guild_folders`). Only
 //! that field is read, with a protobuf reader just big enough for it.
 
-use base64::Engine;
-
 use super::Snowflake;
+use super::proto::{self, Reader, Value, wrapped_bytes, wrapped_varint};
 
 /// A folder of servers, or a lone server when it has no `id`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -33,17 +32,14 @@ mod field {
     pub const FOLDER_ID: u32 = 2;
     pub const FOLDER_NAME: u32 = 3;
     pub const FOLDER_COLOR: u32 = 4;
-    /// The `value` of the `google.protobuf` wrapper types.
-    pub const WRAPPED: u32 = 1;
 }
 
 /// The folders in `proto`, base64 as READY and USER_SETTINGS_PROTO_UPDATE
 /// send it. `None` when it is malformed or holds no folder field (a
 /// partial update that left them alone).
 pub fn guild_folders(proto: &str) -> Option<Vec<GuildFolder>> {
-    let bytes = base64::engine::general_purpose::STANDARD.decode(proto).ok()?;
-    let folders = Reader::new(&bytes).fields().ok()?.into_iter().find(|(number, _)| *number == field::GUILD_FOLDERS)?.1;
-    let Value::Bytes(folders) = folders else { return None };
+    let bytes = proto::decode_base64(proto)?;
+    let folders = proto::message(&bytes, field::GUILD_FOLDERS)?;
     let mut list = Vec::new();
     for (number, value) in Reader::new(folders).fields().ok()? {
         if let (field::FOLDERS, Value::Bytes(folder)) = (number, value) {
@@ -77,101 +73,10 @@ fn folder_from(bytes: &[u8]) -> Option<GuildFolder> {
     Some(folder)
 }
 
-/// The value of an `Int64Value` or `UInt64Value`; zero when left out, as
-/// protobuf omits defaults.
-fn wrapped_varint(bytes: &[u8]) -> Option<u64> {
-    let fields = Reader::new(bytes).fields().ok()?;
-    Some(
-        fields
-            .into_iter()
-            .find_map(|(number, value)| match (number, value) {
-                (field::WRAPPED, Value::Varint(v)) => Some(v),
-                _ => None,
-            })
-            .unwrap_or(0),
-    )
-}
-
-fn wrapped_bytes(bytes: &[u8]) -> Option<&[u8]> {
-    let fields = Reader::new(bytes).fields().ok()?;
-    Some(
-        fields
-            .into_iter()
-            .find_map(|(number, value)| match (number, value) {
-                (field::WRAPPED, Value::Bytes(v)) => Some(v),
-                _ => None,
-            })
-            .unwrap_or_default(),
-    )
-}
-
-/// One field's value, by wire type.
-enum Value<'a> {
-    Varint(u64),
-    Fixed64(u64),
-    Bytes(&'a [u8]),
-    Fixed32,
-}
-
-struct Reader<'a> {
-    bytes: &'a [u8],
-    at: usize,
-}
-
-impl<'a> Reader<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, at: 0 }
-    }
-
-    /// Every field of the message, in order.
-    fn fields(mut self) -> Result<Vec<(u32, Value<'a>)>, ()> {
-        let mut fields = Vec::new();
-        while self.at < self.bytes.len() {
-            let key = self.varint()?;
-            let number = u32::try_from(key >> 3).map_err(drop)?;
-            let value = match key & 7 {
-                0 => Value::Varint(self.varint()?),
-                1 => Value::Fixed64(u64::from_le_bytes(self.take(8)?.try_into().map_err(drop)?)),
-                2 => {
-                    let len = usize::try_from(self.varint()?).map_err(drop)?;
-                    Value::Bytes(self.take(len)?)
-                }
-                5 => {
-                    self.take(4)?;
-                    Value::Fixed32
-                }
-                // Groups are long gone from protobuf; nothing here uses them.
-                _ => return Err(()),
-            };
-            fields.push((number, value));
-        }
-        Ok(fields)
-    }
-
-    fn varint(&mut self) -> Result<u64, ()> {
-        let mut value = 0u64;
-        for shift in (0..64).step_by(7) {
-            let byte = *self.bytes.get(self.at).ok_or(())?;
-            self.at += 1;
-            value |= u64::from(byte & 0x7f) << shift;
-            if byte & 0x80 == 0 {
-                return Ok(value);
-            }
-        }
-        Err(())
-    }
-
-    fn take(&mut self, len: usize) -> Result<&'a [u8], ()> {
-        let end = self.at.checked_add(len).filter(|end| *end <= self.bytes.len()).ok_or(())?;
-        let taken = &self.bytes[self.at..end];
-        self.at = end;
-        Ok(taken)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine;
 
     fn varint(mut value: u64, out: &mut Vec<u8>) {
         loop {

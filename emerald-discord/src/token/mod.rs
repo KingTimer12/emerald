@@ -1,5 +1,6 @@
-//! The account token: how it is held in memory ([`Token`]) and where it is
-//! stored ([`Vault`], over the [`Store`]s of each platform).
+//! The account token: how it is held in memory ([`Token`]), where it is
+//! stored ([`Vault`], over the [`Store`]s of each platform), and the
+//! accounts signed in on this computer ([`Accounts`]).
 //!
 //! Release builds keep it in the OS credential store: the login Keychain on
 //! macOS, Credential Manager on Windows (DPAPI, tied to the Windows user).
@@ -8,6 +9,7 @@
 //! (`token` under `paths::config_dir`, mode 0600): the Keychain trusts one
 //! exact binary, so every rebuild would ask for the password again.
 
+mod accounts;
 #[cfg(windows)]
 mod credential_manager;
 mod file;
@@ -17,10 +19,12 @@ mod vault;
 
 use zeroize::Zeroizing;
 
+pub use accounts::{Account, Accounts, MAX_ACCOUNTS, load, remove, save, switch_to, user_id};
 pub use file::FileStore;
 pub use vault::Vault;
 
-/// Service and account names of the credential store item.
+/// Service and account names of the credential store item; each signed-in
+/// account's item adds its id to the account name.
 const SERVICE: &str = "Emerald";
 const ACCOUNT: &str = "discord-token";
 
@@ -73,18 +77,9 @@ pub fn take_env() -> Option<Token> {
     Some(token)
 }
 
-/// The stored token, if the user signed in before.
-pub fn load() -> Option<Token> {
-    Vault::default().load()
-}
-
-pub fn save(token: &Token) -> std::io::Result<()> {
-    Vault::default().write(token)
-}
-
-/// Forgets the stored token everywhere it might be.
+/// Forgets the active account's token everywhere it might be.
 pub fn forget() {
-    Vault::default().forget();
+    accounts::forget();
 }
 
 #[cfg(test)]

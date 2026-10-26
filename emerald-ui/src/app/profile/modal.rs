@@ -95,7 +95,7 @@ impl Emerald {
                     .border_color(theme::border())
                     .bg(rgb(theme::BASE_LOWEST))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(div().w_full().h(px(BANNER)).flex_none().bg(rgb(card.banner)))
+                    .child(self.banner(&card, BANNER))
                     .child(
                         div()
                             .absolute()

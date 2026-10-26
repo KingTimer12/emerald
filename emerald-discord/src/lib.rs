@@ -23,8 +23,9 @@ use std::sync::Arc;
 
 use model::Status;
 pub use protocol::{
-    Action, Command, IndexTarget, Link, MUTE_WINDOWS, NetEvent, NewPoll, Page, PinPage, ReactionEvent, ReactionSource,
-    ReplyTo, SearchPage, SearchQuery, SearchScope, SettingsChange, Snapshot, ThreadPage, ThreadQuery, Upload,
+    Action, Command, IndexTarget, Link, MUTE_WINDOWS, NetEvent, NewPoll, OwnPresence, Page, Picture, PinPage, ProfileEdit,
+    ReactionEvent, ReactionSource, ReplyTo, SearchPage, SearchQuery, SearchScope, SettingsChange, SettingsEdit, Snapshot,
+    ThreadPage, ThreadQuery, Upload,
 };
 use tokio::sync::{mpsc, watch};
 
@@ -39,7 +40,7 @@ pub fn spawn(
 ) {
     let (event_tx, event_rx) = async_channel::unbounded();
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<Command>();
-    let (presence_tx, presence_rx) = watch::channel(status);
+    let (presence_tx, presence_rx) = watch::channel(status.map(|status| OwnPresence { status, custom: None }));
     let (ops_tx, ops_rx) = mpsc::unbounded_channel::<serde_json::Value>();
 
     std::thread::Builder::new()
@@ -75,8 +76,8 @@ pub fn spawn(
                 tokio::spawn(gateway::run(identity.clone(), event_tx.clone(), presence_rx, ops_rx));
                 while let Some(cmd) = cmd_rx.recv().await {
                     match cmd {
-                        Command::SetStatus(status) => {
-                            presence_tx.send_replace(Some(status));
+                        Command::SetPresence(presence) => {
+                            presence_tx.send_replace(Some(presence));
                         }
                         Command::SetLocale(locale) => identity.set_locale(&locale),
                         Command::RequestMembers { guild, users } => {
@@ -104,10 +105,44 @@ pub fn spawn(
     (event_rx, cmd_tx)
 }
 
-/// Forgets the stored token and starts Emerald again, which then finds no
-/// token and opens the login webview.
+/// Forgets the active account's token and starts Emerald again, which
+/// then opens the next signed-in account, or the login webview when there
+/// is none.
 pub fn sign_out() -> ! {
     token::forget();
+    restart()
+}
+
+/// Starts Emerald again on `account`, another one signed in here.
+pub fn switch_account(account: model::Snowflake) -> ! {
+    if !token::switch_to(account) {
+        tracing::warn!("switching to an account that is not signed in");
+    }
+    restart()
+}
+
+/// Opens the login window for one more account and blocks until it closes.
+/// The new account becomes the active one; `false` when the window was
+/// closed without signing in or the token could not be kept.
+pub fn add_account() -> bool {
+    let Some(token) = emerald_core::process::run_child("--login", b"").and_then(token::Token::new) else {
+        tracing::info!("adding an account was cancelled");
+        return false;
+    };
+    match token::save(&token) {
+        Ok(()) => {
+            tracing::info!("signed in to another account");
+            true
+        }
+        Err(e) => {
+            tracing::warn!("could not save the new account's token: {e}");
+            false
+        }
+    }
+}
+
+/// Starts Emerald afresh on the active account.
+pub fn restart() -> ! {
     // Kept API answers belong to the account that is leaving.
     if let Some(cache) = emerald_http::Cache::open_default() {
         cache.clear_responses();

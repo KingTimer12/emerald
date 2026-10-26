@@ -7,8 +7,8 @@ use serde_json::value::RawValue;
 use super::{Events, Session, State};
 use crate::identity::Identity;
 use crate::model::{
-    Guild, NoteUpdate, Presence, Ready, ReadySupplemental, RecipientUpdate, RelationshipRemove, SettingsProtoUpdate,
-    Snowflake, guild_folders,
+    FriendPresence, Guild, NoteUpdate, Presence, Ready, ReadySupplemental, RecipientUpdate, RelationshipRemove, SettingsProtoUpdate,
+    UserSettings, guild_folders,
 };
 use crate::protocol::{Link, NetEvent, ReactionEvent, Snapshot};
 
@@ -22,9 +22,35 @@ pub(super) fn dispatch(
     events: &Events,
 ) {
     let (Some(kind), Some(data)) = (kind, data) else { return };
+    if kind == "USER_SETTINGS_PROTO_UPDATE" {
+        for event in settings_update(data.get()) {
+            events.try_send(event).ok();
+        }
+        return;
+    }
     if let Some(event) = event(kind, data.get(), identity, state) {
         events.try_send(event).ok();
     }
+}
+
+/// One settings update can change both the folders and the settings
+/// Emerald reads, so it makes up to two events.
+fn settings_update(data: &str) -> Vec<NetEvent> {
+    let Some(update) = decode("USER_SETTINGS_PROTO_UPDATE", data, |u: SettingsProtoUpdate| u) else { return vec![] };
+    // Only the preloaded settings (type 1) hold them.
+    if update.settings.kind != 1 {
+        return vec![];
+    }
+    let proto = &update.settings.proto;
+    let mut events = Vec::new();
+    // A partial update may leave the folders out.
+    if let Some(folders) = guild_folders(proto) {
+        events.push(NetEvent::Folders(folders));
+    }
+    if let Some(settings) = UserSettings::decode(proto) {
+        events.push(NetEvent::UserSettings { settings, partial: update.partial });
+    }
+    events
 }
 
 fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Option<NetEvent> {
@@ -88,15 +114,6 @@ fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Opti
         "MESSAGE_POLL_VOTE_REMOVE" => decode(kind, data, |vote| NetEvent::PollVote { vote, add: false }),
         "TYPING_START" => decode(kind, data, NetEvent::TypingStart),
         "USER_GUILD_SETTINGS_UPDATE" => decode(kind, data, NetEvent::GuildSettings),
-        "USER_SETTINGS_PROTO_UPDATE" => {
-            let update: SettingsProtoUpdate = decode(kind, data, std::convert::identity)?;
-            // Only the preloaded settings hold folders, and a partial update
-            // may leave them out.
-            (update.settings.kind == 1)
-                .then(|| guild_folders(&update.settings.proto))
-                .flatten()
-                .map(NetEvent::Folders)
-        }
         _ => None,
     }
 }
@@ -143,6 +160,7 @@ fn ready(r: Ready, identity: &Identity, state: &mut State) -> NetEvent {
         .filter_map(|state| Some((state.id, state.last_message_id?, state.mention_count)))
         .collect();
     let folders = r.user_settings_proto.as_deref().and_then(guild_folders);
+    let settings = r.user_settings_proto.as_deref().and_then(UserSettings::decode);
     NetEvent::Ready(Box::new(Snapshot {
         me: r.user,
         guilds: r.guilds,
@@ -153,14 +171,22 @@ fn ready(r: Ready, identity: &Identity, state: &mut State) -> NetEvent {
         read_states,
         guild_settings: r.user_guild_settings.entries,
         folders,
+        settings,
+        session_hash: r.auth_session_id_hash,
     }))
 }
 
-/// Friends' statuses as `(user, status)`.
-fn friend_presences(presences: Vec<Presence>) -> Vec<(Snowflake, String)> {
+/// Friend presences only: guild ones come with the member list instead.
+fn friend_presences(presences: Vec<Presence>) -> Vec<FriendPresence> {
     presences
         .into_iter()
-        .filter_map(|p| Some((p.user()?, p.status)))
+        .filter_map(|p| {
+            Some(FriendPresence {
+                user: p.user()?,
+                status: p.status,
+                activities: p.activities,
+            })
+        })
         .collect()
 }
 

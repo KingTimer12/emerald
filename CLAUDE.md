@@ -158,13 +158,13 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 5 — your account
 
-34. [ ] Profile editing: avatar, banner, bio, pronouns, accent color, per-server
+34. [x] Profile editing: avatar, banner, bio, pronouns, accent color, per-server
     nickname and avatar.
-35. [ ] Custom status (text, emoji, expiry) and activity display of others (games,
+35. [x] Custom status (text, emoji, expiry) and activity display of others (games,
     Spotify).
-36. [ ] Privacy settings: who can DM or friend you, message requests.
-37. [ ] Devices/sessions list and logging other sessions out.
-38. [ ] Multiple accounts, with fast switching. Mind the identify limits.
+36. [x] Privacy settings: who can DM or friend you, message requests.
+37. [x] Devices/sessions list and logging other sessions out.
+38. [x] Multiple accounts, with fast switching. Mind the identify limits.
 
 ### Phase 6 — appearance and comfort
 

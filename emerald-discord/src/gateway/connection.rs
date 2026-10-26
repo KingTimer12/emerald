@@ -15,7 +15,6 @@ use super::dispatch::dispatch;
 use super::inflater::Inflater;
 use super::{Events, OpsRx, Outcome, PresenceRx, State, jitter};
 use crate::identity::{self, Identity};
-use crate::model::Status;
 use crate::packets::gateway::{self as packets, Hello, Payload, op};
 use crate::urls;
 
@@ -62,17 +61,17 @@ pub(super) async fn connect(
 
     let token = identity.token();
     // Marks the current value seen; later changes go out as op 3.
-    let chosen = *presence.borrow_and_update();
-    let status = chosen.map_or("unknown", Status::as_str);
+    let chosen = presence.borrow_and_update().clone();
+    let status = chosen.as_ref().map_or("unknown", |p| p.status.as_str());
     let resuming = state.session.is_some();
     let handshake = match state.session.as_ref() {
         Some(s) => packets::resume(token.expose(), &s.id, state.seq),
         None => packets::identify(token.expose(), &identity.properties, status),
     };
     tx.send(WsMessage::Text(handshake.to_string().into())).await?;
-    if resuming && chosen.is_some() {
+    if resuming && let Some(chosen) = &chosen {
         // RESUME carries no presence; reassert one picked while disconnected.
-        tx.send(WsMessage::Text(packets::presence_update(status).to_string().into())).await?;
+        tx.send(WsMessage::Text(packets::presence_update(chosen).to_string().into())).await?;
     }
 
     let mut heartbeat = tokio::time::interval_at(Instant::now() + jitter(interval), interval);
@@ -87,8 +86,8 @@ pub(super) async fn connect(
                 tx.send(WsMessage::Text(op.to_string().into())).await?;
             }
             Ok(()) = presence.changed() => {
-                let Some(status) = *presence.borrow_and_update() else { continue };
-                tx.send(WsMessage::Text(packets::presence_update(status.as_str()).to_string().into())).await?;
+                let Some(chosen) = presence.borrow_and_update().clone() else { continue };
+                tx.send(WsMessage::Text(packets::presence_update(&chosen).to_string().into())).await?;
             }
             _ = heartbeat.tick() => {
                 if !acked {

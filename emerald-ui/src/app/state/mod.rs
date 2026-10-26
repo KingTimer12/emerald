@@ -2,6 +2,7 @@
 //! one concern and is driven by plain method calls, so it can be tested
 //! without a window.
 
+pub mod account;
 pub mod autocomplete;
 pub mod commands;
 pub mod drafts;
@@ -20,6 +21,7 @@ pub mod spaces;
 pub mod switcher;
 pub mod typing;
 
+pub use account::Account;
 pub use autocomplete::Autocomplete;
 pub use drafts::Drafts;
 pub use expiry::TtlCache;

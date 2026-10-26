@@ -20,7 +20,7 @@ pub use base_url::BaseUrl;
 pub use cache::Cache;
 pub use client::{Call, Client, Session};
 pub use downloads::Downloads;
-pub use error::{CaptchaRequired, Challenge, Forbidden, Refused, Solution, Unauthorized, describe};
+pub use error::{CaptchaRequired, Challenge, Forbidden, Reauth, Refused, Solution, Unauthorized, describe};
 pub use microcache::Policy;
 
 /// What a request is scoped to for rate limits and the microcache: the

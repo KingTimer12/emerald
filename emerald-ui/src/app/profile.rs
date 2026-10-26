@@ -11,7 +11,7 @@ use gpui::{Context, Div, FontWeight, MouseButton, SharedString, Window, div, img
 use super::super::{theme, time};
 use super::widgets::{self, ButtonKind};
 use super::{Emerald, Overlay};
-use emerald_discord::model::Snowflake;
+use emerald_discord::model::{Snowflake, banner_url, guild_banner_url};
 
 const PANEL_WIDTH: f32 = 340.;
 
@@ -20,6 +20,8 @@ struct Card {
     name: SharedString,
     username: SharedString,
     banner: u32,
+    /// The banner image, drawn over the color once downloaded.
+    banner_url: Option<String>,
     pronouns: Option<String>,
     bio: Option<String>,
     /// Badge descriptions with their icon URL.
@@ -66,8 +68,13 @@ impl Emerald {
                     .collect()
             })
             .unwrap_or_default();
+        let banner_url = guild
+            .zip(local.and_then(|d| d.banner.as_deref()))
+            .map(|(guild, hash)| guild_banner_url(guild, user, hash))
+            .or_else(|| global_profile.or(profile)?.user.banner.as_deref().map(|hash| banner_url(user, hash)));
         let profile = global_profile.or(profile);
         Card {
+            banner_url,
             name: nick
                 .or_else(|| known.map(|u| u.display_name().to_owned()))
                 .unwrap_or_else(|| user.to_string())
@@ -130,6 +137,45 @@ impl Emerald {
         line
     }
 
+    /// The banner image when there is one and it has arrived, else its color.
+    fn banner(&self, card: &Card, height: f32) -> Div {
+        let banner = div().w_full().h(px(height)).flex_none().overflow_hidden().bg(rgb(card.banner));
+        match card.banner_url.as_deref().and_then(|url| self.avatar_image(url)) {
+            Some(image) => banner.child(img(image).w_full().h(px(height)).object_fit(gpui::ObjectFit::Cover)),
+            None => banner,
+        }
+    }
+
+    /// The custom status and what `user` is doing, as far as Emerald sees:
+    /// friends' presences only.
+    fn activities(&self, user: Snowflake) -> impl Iterator<Item = Div> + '_ {
+        let activities = self.people.activities(user);
+        let custom = activities
+            .iter()
+            .find(|a| a.kind == emerald_discord::model::activity_kind::CUSTOM)
+            .and_then(|a| a.custom_text())
+            .map(|status| div().text_size(px(14.)).text_color(rgb(theme::TEXT_DEFAULT)).child(status));
+        let others = activities.iter().filter_map(|activity| {
+            let headline = super::activity::headline(activity)?;
+            let lines = [activity.details.clone(), activity.state.clone()].into_iter().flatten();
+            Some(section(
+                t!("profile.activity"),
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(theme::TEXT_STRONG))
+                            .child(headline),
+                    )
+                    .children(lines.map(|line| div().text_size(px(13.)).text_color(rgb(theme::TEXT_MUTED)).child(line))),
+            ))
+        });
+        custom.into_iter().chain(others)
+    }
+
     fn avatar_ring(&self, user: Snowflake, card: &Card, size: f32, ring: f32) -> Div {
         div()
             .p(px(ring))
@@ -174,7 +220,7 @@ impl Emerald {
                     .border_1()
                     .border_color(theme::border())
                     .bg(rgb(theme::BASE_LOWEST))
-                    .child(div().w_full().h(px(BANNER)).flex_none().bg(rgb(card.banner)))
+                    .child(self.banner(&card, BANNER))
                     .child(
                         // Avatar straddling the banner's bottom edge.
                         div()
@@ -216,6 +262,7 @@ impl Emerald {
                                     .text_color(rgb(theme::TEXT_MUTED))
                                     .child(p)
                             }))
+                            .children(self.activities(user))
                             .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
                             .child(section(
                                 t!("profile.member_since"),

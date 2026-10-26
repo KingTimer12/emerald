@@ -128,7 +128,17 @@ CPU near zero when idle.
   unread channels. A result jumps to its message.
 - **Threads browser**: a channel's active and older threads, and a search by name.
   Forums sort by activity or by date, filter by tags and search posts by name.
-- **Settings**: display name, status, font size, compact mode; language and 12/24-hour time.
+- **Profile**: display name, avatar, pronouns, about me and banner color, everywhere or per
+  server (nickname; server avatar, banner and bio with Nitro), with a live preview of the card.
+- **Status**: online, idle, do not disturb or invisible, and a custom status with an emoji and
+  a time to clear, all synced with the account's other devices. Friends' custom statuses,
+  games and music show in the friends and DM lists and on profiles.
+- **Privacy & Safety**: DMs and message requests from server members (for new servers or all
+  of them), and who can send friend requests.
+- **Devices**: where the account is signed in, logging any of them out. When Discord asks for
+  a password or two-factor code first, Emerald says so instead of signing out.
+- **Multiple accounts**: up to five signed in at once; switching restarts Emerald on the other.
+- **Settings**: font size, compact mode; language and 12/24-hour time.
 
 Not there yet: voice; playing video and audio inside the app; animated avatars in the
 chat list (still there, as Discord shows them until hovered). On macOS, notifications go
@@ -176,8 +186,9 @@ cargo test
 
 | macOS | Windows | Contents |
 |---|---|---|
-| Keychain, item "Emerald" | Credential Manager, `Emerald:discord-token` | Account token (release builds). |
-| `~/.config/emerald/token` | `%APPDATA%\emerald\token` | Account token in debug builds, mode 0600. A release build moves it to the Keychain or Credential Manager and deletes the file. |
+| Keychain, item "Emerald", account `discord-token-<id>` | Credential Manager, `Emerald:discord-token-<id>` | Each signed-in account's token (release builds). |
+| `~/.config/emerald/tokens/<id>` | `%APPDATA%\emerald\tokens\<id>` | Each account's token in debug builds, mode 0600. A token left by an older build (`token`, or the `discord-token` item) moves into its account's slot. |
+| `~/.config/emerald/accounts.json` | `%APPDATA%\emerald\accounts.json` | The signed-in accounts (id, name, avatar) and which one is active. No tokens. |
 | `~/.config/emerald/settings.json` | `%APPDATA%\emerald\settings.json` | Preferences. |
 | `~/Library/Caches/emerald/cache.sqlite` | `%LOCALAPPDATA%\emerald\cache.sqlite` | SQLite cache, readable only by you: CDN images (capped at 200 MB, least recently used out first) and the last profiles fetched, cleared on sign-out. |
 | `~/Library/Caches/emerald/build_number` | `%LOCALAPPDATA%\emerald\build_number` | Last web client build number seen. |

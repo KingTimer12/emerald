@@ -4,6 +4,7 @@
 //! fingerprinting as much as the fields, so each builder keeps the web
 //! client's order (`serde_json` preserves insertion order here).
 
+pub mod account;
 pub mod context;
 pub mod gateway;
 pub mod guild;

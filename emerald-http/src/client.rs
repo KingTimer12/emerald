@@ -15,7 +15,7 @@ use tokio::time::Instant;
 use crate::base_url::BaseUrl;
 use crate::cache::Cache;
 use crate::downloads::on_disk;
-use crate::error::{ErrorBody, Forbidden, StillLimited, Unauthorized, Unavailable};
+use crate::error::{ErrorBody, Forbidden, StillLimited, Unavailable};
 use crate::microcache::{Lookup, MicroCache, Policy, Ticket};
 use crate::ratelimit::{RateLimiter, Route};
 use crate::{NO_SCOPE, Scope};
@@ -247,7 +247,7 @@ impl Client {
                 }
                 StatusCode::UNAUTHORIZED => {
                     self.limits.note_invalid();
-                    bail!(Unauthorized);
+                    return Err(ErrorBody::read(response).await.unauthorized());
                 }
                 StatusCode::FORBIDDEN => {
                     self.limits.note_invalid();

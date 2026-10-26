@@ -12,12 +12,6 @@ impl Emerald {
         }
         self.run(Action::UpdateProfile, Command::SetGlobalName { name }, cx);
     }
-
-    pub(super) fn set_status(&mut self, status: Status, cx: &mut Context<Self>) {
-        self.settings.status = Some(status);
-        self.net.post(Command::SetStatus(status));
-        self.save_settings(cx);
-    }
 }
 
 impl Emerald {
@@ -156,7 +150,7 @@ impl Emerald {
             .into_any_element()
     }
 
-    pub(super) fn render_status(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_status(&self, view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
         let current = self.settings.status;
         div()
             .flex()
@@ -223,6 +217,7 @@ impl Emerald {
                     })
                     .on_click(cx.listener(move |this, _, _, cx| this.set_status(status, cx)))
             }))
+            .child(self.render_custom_status(view, cx))
             .into_any_element()
     }
 }

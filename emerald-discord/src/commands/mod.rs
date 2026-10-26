@@ -2,6 +2,7 @@
 //! event the UI waits for. [`handle`] only routes; each area lives in its
 //! own module, and [`outcome`] holds the error handling they share.
 
+mod account;
 mod app;
 mod captcha;
 mod channel;
@@ -125,6 +126,10 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::OpenDm { user, select } => user::open_dm(rest, user, select).await,
         Command::SetGlobalName { name } => Some(user::set_global_name(rest, name, &events).await),
         Command::FetchProfile { user, guild, full } => user::profile(rest, user, guild, full).await,
+        Command::EditSettings { current, edit } => Some(account::edit_settings(rest, current, edit, &events).await),
+        Command::EditProfile { guild, edit } => Some(account::edit_profile(rest, guild, edit, &events).await),
+        Command::Sessions => Some(account::sessions(rest).await),
+        Command::LogOutSessions(hashes) => Some(account::log_out_sessions(rest, hashes).await),
         Command::LogOut => Some(user::log_out(rest).await),
 
         Command::JoinGuild { code, message } => Some(guild::join(rest, code, message).await),
@@ -134,7 +139,7 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::LeaveGuild { guild } => Some(guild::leave(rest, guild).await),
 
         // Routed to the gateway before spawning.
-        Command::SetStatus(_)
+        Command::SetPresence(_)
         | Command::SetLocale(_)
         | Command::RequestMembers { .. }
         | Command::SearchMembers { .. }

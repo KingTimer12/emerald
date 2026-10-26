@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod account;
+mod activity;
 mod add_server;
 mod alerts;
 mod attachments;
@@ -83,7 +85,8 @@ const PROFILE_MIN_WINDOW: f32 = 1100.;
 /// Something drawn above the main layout; Escape dismisses it.
 enum Overlay {
     AddServer(AddServer),
-    Settings(SettingsView),
+    /// Boxed: the settings hold forms far larger than any other overlay.
+    Settings(Box<SettingsView>),
     /// "View Full Profile" for this user, as members of `guild` see them.
     Profile { user: Snowflake, guild: Option<Snowflake> },
     /// "Delete Message", asking before it goes.
@@ -119,6 +122,8 @@ pub struct Emerald {
     settings: Settings,
     connection: Connection,
     people: People,
+    /// The account's synced settings, presence and devices.
+    account: state::Account,
     images: Images,
     /// Animated stickers play on this clock, so copies of one stay in step.
     animation_clock: Instant,
@@ -339,6 +344,7 @@ impl Emerald {
                 fatal: None,
             },
             people: People::default(),
+            account: state::Account::default(),
             images: Images::default(),
             animation_clock: Instant::now(),
             animating: Cell::new(false),

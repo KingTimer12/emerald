@@ -13,7 +13,8 @@ use super::state::MemberList;
 use super::{Emerald, widgets};
 use emerald_discord::Command;
 use super::state::{member_search, members};
-use emerald_discord::model::{ListPresence, MemberListItem, Snowflake, User, activity_kind};
+use super::activity::activity_text;
+use emerald_discord::model::{MemberListItem, Snowflake, User};
 
 /// Pauses typing this long before the search is sent.
 const SEARCH_DELAY: Duration = Duration::from_millis(300);

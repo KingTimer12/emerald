@@ -155,6 +155,13 @@ const SHORT_MONTHS: [&str; 12] = [
     "time.month_short.december",
 ];
 
+/// The next local midnight after `secs`, when "Clear after: Today" ends.
+pub fn end_of_day(secs: i64) -> i64 {
+    local(secs).map_or(secs + 86_400, |at| {
+        secs + 86_400 - i64::from(at.hour * 3600 + at.minute * 60 + at.second)
+    })
+}
+
 /// Identifies the local calendar day, for day separators.
 pub fn day_key(secs: i64) -> i32 {
     local(secs).map_or(0, |at| at.year * 1000 + at.yday)

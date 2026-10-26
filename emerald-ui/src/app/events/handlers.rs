@@ -14,10 +14,13 @@ impl Emerald {
             read_states,
             guild_settings,
             folders,
+            settings,
+            session_hash,
         } = snapshot;
         self.connection.set_link(Link::Connected);
         let me_id = me.id;
         self.people.load(me, users, relationships);
+        self.load_account(settings, session_hash, cx);
         dms.retain(|c| c.kind.is_private());
         for dm in &mut dms {
             self.people.adopt_dm(dm);
@@ -250,8 +253,19 @@ impl Emerald {
                 }
             }
             Action::UpdateProfile => {
+                if result.is_ok() {
+                    self.profile_saved(cx);
+                }
                 if let Some(Overlay::Settings(view)) = &mut self.overlay {
-                    view.feedback = Some(Feedback::from_result(result, t!("settings.display_name_saved")));
+                    view.feedback = Some(Feedback::from_result(result, t!("settings.profile_saved")));
+                }
+            }
+            Action::AccountSettings | Action::Sessions => {
+                if let Err(error) = result {
+                    match &mut self.overlay {
+                        Some(Overlay::Settings(view)) => view.feedback = Some(Feedback::from_result(Err(error), "")),
+                        _ => self.connection.set_message(t!("common.error", error = error)),
+                    }
                 }
             }
         }

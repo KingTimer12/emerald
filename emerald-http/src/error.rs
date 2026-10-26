@@ -29,6 +29,23 @@ impl std::fmt::Display for Unauthorized {
 
 impl std::error::Error for Unauthorized {}
 
+/// 401 asking the user to confirm it is them (password or two-factor code)
+/// before a sensitive change. The token is still good; Emerald has no such
+/// prompt, so the change has to be made in Discord's own app.
+#[derive(Debug)]
+pub struct Reauth;
+
+impl std::fmt::Display for Reauth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("confirmation (MFA) required (401)")
+    }
+}
+
+impl std::error::Error for Reauth {}
+
+/// Discord's `MFA_REQUIRED` error code.
+const MFA_REQUIRED: u64 = 60003;
+
 /// Discord could not answer: a 5xx, or still rate limited after every retry.
 #[derive(Debug)]
 pub struct Unavailable(pub String);
@@ -100,6 +117,9 @@ pub fn describe(error: &anyhow::Error) -> String {
     if error.is::<Unauthorized>() {
         return t!("errors.unauthorized").to_owned();
     }
+    if error.is::<Reauth>() {
+        return t!("errors.reauth").to_owned();
+    }
     if error.is::<CaptchaRequired>() {
         return t!("errors.captcha_incomplete").to_owned();
     }
@@ -164,6 +184,8 @@ pub(crate) struct ErrorBody {
     #[serde(default)]
     message: Option<String>,
     #[serde(default)]
+    code: Option<u64>,
+    #[serde(default)]
     captcha_key: Option<serde::de::IgnoredAny>,
     #[serde(default)]
     captcha_sitekey: Option<String>,
@@ -182,6 +204,12 @@ impl ErrorBody {
 
     pub(crate) fn message(self) -> Option<String> {
         self.message
+    }
+
+    /// What a 401 with this body stands for: a request to confirm the
+    /// user's identity, or a token Discord no longer takes.
+    pub(crate) fn unauthorized(self) -> anyhow::Error {
+        if self.code == Some(MFA_REQUIRED) { Reauth.into() } else { Unauthorized.into() }
     }
 
     /// The error a failed (non-401/403/429) response stands for.

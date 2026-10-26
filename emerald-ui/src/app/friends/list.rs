@@ -60,7 +60,10 @@ impl Emerald {
             relationship_kind::INCOMING => t!("friends.incoming").into(),
             relationship_kind::OUTGOING => t!("friends.outgoing").into(),
             relationship_kind::BLOCKED => t!("friends.blocked").into(),
-            _ => widgets::status_label(entry.status.as_ref().map(|s| -> &str { s.as_ref() })).into(),
+            _ => match super::super::activity::activity_text(self.people.activities(id)) {
+                Some(activity) => activity.into(),
+                None => widgets::status_label(entry.status.as_ref().map(|s| -> &str { s.as_ref() })).into(),
+            },
         };
         let small = |button: gpui::Stateful<gpui::Div>| button.h(px(32.)).px_3();
         // Discord lets you message anyone you can reach, pending or not.

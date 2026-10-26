@@ -92,15 +92,55 @@ pub mod activity_kind {
     pub const COMPETING: u8 = 5;
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Activity {
     #[serde(rename = "type", default)]
     pub kind: u8,
     #[serde(default)]
     pub name: String,
-    /// Custom status text, or the party state of a game.
+    /// Custom status text, the party state of a game, or the artist on
+    /// Spotify.
     #[serde(default)]
     pub state: Option<String>,
+    /// What the game says the player is doing, or the song on Spotify.
+    #[serde(default)]
+    pub details: Option<String>,
+    /// The custom status's emoji.
+    #[serde(default)]
+    pub emoji: Option<ActivityEmoji>,
+    #[serde(default)]
+    pub timestamps: Option<ActivityTimestamps>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ActivityEmoji {
+    /// The Unicode emoji, or the custom one's name.
+    pub name: String,
+    #[serde(default)]
+    pub id: Option<Snowflake>,
+}
+
+/// Unix milliseconds.
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+pub struct ActivityTimestamps {
+    #[serde(default)]
+    pub start: Option<u64>,
+    #[serde(default)]
+    pub end: Option<u64>,
+}
+
+impl Activity {
+    /// The custom status's text with its emoji in front, when the emoji is
+    /// a Unicode one.
+    pub fn custom_text(&self) -> Option<String> {
+        let text = self.state.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        let emoji = self.emoji.as_ref().filter(|e| e.id.is_none()).map(|e| e.name.as_str());
+        match (emoji, text) {
+            (Some(emoji), Some(text)) => Some(format!("{emoji} {text}")),
+            (Some(emoji), None) => Some(emoji.to_owned()),
+            (None, text) => text.map(str::to_owned),
+        }
+    }
 }
 
 #[cfg(test)]

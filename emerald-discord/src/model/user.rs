@@ -97,6 +97,16 @@ pub struct Presence {
     pub status: String,
     #[serde(default)]
     pub guild_id: Option<Snowflake>,
+    #[serde(default)]
+    pub activities: Vec<super::Activity>,
+}
+
+/// A friend's status and what they are doing.
+#[derive(Clone, Debug)]
+pub struct FriendPresence {
+    pub user: Snowflake,
+    pub status: String,
+    pub activities: Vec<super::Activity>,
 }
 
 impl Presence {

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use super::{SearchQuery, SearchScope, SettingsChange, ThreadQuery};
-use crate::model::{ChannelKind, Emoji, Gif, Snowflake, Status};
+use super::{OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery};
+use crate::model::{ChannelKind, Emoji, Gif, Snowflake, UserSettings};
 
 /// Requests flowing from the UI to the network thread.
 pub enum Command {
@@ -255,7 +255,24 @@ pub enum Command {
     SetGlobalName {
         name: Option<String>,
     },
-    SetStatus(Status),
+    /// What the others see: the status and custom status, sent over the
+    /// gateway.
+    SetPresence(OwnPresence),
+    /// Saves one change to the synced settings, rewriting its section of
+    /// `current`, the settings as last received.
+    EditSettings {
+        current: UserSettings,
+        edit: SettingsEdit,
+    },
+    /// The profile, everywhere or in `guild`.
+    EditProfile {
+        guild: Option<Snowflake>,
+        edit: ProfileEdit,
+    },
+    /// The devices signed in to the account.
+    Sessions,
+    /// Signs these devices out, by their hashes.
+    LogOutSessions(Vec<String>),
     /// The interface language changed; Discord's answers follow it.
     SetLocale(String),
     /// Gateway op 8: fetch these members' nicknames and roles.

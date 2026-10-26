@@ -50,7 +50,19 @@ impl Emerald {
             }
             NetEvent::InviteCreated { channel, invite } => self.on_invite_created(channel, invite),
             NetEvent::Invite { code, invite } => self.invite_cards.store(code, invite),
-            NetEvent::UserUpdate(user) => self.people.update(user),
+            NetEvent::UserUpdate(user) => {
+                if self.people.is_me(user.id) {
+                    super::account::remember_account(&user);
+                }
+                self.people.update(user);
+            }
+            NetEvent::UserSettings { settings, partial } => self.on_user_settings(settings, partial, cx),
+            NetEvent::ProfileEdited { guild, details } => self.on_profile_edited(guild, details),
+            NetEvent::Sessions(sessions) => self.account.set_sessions(sessions),
+            NetEvent::SessionsLoggedOut(hashes) => {
+                self.busy.remove(&Action::Sessions);
+                self.account.logged_out(&hashes);
+            }
             NetEvent::DmOpened { mut channel, select } => {
                 self.people.adopt_dm(&mut channel);
                 let id = channel.id;
@@ -239,7 +251,10 @@ impl Emerald {
                     profile.mutual_guilds = old.mutual_guilds.clone();
                     profile.mutual_friends_count = old.mutual_friends_count;
                 }
-                self.profiles.fill(key, profile, Instant::now())
+                self.profiles.fill(key, profile, Instant::now());
+                if self.people.is_me(key.0) {
+                    self.fill_profile_form(cx);
+                }
             }
             NetEvent::SendFailed {
                 channel,

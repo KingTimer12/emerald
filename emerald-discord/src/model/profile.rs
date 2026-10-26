@@ -3,12 +3,19 @@ use serde::Deserialize;
 use super::Snowflake;
 use crate::urls::CDN;
 
-#[derive(Debug, Default, Deserialize)]
+/// The profile's own fields, global (`user_profile`) or for one server
+/// (`guild_member_profile`); also what a profile PATCH answers.
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct UserProfileDetails {
     #[serde(default)]
     pub bio: Option<String>,
     #[serde(default)]
     pub pronouns: Option<String>,
+    /// Banner image hash.
+    #[serde(default)]
+    pub banner: Option<String>,
+    #[serde(default)]
+    pub accent_color: Option<u32>,
 }
 
 /// `GET /users/{id}/profile`, as the DM profile panel uses it.
@@ -47,10 +54,28 @@ pub struct MutualGuild {
 pub struct ProfileMember {
     #[serde(default)]
     pub nick: Option<String>,
+    /// Their avatar in that guild only.
+    #[serde(default)]
+    pub avatar: Option<String>,
     #[serde(default)]
     pub roles: Vec<Snowflake>,
     #[serde(default)]
     pub joined_at: Option<String>,
+}
+
+/// A user's banner image. Animated ones (`a_…`) show their first frame.
+pub fn banner_url(user: Snowflake, hash: &str) -> String {
+    CDN.join(format_args!("/banners/{user}/{hash}.png?size=600"))
+}
+
+/// A user's banner in one guild.
+pub fn guild_banner_url(guild: Snowflake, user: Snowflake, hash: &str) -> String {
+    CDN.join(format_args!("/guilds/{guild}/users/{user}/banners/{hash}.png?size=600"))
+}
+
+/// A user's avatar in one guild.
+pub fn guild_avatar_url(guild: Snowflake, user: Snowflake, hash: &str) -> String {
+    CDN.join(format_args!("/guilds/{guild}/users/{user}/avatars/{hash}.png?size=128"))
 }
 
 impl ProfileMember {
@@ -116,6 +141,9 @@ pub struct ConnectedAccount {
 #[derive(Debug, Deserialize)]
 pub struct ProfileUser {
     pub id: Snowflake,
+    /// Banner image hash; Nitro only.
+    #[serde(default)]
+    pub banner: Option<String>,
     /// Banner fill when there is no banner image, as `#rrggbb`.
     #[serde(default)]
     pub banner_color: Option<String>,

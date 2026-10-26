@@ -6,7 +6,9 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::SharedString;
 
-use emerald_discord::model::{Channel, Relationship, Snowflake, User, avatar_url, relationship_kind};
+use emerald_discord::model::{
+    Activity, Channel, FriendPresence, Relationship, Snowflake, User, avatar_url, relationship_kind,
+};
 
 #[derive(Default)]
 pub struct People {
@@ -16,6 +18,8 @@ pub struct People {
     relationships: HashMap<Snowflake, u8>,
     /// Friend presences; missing means offline.
     presences: HashMap<Snowflake, SharedString>,
+    /// What friends are doing; missing means nothing.
+    activities: HashMap<Snowflake, Vec<Activity>>,
     /// Names the user gave their friends.
     nicknames: HashMap<Snowflake, String>,
     /// Users whose messages fold away, short of blocking them.
@@ -107,12 +111,23 @@ impl People {
         self.presences.get(&id)
     }
 
-    pub fn set_presences(&mut self, presences: Vec<(Snowflake, String)>) {
-        for (user, status) in presences {
-            if status == "offline" {
+    /// A friend's activities, custom status included.
+    pub fn activities(&self, id: Snowflake) -> &[Activity] {
+        self.activities.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    pub fn set_presences(&mut self, presences: Vec<FriendPresence>) {
+        for FriendPresence { user, status, activities } in presences {
+            let offline = status == "offline";
+            if offline {
                 self.presences.remove(&user);
             } else {
                 self.presences.insert(user, status.into());
+            }
+            if activities.is_empty() || offline {
+                self.activities.remove(&user);
+            } else {
+                self.activities.insert(user, activities);
             }
         }
     }
