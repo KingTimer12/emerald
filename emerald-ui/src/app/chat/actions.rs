@@ -6,7 +6,7 @@ mod menu;
 
 use gpui::{
     AnyElement, ClipboardItem, Context, Div, Focusable, FontWeight, MouseButton, Pixels, Point, SharedString, Window,
-    anchored, deferred, div, prelude::*, px, rgb,
+    anchored, deferred, div, prelude::*, rgb,
 };
 
 use super::super::super::icons::{self, icon};

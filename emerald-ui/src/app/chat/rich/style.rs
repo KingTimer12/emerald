@@ -1,6 +1,7 @@
 //! Markdown styles as gpui highlights, flattened into disjoint pieces.
 
 use super::*;
+use crate::zoom::zoomed;
 
 /// gpui wants highlights sorted and disjoint; nested markdown overlaps, so
 /// split at every boundary and merge the styles covering each piece. Closed
@@ -35,8 +36,8 @@ pub(super) fn flatten(
                 any = true;
                 // The text takes the cover's color, so nothing shows through.
                 style = style.highlight(HighlightStyle {
-                    color: Some(rgb(theme::SPOILER_HIDDEN).into()),
-                    background_color: Some(rgb(theme::SPOILER_HIDDEN).into()),
+                    color: Some(rgb(theme::spoiler_hidden()).into()),
+                    background_color: Some(rgb(theme::spoiler_hidden()).into()),
                     ..Default::default()
                 });
             }
@@ -51,7 +52,7 @@ pub(super) fn flatten(
 
 pub(super) fn highlight(style: Style) -> HighlightStyle {
     let line = UnderlineStyle {
-        thickness: px(1.),
+        thickness: zoomed(1.),
         color: None,
         wavy: false,
     };
@@ -70,7 +71,7 @@ pub(super) fn highlight(style: Style) -> HighlightStyle {
         },
         Style::Strike => HighlightStyle {
             strikethrough: Some(StrikethroughStyle {
-                thickness: px(1.),
+                thickness: zoomed(1.),
                 color: None,
             }),
             ..Default::default()
@@ -80,7 +81,7 @@ pub(super) fn highlight(style: Style) -> HighlightStyle {
             ..Default::default()
         },
         Style::Link => HighlightStyle {
-            color: Some(rgb(theme::LINK).into()),
+            color: Some(rgb(theme::link()).into()),
             ..Default::default()
         },
         // Colours blend, so only fading takes the text away.
@@ -89,11 +90,11 @@ pub(super) fn highlight(style: Style) -> HighlightStyle {
             ..Default::default()
         },
         Style::Muted => HighlightStyle {
-            color: Some(rgb(theme::TEXT_MUTED).into()),
+            color: Some(rgb(theme::text_muted()).into()),
             ..Default::default()
         },
         Style::Mention => HighlightStyle {
-            color: Some(rgb(theme::MENTION_TEXT).into()),
+            color: Some(rgb(theme::mention_text()).into()),
             background_color: Some(theme::mention_bg().into()),
             font_weight: Some(FontWeight::MEDIUM),
             ..Default::default()
@@ -119,7 +120,7 @@ mod tests {
         let ranges: Vec<_> = pieces.iter().map(|(r, _)| r.clone()).collect();
         assert_eq!(ranges, [0..2, 2..4, 4..5]);
         let covered = &pieces[1].1;
-        assert_eq!(covered.color, Some(rgb(theme::SPOILER_HIDDEN).into()));
+        assert_eq!(covered.color, Some(rgb(theme::spoiler_hidden()).into()));
         assert_eq!(covered.font_weight, Some(FontWeight::BOLD));
     }
 }

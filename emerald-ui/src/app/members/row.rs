@@ -1,6 +1,7 @@
 //! One row of the member list or the member search, with name, tag and activity.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn render_search_row(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -14,22 +15,22 @@ impl Emerald {
             status: None,
             activity: None,
         };
-        Some(div().w_full().h(px(ROW_HEIGHT)).px_2().child(self.render_member(("result", ix), row, cx)).into_any_element())
+        Some(div().w_full().h(zoomed(ROW_HEIGHT)).px_2().child(self.render_member(("result", ix), row, cx)).into_any_element())
     }
 
     pub(super) fn render_member_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
-        let row = div().w_full().h(px(ROW_HEIGHT)).px_2();
+        let row = div().w_full().h(zoomed(ROW_HEIGHT)).px_2();
         let list = self.members.current();
         match list.and_then(|list| list.row(ix)) {
             Some(MemberListItem::Group(group)) => {
                 let count = list.and_then(|l| l.group(&group.id)).map_or(group.count, |g| g.count);
                 row.flex()
                     .items_end()
-                    .pb(px(6.))
+                    .pb(zoomed(6.))
                     .px_4()
-                    .text_size(px(12.))
+                    .text_size(zoomed(12.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme::CHANNELS_DEFAULT))
+                    .text_color(rgb(theme::channels_default()))
                     .child(
                         div()
                             .truncate()
@@ -54,8 +55,8 @@ impl Emerald {
                 .items_center()
                 .gap_3()
                 .px_2()
-                .child(div().size(px(32.)).flex_none().rounded_full().bg(theme::hover()))
-                .child(div().h(px(12.)).w(px(60. + (ix % 5) as f32 * 16.)).rounded_full().bg(theme::hover()))
+                .child(div().size(zoomed(32.)).flex_none().rounded_full().bg(theme::hover()))
+                .child(div().h(zoomed(12.)).w(zoomed(60. + (ix % 5) as f32 * 16.)).rounded_full().bg(theme::hover()))
                 .into_any_element(),
         }
     }
@@ -70,7 +71,7 @@ impl Emerald {
             .current()
             .info()
             .and_then(|guild| guild.role_color(roles))
-            .unwrap_or(theme::CHANNELS_DEFAULT);
+            .unwrap_or(theme::channels_default());
 
         div()
             .id(id)
@@ -89,14 +90,14 @@ impl Emerald {
                 user,
                 self.avatar_image(&who.avatar_url()),
                 32.,
-                status.map(|status| (status, theme::BASE_LOWEST)),
+                status.map(|status| (status, theme::base_lowest())),
             ))
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .child(
                         div()
                             .flex()
@@ -115,7 +116,7 @@ impl Emerald {
                         div()
                             .truncate()
                             .text_xs()
-                            .text_color(rgb(theme::TEXT_MUTED))
+                            .text_color(rgb(theme::text_muted()))
                             .child(text)
                     })),
             )
@@ -143,12 +144,12 @@ impl Emerald {
 pub(super) fn app_tag() -> impl IntoElement {
     div()
         .flex_none()
-        .px(px(4.))
-        .rounded(px(3.))
-        .bg(rgb(theme::BRAND))
-        .text_size(px(10.))
+        .px(zoomed(4.))
+        .rounded(zoomed(3.))
+        .bg(rgb(theme::brand()))
+        .text_size(zoomed(10.))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .child("APP")
 }
 

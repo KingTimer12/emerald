@@ -1,6 +1,7 @@
 //! Replying and editing in place: starting, saving and cancelling, and their bars.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(in super::super::super) fn start_reply(&mut self, channel: Snowflake, id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
@@ -117,19 +118,19 @@ impl Emerald {
                 .flex()
                 .items_center()
                 .gap_2()
-                .h(px(34.))
+                .h(zoomed(34.))
                 .px_4()
                 .rounded_t_lg()
-                .bg(rgb(theme::BASE_LOW))
-                .text_size(px(14.))
-                .text_color(rgb(theme::TEXT_MUTED))
-                .child(div().flex_1().min_w(px(0.)).truncate().child(gpui::StyledText::new(text).with_highlights(
+                .bg(rgb(theme::base_low()))
+                .text_size(zoomed(14.))
+                .text_color(rgb(theme::text_muted()))
+                .child(div().flex_1().min_w(zoomed(0.)).truncate().child(gpui::StyledText::new(text).with_highlights(
                     names.into_iter().map(|range| {
                         (
                             range,
                             gpui::HighlightStyle {
                                 font_weight: Some(FontWeight::SEMIBOLD),
-                                color: Some(rgb(theme::TEXT_DEFAULT).into()),
+                                color: Some(rgb(theme::text_default()).into()),
                                 ..Default::default()
                             },
                         )
@@ -142,8 +143,8 @@ impl Emerald {
                             .flex_none()
                             .cursor_pointer()
                             .font_weight(FontWeight::BOLD)
-                            .text_size(px(12.))
-                            .text_color(rgb(if mention { theme::LINK } else { theme::TEXT_MUTED }))
+                            .text_size(zoomed(12.))
+                            .text_color(rgb(if mention { theme::link() } else { theme::text_muted() }))
                             .child(format!(
                                 "@ {}",
                                 if mention { t!("message.mention_on") } else { t!("message.mention_off") }
@@ -156,21 +157,21 @@ impl Emerald {
                             })),
                     )
                 })
-                .child(div().w(px(1.)).h(px(16.)).bg(theme::border()))
+                .child(div().w(zoomed(1.)).h(zoomed(16.)).bg(theme::border()))
                 .child(
                     div()
                         .id("reply-cancel")
                         .flex_none()
-                        .size(px(18.))
+                        .size(zoomed(18.))
                         .flex()
                         .items_center()
                         .justify_center()
                         .rounded_full()
                         .cursor_pointer()
-                        .bg(rgb(theme::INTERACTIVE))
-                        .hover(|s| s.bg(rgb(theme::TEXT_STRONG)))
-                        .text_size(px(10.))
-                        .text_color(rgb(theme::BASE_LOW))
+                        .bg(rgb(theme::interactive()))
+                        .hover(|s| s.bg(rgb(theme::text_strong())))
+                        .text_size(zoomed(10.))
+                        .text_color(rgb(theme::base_low()))
                         .child("✕")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.composer.reply = None;

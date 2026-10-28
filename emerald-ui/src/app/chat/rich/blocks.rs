@@ -1,6 +1,7 @@
 //! A message's markdown blocks laid out: paragraphs, headings, lists, quotes and code.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn render_blocks(&self, id: ElementId, content: &str, options: Options) -> AnyElement {
@@ -24,7 +25,7 @@ impl Emerald {
                     rich.spans.push((start..rich.text.len(), Style::Muted));
                 }
                 _ => shown.push(Shown::Element(
-                    div().text_size(px(12.)).text_color(theme::muted()).child(note.to_owned()).into_any_element(),
+                    div().text_size(zoomed(12.)).text_color(theme::muted()).child(note.to_owned()).into_any_element(),
                 )),
             }
         }
@@ -35,8 +36,8 @@ impl Emerald {
         div()
             .flex()
             .flex_col()
-            .gap(px(2.))
-            .min_w(px(0.))
+            .gap(zoomed(2.))
+            .min_w(zoomed(0.))
             .children(shown.into_iter().map(|shown| match shown {
                 Shown::Text(rich, part, wrap) => wrap(self.render_piece(id.clone(), rich, part, &options)),
                 Shown::Element(element) => element,
@@ -63,19 +64,19 @@ impl Emerald {
                             };
                             Box::new(move |text| {
                                 div()
-                                    .mt(px(if level == 1 { 8. } else { 4. }))
-                                    .text_size(px(size))
-                                    .line_height(px((size * 1.375).round()))
+                                    .mt(zoomed(if level == 1 { 8. } else { 4. }))
+                                    .text_size(zoomed(size))
+                                    .line_height(zoomed((size * 1.375).round()))
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(text)
                                     .into_any_element()
                             })
                         }
                         TextKind::Subtext => Box::new(|text| {
                             div()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
+                                .text_size(zoomed(12.))
+                                .line_height(zoomed(16.))
                                 .text_color(theme::muted())
                                 .child(text)
                                 .into_any_element()
@@ -93,9 +94,9 @@ impl Emerald {
                         Box::new(move |text| {
                             div()
                                 .flex()
-                                .pl(px(indent))
-                                .child(div().flex_none().min_w(px(18.)).pr_1().child(marker))
-                                .child(div().flex_1().min_w(px(0.)).child(text))
+                                .pl(zoomed(indent))
+                                .child(div().flex_none().min_w(zoomed(18.)).pr_1().child(marker))
+                                .child(div().flex_1().min_w(zoomed(0.)).child(text))
                                 .into_any_element()
                         }),
                     ));
@@ -109,8 +110,8 @@ impl Emerald {
                     shown.push(Shown::Element(
                         div()
                             .flex()
-                            .child(div().flex_none().w(px(4.)).rounded_sm().bg(rgb(theme::INTERACTIVE_MUTED)))
-                            .child(div().flex().flex_col().flex_1().min_w(px(0.)).pl_3().children(body))
+                            .child(div().flex_none().w(zoomed(4.)).rounded_sm().bg(rgb(theme::interactive_muted())))
+                            .child(div().flex().flex_col().flex_1().min_w(zoomed(0.)).pl_3().children(body))
                             .into_any_element(),
                     ));
                 }
@@ -144,15 +145,15 @@ impl Emerald {
         };
         div()
             .id(ElementId::NamedChild(Box::new(id.clone()), format!("code-{part}").into()))
-            .max_w(px(900.))
+            .max_w(zoomed(900.))
             .p_2()
             .rounded_md()
             .border_1()
             .border_color(theme::border())
             .bg(theme::code_bg())
             .font_family(theme::MONO)
-            .text_size(px(14.))
-            .line_height(px(18.))
+            .text_size(zoomed(14.))
+            .line_height(zoomed(18.))
             .overflow_x_scroll()
             .child(div().relative().children(layer).child(styled))
             .into_any_element()

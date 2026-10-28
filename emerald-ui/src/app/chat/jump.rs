@@ -5,13 +5,14 @@
 
 use std::time::Duration;
 
-use gpui::{AnyElement, Context, FontWeight, ListOffset, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, FontWeight, ListOffset, div, prelude::*, rgb};
 
 use super::super::super::{theme, time};
 use super::super::Emerald;
 use super::list::TOP;
 use emerald_discord::model::Snowflake;
 use emerald_discord::{Command, Page};
+use crate::zoom::zoomed;
 
 /// How long a message jumped to stays highlighted.
 const FLASH: Duration = Duration::from_secs(2);
@@ -89,7 +90,7 @@ impl Emerald {
             // A couple of rows above it stay in view, for context.
             self.messages.scroll_to(ListOffset {
                 item_ix: (TOP + ix).saturating_sub(2),
-                offset_in_item: px(0.),
+                offset_in_item: zoomed(0.),
             });
             if let Some(message) = flash {
                 self.flash_message(message, cx);
@@ -226,16 +227,16 @@ impl Emerald {
             div()
                 .absolute()
                 .top_0()
-                .left(px(16.))
-                .right(px(16.))
-                .h(px(32.))
+                .left(zoomed(16.))
+                .right(zoomed(16.))
+                .h(zoomed(32.))
                 .flex()
                 .items_center()
                 .rounded_b_lg()
-                .bg(rgb(theme::BRAND))
-                .text_size(px(14.))
+                .bg(rgb(theme::brand()))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(theme::TEXT_STRONG))
+                .text_color(rgb(theme::text_strong()))
                 .child(
                     div()
                         .id("unread-bar")
@@ -284,25 +285,25 @@ impl Emerald {
             div()
                 .absolute()
                 .bottom_0()
-                .left(px(16.))
-                .right(px(16.))
-                .h(px(32.))
+                .left(zoomed(16.))
+                .right(zoomed(16.))
+                .h(zoomed(32.))
                 .flex()
                 .items_center()
                 .justify_between()
                 .px_3()
                 .rounded_t_lg()
-                .bg(rgb(theme::BASE_LOWEST))
+                .bg(rgb(theme::base_lowest()))
                 .border_1()
                 .border_color(theme::border())
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .child(div().text_color(theme::muted()).child(t!("chat.older_messages")))
                 .child(
                     div()
                         .id("jump-present")
                         .cursor_pointer()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(theme::LINK))
+                        .text_color(rgb(theme::link()))
                         .child(t!("chat.jump_present"))
                         .on_click(cx.listener(|this, _, _, cx| this.jump_to_present(cx))),
                 )
@@ -313,24 +314,24 @@ impl Emerald {
 
 /// The red line with "NEW" above the first unread message.
 pub(super) fn unread_divider() -> AnyElement {
-    let red = rgb(theme::DANGER);
+    let red = rgb(theme::danger());
     div()
         .w_full()
         .flex()
         .items_center()
         .pl_4()
         .my_1()
-        .child(div().flex_1().h(px(1.)).bg(red))
+        .child(div().flex_1().h(zoomed(1.)).bg(red))
         .child(
             div()
                 .flex_none()
                 .px_1()
                 .rounded_l_sm()
                 .bg(red)
-                .text_size(px(10.))
-                .line_height(px(13.))
+                .text_size(zoomed(10.))
+                .line_height(zoomed(13.))
                 .font_weight(FontWeight::BOLD)
-                .text_color(rgb(theme::TEXT_STRONG))
+                .text_color(rgb(theme::text_strong()))
                 .child(t!("chat.new")),
         )
         .into_any_element()

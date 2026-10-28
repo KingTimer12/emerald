@@ -1,6 +1,7 @@
 //! The friend list: rows with status and the buttons each relationship allows.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn render_friend_list(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -46,8 +47,8 @@ impl Emerald {
             .flex()
             .flex_col()
             .overflow_y_scroll()
-            .pl(px(30.))
-            .pr(px(20.))
+            .pl(zoomed(30.))
+            .pr(zoomed(20.))
             .pt_4()
             .child(widgets::label(format!("{title} — {count}")).mb_2())
             .children(rows)
@@ -65,7 +66,7 @@ impl Emerald {
                 None => widgets::status_label(entry.status.as_ref().map(|s| -> &str { s.as_ref() })).into(),
             },
         };
-        let small = |button: gpui::Stateful<gpui::Div>| button.h(px(32.)).px_3();
+        let small = |button: gpui::Stateful<gpui::Div>| button.h(zoomed(32.)).px_3();
         // Discord lets you message anyone you can reach, pending or not.
         let message = small(widgets::button(("message", id.0 as usize), t!("friends.message"), ButtonKind::Secondary))
             .on_click(cx.listener(move |this, _, window, cx| {
@@ -131,7 +132,7 @@ impl Emerald {
 
         div()
             .id(("friend", id.0 as usize))
-            .h(px(62.))
+            .h(zoomed(62.))
             .flex_none()
             .flex()
             .items_center()
@@ -147,8 +148,8 @@ impl Emerald {
                 id,
                 self.user_avatar(id),
                 32.,
-                entry.status.as_ref().map(|s| -> (&str, u32) { (s.as_ref(), theme::BASE_LOWER) }).or(
-                    (entry.kind == relationship_kind::FRIEND).then_some(("offline", theme::BASE_LOWER)),
+                entry.status.as_ref().map(|s| -> (&str, u32) { (s.as_ref(), theme::base_lower()) }).or(
+                    (entry.kind == relationship_kind::FRIEND).then_some(("offline", theme::base_lower())),
                 ),
             ))
             .child(
@@ -156,7 +157,7 @@ impl Emerald {
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .child(
                         div()
                             .flex()
@@ -166,21 +167,21 @@ impl Emerald {
                                 div()
                                     .truncate()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(entry.name),
                             )
                             .child(
                                 div()
                                     .truncate()
-                                    .text_size(px(14.))
-                                    .text_color(rgb(theme::TEXT_MUTED))
+                                    .text_size(zoomed(14.))
+                                    .text_color(rgb(theme::text_muted()))
                                     .child(entry.username),
                             ),
                     )
                     .child(
                         div()
-                            .text_size(px(14.))
-                            .text_color(rgb(theme::TEXT_MUTED))
+                            .text_size(zoomed(14.))
+                            .text_color(rgb(theme::text_muted()))
                             .child(subtitle),
                     ),
             )

@@ -54,6 +54,11 @@ impl Emerald {
         }
         if let Some(channel) = self.selected_channel.filter(|_| !self.friends_open) {
             self.select_channel(channel, window, cx);
+        } else if self.selected_channel.is_none()
+            && let Some(channel) = self.settings.last_channel
+        {
+            // The first READY of a launch: reopen where the last session ended.
+            self.restore_channel(channel, window, cx);
         }
     }
 

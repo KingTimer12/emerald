@@ -1,6 +1,7 @@
 //! Embeds: link previews and rich cards, their fields and media.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// An embed: an image or GIF preview on its own, or a card with the
@@ -29,13 +30,13 @@ impl Emerald {
         if !has_text && large.is_none() {
             return None;
         }
-        let small = |text: String, size: f32, color: u32| div().text_size(px(size)).text_color(rgb(color)).child(text);
+        let small = |text: String, size: f32, color: u32| div().text_size(zoomed(size)).text_color(rgb(color)).child(text);
         let title = embed.title.clone().map(|title| {
             // Embed URLs come from the sender; open only http(s).
             let element = div()
-                .text_size(px(16.))
+                .text_size(zoomed(16.))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(if opens.is_some() { theme::LINK } else { theme::TEXT_STRONG }))
+                .text_color(rgb(if opens.is_some() { theme::link() } else { theme::text_strong() }))
                 .child(title);
             match opens.clone() {
                 Some(url) => element
@@ -49,8 +50,8 @@ impl Emerald {
         let part = 1 + n as u32 * EMBED_PARTS;
         let description = embed.description.as_ref().map(|description| {
             div()
-                .text_size(px(14.))
-                .line_height(px(18.))
+                .text_size(zoomed(14.))
+                .line_height(zoomed(18.))
                 .child(self.rich_embed(id("description"), description, &[], message, part))
         });
         let fields = self.render_fields(embed, message, part, &id);
@@ -62,7 +63,7 @@ impl Emerald {
             Some(
                 div()
                     .flex_none()
-                    .size(px(EMBED_THUMBNAIL))
+                    .size(zoomed(EMBED_THUMBNAIL))
                     .rounded_md()
                     .overflow_hidden()
                     .child(img(image).size_full().object_fit(gpui::ObjectFit::Cover)),
@@ -71,20 +72,20 @@ impl Emerald {
         let large = large.map(|media| self.render_embed_media(media, false, opens.clone().filter(|_| video), id("image")));
         Some(
             div()
-                .max_w(px(520.))
+                .max_w(zoomed(520.))
                 .flex()
                 .rounded_md()
                 .overflow_hidden()
-                .bg(rgb(theme::BASE_LOW))
+                .bg(rgb(theme::base_low()))
                 .border_1()
                 .border_color(theme::border())
-                .child(div().w(px(4.)).flex_none().bg(rgb(embed.color.unwrap_or(theme::INTERACTIVE_MUTED))))
+                .child(div().w(zoomed(4.)).flex_none().bg(rgb(embed.color.unwrap_or(theme::interactive_muted()))))
                 .child(
                     div()
                         .flex()
                         .flex_col()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .gap_2()
                         .px_3()
                         .py_2()
@@ -97,11 +98,11 @@ impl Emerald {
                                         .flex()
                                         .flex_col()
                                         .flex_1()
-                                        .min_w(px(0.))
+                                        .min_w(zoomed(0.))
                                         .gap_1()
-                                        .children(provider.map(|p| small(p, 12., theme::TEXT_MUTED)))
+                                        .children(provider.map(|p| small(p, 12., theme::text_muted())))
                                         .children(author.map(|a| {
-                                            small(a, 14., theme::TEXT_STRONG).font_weight(FontWeight::SEMIBOLD)
+                                            small(a, 14., theme::text_strong()).font_weight(FontWeight::SEMIBOLD)
                                         }))
                                         .children(title)
                                         .children(description)
@@ -110,7 +111,7 @@ impl Emerald {
                                 .children(thumbnail),
                         )
                         .children(large)
-                        .children(footer.map(|f| small(f, 12., theme::TEXT_MUTED))),
+                        .children(footer.map(|f| small(f, 12., theme::text_muted()))),
                 )
                 .into_any_element(),
         )
@@ -135,13 +136,13 @@ impl Emerald {
                 .flex()
                 .flex_col()
                 .flex_1()
-                .min_w(px(0.))
-                .text_size(px(14.))
-                .line_height(px(18.))
+                .min_w(zoomed(0.))
+                .text_size(zoomed(14.))
+                .line_height(zoomed(18.))
                 .child(
                     div()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(theme::TEXT_STRONG))
+                        .text_color(rgb(theme::text_strong()))
                         .child(self.rich_line(id(&format!("field-name-{ix}")), &field.name, &[])),
                 )
                 .child(self.rich_embed(id(&format!("field-{ix}")), &field.value, &[], message, part + 1 + ix as u32))
@@ -184,8 +185,8 @@ impl Emerald {
             .id(id.clone())
             .relative()
             .flex_none()
-            .w(px(picture.width))
-            .h(px(picture.height))
+            .w(zoomed(picture.width))
+            .h(zoomed(picture.height))
             .rounded_lg()
             .overflow_hidden();
         let frame = match animated {
@@ -211,7 +212,7 @@ impl Emerald {
     /// size for Retina; `None` while the window is in the background, so
     /// nothing plays there, and until they arrive.
     pub(super) fn animation(&self, url: &str, width: f32, height: f32) -> Option<std::sync::Arc<gpui::RenderImage>> {
-        if !self.window_active {
+        if !self.animates() {
             return None;
         }
         self.images.animated(url, (width * 2.) as u32, (height * 2.) as u32, &*self.net)

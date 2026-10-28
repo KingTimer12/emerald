@@ -7,6 +7,8 @@
 //! byte, UTF-16 and grapheme offsets, [`layout`] shapes the text,
 //! [`element`] paints it and [`ime`] talks to the platform's input methods.
 
+use crate::zoom::zoomed;
+
 mod editing;
 mod element;
 mod ime;
@@ -24,7 +26,7 @@ use gpui::{
     Entity, EntityInputHandler, EventEmitter, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, ScrollWheelEvent,
     SharedString, Style, TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, WrappedLine, actions, div, fill,
-    point, prelude::*, px, relative, rgb, rgba, size,
+    point, prelude::*, relative, rgb, rgba, size,
 };
 use unicode_segmentation::*;
 
@@ -263,18 +265,18 @@ impl Render for TextInput {
             .map(|input| {
                 if self.compact {
                     input
-                        .px(px(6.))
-                        .py(px(4.))
-                        .bg(rgb(theme::BASE_LOWER))
-                        .line_height(px(18.))
-                        .text_size(px(13.))
+                        .px(zoomed(6.))
+                        .py(zoomed(4.))
+                        .bg(rgb(theme::base_lower()))
+                        .line_height(zoomed(18.))
+                        .text_size(zoomed(13.))
                 } else {
                     input
                         .px_4()
-                        .py(px(11.))
-                        .bg(rgb(theme::SURFACE_HIGH))
-                        .line_height(px(22.))
-                        .text_size(px(16.))
+                        .py(zoomed(11.))
+                        .bg(rgb(theme::surface_high()))
+                        .line_height(zoomed(22.))
+                        .text_size(zoomed(16.))
                 }
             })
             .child(TextElement { input: cx.entity() })

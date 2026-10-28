@@ -1,13 +1,14 @@
 //! Shaping the text for drawing: the displayed runs, wrapped lines and their geometry.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl TextInput {
     /// The text drawn, the placeholder when empty, and its styled runs.
     pub(super) fn display(&self, window: &Window) -> (SharedString, Vec<TextRun>) {
         let style = window.text_style();
         let (text, color) = if self.content.is_empty() {
-            (self.placeholder.clone(), rgb(theme::PLACEHOLDER).into())
+            (self.placeholder.clone(), rgb(theme::placeholder()).into())
         } else {
             (self.content.clone(), style.color)
         };
@@ -29,7 +30,7 @@ impl TextInput {
                     len: marked.end - marked.start,
                     underline: Some(UnderlineStyle {
                         color: Some(run.color),
-                        thickness: px(1.0),
+                        thickness: zoomed(1.0),
                         wavy: false,
                     }),
                     ..run.clone()
@@ -134,7 +135,7 @@ impl Layout {
                 let left = line.unwrapped_layout.x_for_index(from) - origin_x;
                 let mut right = line.unwrapped_layout.x_for_index(to) - origin_x;
                 if takes_break {
-                    right += px(4.);
+                    right += zoomed(4.);
                 }
                 let y = top + self.line_height * row as f32;
                 quads.push(Bounds::from_corners(point(left, y), point(right, y + self.line_height)));

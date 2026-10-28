@@ -4,6 +4,7 @@
 use super::*;
 use crate::time;
 use emerald_discord::model::{AuthSession, iso_secs};
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn render_devices(&self, view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
@@ -69,8 +70,8 @@ fn device_row(session: &AuthSession, ix: Option<usize>, cx: &mut Context<Emerald
                 .flex()
                 .flex_col()
                 .flex_1()
-                .min_w(px(0.))
-                .child(div().truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::TEXT_STRONG)).child(name))
+                .min_w(zoomed(0.))
+                .child(div().truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::text_strong())).child(name))
                 .when(!detail.is_empty(), |col| col.child(hint(detail).truncate())),
         )
         .children(ix.map(|ix| {

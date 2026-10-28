@@ -2,6 +2,7 @@
 //! each with its unread dot and mention count.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(in super::super) fn render_servers(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -11,8 +12,8 @@ impl Emerald {
         items.push(
             div()
                 .flex_none()
-                .w(px(32.))
-                .h(px(1.))
+                .w(zoomed(32.))
+                .h(zoomed(1.))
                 .bg(theme::selected())
                 .into_any_element(),
         );
@@ -30,8 +31,8 @@ impl Emerald {
             .items_center()
             .gap_2()
             .pt_1()
-            .pb(px(PANEL_CLEARANCE))
-            .w(px(72.))
+            .pb(zoomed(PANEL_CLEARANCE))
+            .w(zoomed(72.))
             .h_full()
             .flex_none()
             .overflow_y_scroll()
@@ -40,16 +41,16 @@ impl Emerald {
                 div()
                     .id("add-server")
                     .flex_none()
-                    .size(px(40.))
+                    .size(zoomed(40.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(12.))
-                    .bg(rgb(theme::BASE_LOW))
-                    .text_color(rgb(theme::ONLINE))
-                    .text_size(px(24.))
+                    .rounded(zoomed(12.))
+                    .bg(rgb(theme::base_low()))
+                    .text_color(rgb(theme::online()))
+                    .text_size(zoomed(24.))
                     .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::ONLINE)).text_color(rgb(theme::TEXT_STRONG)))
+                    .hover(|s| s.bg(rgb(theme::online())).text_color(rgb(theme::text_strong())))
                     .child("+")
                     .on_click(cx.listener(|this, _, window, cx| this.open_add_server(window, cx))),
             )
@@ -81,7 +82,7 @@ impl Emerald {
     fn render_folder(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let Some(folder) = self.server_list.folder(ix) else { return div().into_any_element() };
         let open = self.server_list.is_open(ix);
-        let color = folder.color.filter(|c| *c != 0).unwrap_or(theme::BRAND);
+        let color = folder.color.filter(|c| *c != 0).unwrap_or(theme::brand());
         let spaces: Vec<(usize, &Space)> = folder
             .guilds
             .iter()
@@ -100,22 +101,22 @@ impl Emerald {
         } else {
             // Up to four servers, two by two.
             div()
-                .size(px(32.))
+                .size(zoomed(32.))
                 .flex()
                 .flex_wrap()
-                .gap(px(2.))
+                .gap(zoomed(2.))
                 .children(spaces.iter().take(4).map(|(_, space)| {
                     let image = space.icon_url.as_ref().and_then(|url| self.avatar_image(url));
                     div()
-                        .size(px(15.))
-                        .rounded(px(5.))
+                        .size(zoomed(15.))
+                        .rounded(zoomed(5.))
                         .overflow_hidden()
-                        .bg(rgb(theme::BASE_LOW))
+                        .bg(rgb(theme::base_low()))
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(7.))
-                        .text_color(rgb(theme::TEXT_STRONG))
+                        .text_size(zoomed(7.))
+                        .text_color(rgb(theme::text_strong()))
                         .map(|tile| match image {
                             Some(image) => tile.child(img(image).size_full()),
                             None => tile.child(space.initials.clone()),
@@ -129,7 +130,7 @@ impl Emerald {
             .relative()
             .flex_none()
             .w_full()
-            .h(px(40.))
+            .h(zoomed(40.))
             .flex()
             .justify_center()
             .when(unread && !open, |row| {
@@ -137,21 +138,21 @@ impl Emerald {
                     div()
                         .absolute()
                         .left_0()
-                        .top(px(16.))
-                        .w(px(4.))
-                        .h(px(8.))
-                        .rounded_r(px(4.))
-                        .bg(rgb(theme::TEXT_STRONG)),
+                        .top(zoomed(16.))
+                        .w(zoomed(4.))
+                        .h(zoomed(8.))
+                        .rounded_r(zoomed(4.))
+                        .bg(rgb(theme::text_strong())),
                 )
             })
             .child(
                 div()
                     .id(("folder", ix))
-                    .size(px(40.))
+                    .size(zoomed(40.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(12.))
+                    .rounded(zoomed(12.))
                     .bg(if open { theme::hover() } else { theme::with_alpha(color, 0.4) })
                     .cursor_pointer()
                     .tooltip(widgets::tooltip(name))
@@ -165,11 +166,11 @@ impl Emerald {
                 row.child(
                     div()
                         .absolute()
-                        .bottom(px(-4.))
-                        .right(px(10.))
+                        .bottom(zoomed(-4.))
+                        .right(zoomed(10.))
                         .rounded_full()
                         .border_4()
-                        .border_color(rgb(theme::BASE_LOWEST))
+                        .border_color(rgb(theme::base_lowest()))
                         .child(widgets::badge(mentions as usize)),
                 )
             });
@@ -184,13 +185,13 @@ impl Emerald {
             .items_center()
             .child(
                 div()
-                    .w(px(48.))
+                    .w(zoomed(48.))
                     .py_1()
                     .flex()
                     .flex_col()
                     .items_center()
                     .gap_2()
-                    .rounded(px(16.))
+                    .rounded(zoomed(16.))
                     .bg(theme::with_alpha(color, 0.15))
                     .child(button)
                     .children(spaces.iter().map(|(ix, space)| self.render_space(*ix, space, cx).into_any_element())),
@@ -214,13 +215,13 @@ impl Emerald {
         let pill = div()
             .absolute()
             .left_0()
-            .top(px(pill_top))
-            .w(px(4.))
-            .h(px(pill_height))
-            .rounded_r(px(4.))
-            .bg(rgb(theme::TEXT_STRONG))
+            .top(zoomed(pill_top))
+            .w(zoomed(4.))
+            .h(zoomed(pill_height))
+            .rounded_r(zoomed(4.))
+            .bg(rgb(theme::text_strong()))
             .when(!selected, |pill| {
-                pill.group_hover(group.clone(), |s| s.top(px(10.)).h(px(20.)))
+                pill.group_hover(group.clone(), |s| s.top(zoomed(10.)).h(zoomed(20.)))
             });
         let initials_size = if space.initials.chars().count() > 2 { 12. } else { 14. };
         let image = space.icon_url.as_ref().and_then(|url| self.avatar_image(url));
@@ -230,25 +231,25 @@ impl Emerald {
             .relative()
             .flex_none()
             .w_full()
-            .h(px(40.))
+            .h(zoomed(40.))
             .flex()
             .justify_center()
             .child(pill)
             .child(
                 div()
                     .id(("space", ix))
-                    .size(px(40.))
+                    .size(zoomed(40.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(12.))
+                    .rounded(zoomed(12.))
                     .overflow_hidden()
-                    .bg(rgb(if selected { theme::BRAND } else { theme::BASE_LOW }))
-                    .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
-                    .text_size(px(initials_size))
+                    .bg(rgb(if selected { theme::brand() } else { theme::base_low() }))
+                    .text_color(rgb(if selected { theme::text_strong() } else { theme::interactive() }))
+                    .text_size(zoomed(initials_size))
                     .font_weight(FontWeight::MEDIUM)
                     .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::BRAND)).text_color(rgb(theme::TEXT_STRONG)))
+                    .hover(|s| s.bg(rgb(theme::brand())).text_color(rgb(theme::text_strong())))
                     .tooltip(widgets::tooltip(space.name.clone()))
                     .map(|icon| match image {
                         Some(image) => icon.child(img(image).size_full()),
@@ -257,9 +258,9 @@ impl Emerald {
                             icons::icon(
                                 icons::EMERALD,
                                 24.,
-                                if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE },
+                                if selected { theme::text_strong() } else { theme::interactive() },
                             )
-                            .group_hover(group.clone(), |s| s.text_color(rgb(theme::TEXT_STRONG))),
+                            .group_hover(group.clone(), |s| s.text_color(rgb(theme::text_strong()))),
                         ),
                         None => icon.child(space.initials.clone()),
                     })
@@ -278,11 +279,11 @@ impl Emerald {
                 space.child(
                     div()
                         .absolute()
-                        .bottom(px(-4.))
-                        .right(px(10.))
+                        .bottom(zoomed(-4.))
+                        .right(zoomed(10.))
                         .rounded_full()
                         .border_4()
-                        .border_color(rgb(theme::BASE_LOWEST))
+                        .border_color(rgb(theme::base_lowest()))
                         .child(widgets::badge(mentions as usize)),
                 )
             })

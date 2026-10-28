@@ -1,13 +1,14 @@
 //! "Select Friends": picks friends for a new group DM, or to add to a DM,
 //! as the web client's popout beside the DM list and the DM header does.
 
-use gpui::{AnyElement, Context, Focusable, FontWeight, MouseButton, SharedString, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Focusable, FontWeight, MouseButton, SharedString, Window, div, prelude::*, rgb};
 
 use super::super::{icons, theme};
 use super::widgets::{self, ButtonKind};
 use super::{Emerald, Overlay};
 use emerald_discord::Command;
 use emerald_discord::model::{ChannelKind, Snowflake};
+use crate::zoom::zoomed;
 
 /// Discord lets ten people into a group DM, the user included.
 pub(super) const GROUP_LIMIT: usize = 10;
@@ -111,7 +112,7 @@ impl Emerald {
                 let username: SharedString = self.people.user(id).map(|u| u.username.clone()).unwrap_or_default().into();
                 div()
                     .id(("pick-friend", ix))
-                    .h(px(44.))
+                    .h(zoomed(44.))
                     .flex_none()
                     .flex()
                     .items_center()
@@ -124,12 +125,12 @@ impl Emerald {
                     .child(
                         div()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .flex()
                             .gap_2()
                             .items_center()
-                            .child(div().truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::TEXT_STRONG)).child(name))
-                            .child(div().truncate().text_size(px(14.)).text_color(rgb(theme::TEXT_MUTED)).child(username)),
+                            .child(div().truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::text_strong())).child(name))
+                            .child(div().truncate().text_size(zoomed(14.)).text_color(rgb(theme::text_muted())).child(username)),
                     )
                     .child(checkbox(picked))
                     .on_click(cx.listener(move |this, _, _, cx| this.toggle_picked(id, cx)))
@@ -152,15 +153,15 @@ impl Emerald {
             .child(
                 div()
                     .id("group-picker")
-                    .w(px(440.))
-                    .max_h(px(560.))
+                    .w(zoomed(440.))
+                    .max_h(zoomed(560.))
                     .flex()
                     .flex_col()
                     .rounded_lg()
                     .overflow_hidden()
                     .border_1()
                     .border_color(theme::border())
-                    .bg(rgb(theme::SURFACE_HIGH))
+                    .bg(rgb(theme::surface_high()))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -170,9 +171,9 @@ impl Emerald {
                             .p_4()
                             .child(
                                 div()
-                                    .text_size(px(20.))
+                                    .text_size(zoomed(20.))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(t!("group.select_friends")),
                             )
                             .child(div().text_xs().text_color(theme::muted()).child(t!("group.room", count = room)))
@@ -182,7 +183,7 @@ impl Emerald {
                         div()
                             .id("picker-list")
                             .flex_1()
-                            .min_h(px(0.))
+                            .min_h(zoomed(0.))
                             .overflow_y_scroll()
                             .px_2()
                             .flex()
@@ -207,13 +208,13 @@ impl Emerald {
 
 fn checkbox(on: bool) -> gpui::Div {
     div()
-        .size(px(22.))
+        .size(zoomed(22.))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
         .rounded_md()
         .border_1()
-        .border_color(if on { rgb(theme::BRAND) } else { theme::border() })
-        .when(on, |b| b.bg(rgb(theme::BRAND)).child(icons::icon(icons::CHECK, 16., theme::TEXT_STRONG)))
+        .border_color(if on { rgb(theme::brand()) } else { theme::border() })
+        .when(on, |b| b.bg(rgb(theme::brand())).child(icons::icon(icons::CHECK, 16., theme::text_strong())))
 }

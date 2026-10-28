@@ -6,6 +6,7 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use crate::zoom::zoomed;
 
 mod account;
 mod activity;
@@ -40,13 +41,17 @@ mod switcher;
 mod user_menu;
 mod user_panel;
 mod widgets;
+mod window;
+pub use window::initial_bounds;
 
 use connection::*;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, Image, KeyBinding, ListAlignment, ListState,
-    SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, px, relative, rgb,
+    App, Context, Entity, FocusHandle, Focusable, Image, KeyBinding, KeyDownEvent, ListAlignment, ListState,
+    SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, relative, rgb,
 };
+
+use crate::shortcuts::{EditLast, MarkRead, NextChannel, NextUnread, PreviousChannel, QuickSwitch};
 
 use super::text_input::{MenuKey, PastedImage, Submitted, TextInput};
 use super::theme;
@@ -65,15 +70,18 @@ use state::{
     TtlCache, Typing,
 };
 
-actions!(emerald_ui, [Dismiss, EditLast, QuickSwitch]);
+actions!(emerald_ui, [Dismiss, ZoomIn, ZoomOut, ZoomReset]);
 
-pub fn bind_keys(cx: &mut App) {
+/// Escape, Copy and zoom; the other keys are in `shortcuts`. Zoom keys are
+/// fixed, as in other apps, so they work whatever the shortcuts say.
+pub(crate) fn bind_fixed_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Dismiss, Some("Emerald")),
-        KeyBinding::new("up", EditLast, Some("Emerald")),
-        KeyBinding::new("secondary-k", QuickSwitch, Some("Emerald")),
         // Selected message text; inputs handle it first when they have a selection.
         KeyBinding::new("secondary-c", crate::text_input::Copy, Some("Emerald")),
+        KeyBinding::new("secondary-=", ZoomIn, Some("Emerald")),
+        KeyBinding::new("secondary--", ZoomOut, Some("Emerald")),
+        KeyBinding::new("secondary-0", ZoomReset, Some("Emerald")),
     ]);
 }
 
@@ -207,6 +215,8 @@ pub struct Emerald {
     /// The window has focus; animated emoji and avatars only play then,
     /// as in the web client, so the app idles when in the background.
     window_active: bool,
+    /// The window place written to the settings after it settles.
+    window_save: Option<gpui::Task<()>>,
     /// This view, for handlers drawn deep in the text to call back.
     weak: gpui::WeakEntity<Emerald>,
     /// The reaction picker's search box, and its grid's scroll position.
@@ -307,12 +317,14 @@ impl Emerald {
                 this.window_active = window.is_window_active();
                 cx.notify();
             }),
+            cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
+            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
             cx.subscribe_in(&dm_search, window, |this, _, _: &Submitted, window, cx| {
                 this.open_first_dm(window, cx)
             }),
         ];
 
-        let messages = ListState::new(0, ListAlignment::Bottom, px(400.));
+        let messages = ListState::new(0, ListAlignment::Bottom, zoomed(400.));
         let weak = cx.entity().downgrade();
         messages.set_scroll_handler(move |event, _, cx| {
             let (range, count) = (event.visible_range.clone(), event.count);
@@ -377,6 +389,7 @@ impl Emerald {
             poll_choice: None,
             poll_results: HashSet::new(),
             window_active: window.is_window_active(),
+            window_save: None,
             weak: cx.entity().downgrade(),
             forums: HashMap::new(),
             panel: None,
@@ -435,7 +448,7 @@ impl Emerald {
         let animated = self
             .people
             .user(id)
-            .filter(|_| self.window_active)
+            .filter(|_| self.animates())
             .and_then(|user| user.animated_avatar_url());
         animated
             .and_then(|url| self.avatar_image(&url))

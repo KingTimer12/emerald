@@ -4,6 +4,7 @@
 use super::*;
 use crate::time;
 use emerald_discord::model::CustomStatus;
+use crate::zoom::zoomed;
 
 /// Longest custom status Discord takes.
 const MAX_TEXT: usize = 128;
@@ -114,16 +115,16 @@ impl Emerald {
         let chip = |id: (&'static str, usize), label: SharedString, selected: bool| {
             div()
                 .id(id)
-                .h(px(32.))
+                .h(zoomed(32.))
                 .px_3()
                 .flex()
                 .items_center()
                 .rounded_md()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .text_color(rgb(theme::TEXT_STRONG))
-                .when(selected, |chip| chip.bg(rgb(theme::BRAND)))
+                .text_color(rgb(theme::text_strong()))
+                .when(selected, |chip| chip.bg(rgb(theme::brand())))
                 .when(!selected, |chip| chip.bg(theme::hover()).hover(|s| s.bg(theme::active())))
                 .child(label)
         };
@@ -143,7 +144,7 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .gap_3()
-                    .child(div().w(px(64.)).flex_none().child(form.emoji.clone()))
+                    .child(div().w(zoomed(64.)).flex_none().child(form.emoji.clone()))
                     .child(div().flex_1().child(form.text.clone())),
             )
             .child(div().flex().flex_wrap().gap_1().children(QUICK_EMOJI.iter().enumerate().map(|(ix, emoji)| {

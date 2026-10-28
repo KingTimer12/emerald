@@ -3,7 +3,7 @@
 
 use gpui::{
     Context, Entity, Focusable, FontWeight, MouseButton, SharedString, Subscription, Window, div, prelude::*,
-    px, rgb,
+    rgb,
 };
 
 use super::super::text_input::{Submitted, TextInput};
@@ -12,6 +12,7 @@ use super::widgets::{self, ButtonKind};
 use super::{Emerald, Overlay};
 use emerald_discord::rest::invite_code;
 use emerald_discord::{Action, Command};
+use crate::zoom::zoomed;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Step {
@@ -106,21 +107,21 @@ impl Emerald {
     pub(super) fn render_add_server(&self, modal: &AddServer, cx: &mut Context<Self>) -> impl IntoElement {
         let title = |text: &'static str| {
             div()
-                .text_size(px(24.))
+                .text_size(zoomed(24.))
                 .font_weight(FontWeight::BOLD)
-                .text_color(rgb(theme::TEXT_STRONG))
+                .text_color(rgb(theme::text_strong()))
                 .child(text)
         };
         let subtitle = |text: &'static str| {
             div()
-                .text_color(rgb(theme::TEXT_MUTED))
+                .text_color(rgb(theme::text_muted()))
                 .text_center()
                 .child(text)
         };
         let error = modal.error.clone().map(|error| {
             div()
-                .text_size(px(14.))
-                .text_color(rgb(theme::FEEDBACK_CRITICAL))
+                .text_size(zoomed(14.))
+                .text_color(rgb(theme::feedback_critical()))
                 .child(error)
         });
 
@@ -140,7 +141,7 @@ impl Emerald {
                             .id("create-own")
                             .mt_4()
                             .w_full()
-                            .h(px(64.))
+                            .h(zoomed(64.))
                             .px_4()
                             .flex()
                             .items_center()
@@ -153,10 +154,10 @@ impl Emerald {
                             .child(
                                 div()
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(t!("servers.create_own")),
                             )
-                            .child(div().text_size(px(20.)).text_color(rgb(theme::INTERACTIVE)).child("›"))
+                            .child(div().text_size(zoomed(20.)).text_color(rgb(theme::interactive())).child("›"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.add_server_step(Step::Create, window, cx)
                             })),
@@ -168,9 +169,9 @@ impl Emerald {
                     .gap_3()
                     .child(
                         div()
-                            .text_size(px(20.))
+                            .text_size(zoomed(20.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .child(t!("servers.have_invite")),
                     )
                     .child(
@@ -221,8 +222,8 @@ impl Emerald {
                 let busy = self.busy.contains(&Action::JoinGuild);
                 let example = |text: &'static str| {
                     div()
-                        .text_size(px(14.))
-                        .text_color(rgb(theme::TEXT_DEFAULT))
+                        .text_size(zoomed(14.))
+                        .text_color(rgb(theme::text_default()))
                         .child(text)
                 };
                 (
@@ -289,12 +290,12 @@ impl Emerald {
                 div()
                     .id("add-server")
                     .relative()
-                    .w(px(440.))
+                    .w(zoomed(440.))
                     .rounded_lg()
                     .overflow_hidden()
                     .border_1()
                     .border_color(theme::border())
-                    .bg(rgb(theme::SURFACE_HIGH))
+                    .bg(rgb(theme::surface_high()))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -306,7 +307,7 @@ impl Emerald {
                             )),
                     )
                     .child(div().px_4().pt_6().pb_4().child(body))
-                    .child(div().p_4().bg(rgb(theme::BASE_LOW)).child(footer)),
+                    .child(div().p_4().bg(rgb(theme::base_low())).child(footer)),
             )
     }
 }

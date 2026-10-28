@@ -168,11 +168,14 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 6 — appearance and comfort
 
-39. [ ] Light theme and following the system theme.
+39. [x] Light theme and following the system theme.
 40. [ ] Zoom / UI scale, reduced motion, keyboard navigation and screen-reader labels.
-41. [ ] Configurable shortcuts (mark read, next unread, Alt+Up/Down).
-42. [ ] Window state remembered (size, position, last channel) and a tray / menu-bar
-    item.
+    Partial: zoom (90% to 150%, Cmd/Ctrl with + and -) and reduced motion are done. Tab
+    focus and screen-reader labels wait for gpui to have focusable controls and an
+    accessibility tree.
+41. [x] Configurable shortcuts (mark read, next unread, Alt+Up/Down).
+42. [x] Window state remembered (size, position, last channel) and a tray / menu-bar
+    item. The menu bar item is macOS only; Windows waits for the parity pass (phase 9).
 
 ### Phase 7 — moderation (only what the user's roles allow)
 

@@ -7,6 +7,7 @@ use super::*;
 use super::super::super::time;
 use emerald_discord::model::Channel;
 use emerald_discord::{Command, ThreadPage, ThreadQuery};
+use crate::zoom::zoomed;
 
 pub(in super::super) struct ThreadsPanel {
     pub channel: Snowflake,
@@ -145,27 +146,27 @@ impl Emerald {
         };
         div()
             .flex_1()
-            .min_h(px(0.))
+            .min_h(zoomed(0.))
             .flex()
             .flex_col()
             .child(
                 div()
                     .m_3()
-                    .h(px(32.))
+                    .h(zoomed(32.))
                     .px_2()
                     .flex()
                     .items_center()
                     .gap_1()
                     .rounded_md()
-                    .bg(rgb(theme::BASE_LOWEST))
-                    .child(icons::icon(icons::SEARCH, 16., theme::INTERACTIVE))
-                    .child(div().flex_1().min_w(px(0.)).child(self.thread_query.clone())),
+                    .bg(rgb(theme::base_lowest()))
+                    .child(icons::icon(icons::SEARCH, 16., theme::interactive()))
+                    .child(div().flex_1().min_w(zoomed(0.)).child(self.thread_query.clone())),
             )
             .child(
                 div()
                     .id("threads-list")
                     .flex_1()
-                    .min_h(px(0.))
+                    .min_h(zoomed(0.))
                     .overflow_y_scroll()
                     .px_2()
                     .pb_2()
@@ -194,7 +195,7 @@ impl Emerald {
             .py_2()
             .flex()
             .flex_col()
-            .gap(px(2.))
+            .gap(zoomed(2.))
             .rounded_md()
             .cursor_pointer()
             .hover(|s| s.bg(theme::hover()))
@@ -203,7 +204,7 @@ impl Emerald {
                 div()
                     .truncate()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .child(thread.name.clone().unwrap_or_default()),
             )
             .child(
@@ -213,7 +214,7 @@ impl Emerald {
                     .gap_1()
                     .text_xs()
                     .text_color(theme::muted())
-                    .child(icons::icon(icons::THREAD, 14., theme::TEXT_MUTED))
+                    .child(icons::icon(icons::THREAD, 14., theme::text_muted()))
                     .child(count.to_string())
                     .child("·")
                     .child(time::short_date(thread.activity().unix_secs())),

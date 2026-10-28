@@ -2,13 +2,14 @@
 //! whether several answers may be picked, with the web client's limits.
 //! Opened from the + beside the message box, which also uploads files.
 
-use gpui::{AnyElement, Context, Entity, Focusable, FontWeight, SharedString, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Entity, Focusable, FontWeight, SharedString, Window, div, prelude::*, rgb};
 
 use super::super::super::text_input::TextInput;
 use super::super::super::{icons, theme, time};
 use super::super::{Emerald, Overlay, widgets};
 use emerald_discord::model::Snowflake;
 use emerald_discord::{Action, Command, NewPoll as PollToSend, permissions, rest};
+use crate::zoom::zoomed;
 
 /// The web client's limits: question and answer lengths, and answers.
 const MAX_QUESTION: usize = 300;
@@ -49,15 +50,15 @@ impl Emerald {
                 .id("plus")
                 .flex_none()
                 // Centered on a one-row message box.
-                .mt(px(7.))
-                .size(px(32.))
+                .mt(zoomed(7.))
+                .size(zoomed(32.))
                 .flex()
                 .items_center()
                 .justify_center()
                 .rounded_md()
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
-                .child(icons::icon(icons::ATTACH, 22., theme::INTERACTIVE))
+                .child(icons::icon(icons::ATTACH, 22., theme::interactive()))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     if files {
                         this.plus_menu = !this.plus_menu;
@@ -79,10 +80,10 @@ impl Emerald {
             div()
                 .id(id)
                 .px_2()
-                .py(px(6.))
+                .py(zoomed(6.))
                 .rounded_sm()
                 .cursor_pointer()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
                 .hover(|s| s.bg(theme::hover()))
                 .child(label)
@@ -90,16 +91,16 @@ impl Emerald {
         Some(
             div()
                 .absolute()
-                .bottom(px(48.))
+                .bottom(zoomed(48.))
                 .left_0()
-                .w(px(200.))
+                .w(zoomed(200.))
                 .p_1()
                 .flex()
                 .flex_col()
                 .rounded_md()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::SURFACE_HIGH))
+                .bg(rgb(theme::surface_high()))
                 // A press anywhere else closes it, as menus do.
                 .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                     this.plus_menu = false;
@@ -139,14 +140,14 @@ impl Emerald {
             div()
                 .id(id)
                 .px_2()
-                .py(px(2.))
+                .py(zoomed(2.))
                 .rounded_full()
                 .border_1()
-                .border_color(if on { rgb(theme::BRAND) } else { theme::border() })
-                .bg(if on { theme::active() } else { rgb(theme::BASE_LOWER) })
+                .border_color(if on { rgb(theme::brand()) } else { theme::border() })
+                .bg(if on { theme::active() } else { rgb(theme::base_lower()) })
                 .text_xs()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::TEXT_DEFAULT }))
+                .text_color(rgb(if on { theme::text_strong() } else { theme::text_default() }))
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .child(label)
@@ -164,8 +165,8 @@ impl Emerald {
         let add = (modal.answers.len() < MAX_ANSWERS).then(|| {
             div()
                 .id("poll-add-answer")
-                .text_size(px(14.))
-                .text_color(rgb(theme::LINK))
+                .text_size(zoomed(14.))
+                .text_color(rgb(theme::link()))
                 .cursor_pointer()
                 .child(t!("poll.add_answer"))
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -216,13 +217,13 @@ impl Emerald {
                     .cursor_pointer()
                     .child(
                         div()
-                            .size(px(18.))
+                            .size(zoomed(18.))
                             .rounded_sm()
                             .border_2()
-                            .border_color(rgb(if multiple { theme::BRAND } else { theme::INTERACTIVE_MUTED }))
-                            .when(multiple, |b| b.bg(rgb(theme::BRAND))),
+                            .border_color(rgb(if multiple { theme::brand() } else { theme::interactive_muted() }))
+                            .when(multiple, |b| b.bg(rgb(theme::brand()))),
                     )
-                    .child(div().text_size(px(14.)).child(t!("poll.multiple")))
+                    .child(div().text_size(zoomed(14.)).child(t!("poll.multiple")))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(Overlay::CreatePoll(modal)) = &mut this.overlay {
                             modal.multiple = !modal.multiple;

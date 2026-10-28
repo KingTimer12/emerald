@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use gpui::{AnyElement, Context, FontWeight, ListAlignment, ListState, SharedString, div, img, list, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, FontWeight, ListAlignment, ListState, SharedString, div, img, list, prelude::*, rgb};
 
 use super::super::super::icons::{self, icon};
 use super::super::super::{theme, time};
@@ -13,6 +13,7 @@ use super::super::{Emerald, widgets};
 use super::super::state::Msg;
 use emerald_discord::model::{Channel, Message, Snowflake};
 use emerald_discord::{Command, ThreadPage, ThreadQuery};
+use crate::zoom::zoomed;
 
 /// First messages asked for at once, as the web client batches them.
 const POST_BATCH: usize = 10;
@@ -52,7 +53,7 @@ impl Forum {
                 ..ThreadQuery::default()
             },
             found: Vec::new(),
-            list: ListState::new(0, ListAlignment::Top, px(400.)),
+            list: ListState::new(0, ListAlignment::Top, zoomed(400.)),
         }
     }
 
@@ -194,7 +195,7 @@ impl Emerald {
         .py_2();
         div()
             .flex_1()
-            .min_h(px(0.))
+            .min_h(zoomed(0.))
             .flex()
             .flex_col()
             .child(self.render_forum_toolbar(forum, state, cx))
@@ -236,19 +237,19 @@ impl Emerald {
             div()
                 .flex()
                 .gap_1()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .child(div().flex_none().text_color(rgb(color)).font_weight(FontWeight::MEDIUM).child(format!("{author}:")))
                 .child(
                     div()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .truncate()
-                        .text_color(rgb(theme::TEXT_DEFAULT))
+                        .text_color(rgb(theme::text_default()))
                         .child(self.rich_text(("post-preview", ix), &content, &msg.mentions)),
                 )
         });
         let thumbnail = first.and_then(|msg| msg.images.first()).filter(|p| !p.spoiler).map(|picture| {
-            let frame = div().flex_none().size(px(THUMBNAIL)).rounded_lg().overflow_hidden();
+            let frame = div().flex_none().size(zoomed(THUMBNAIL)).rounded_lg().overflow_hidden();
             match self.avatar_image(&picture.url) {
                 Some(image) => frame.child(img(image).size_full()),
                 None => frame.bg(theme::hover()),
@@ -269,14 +270,14 @@ impl Emerald {
                     .rounded_lg()
                     .border_1()
                     .border_color(theme::border())
-                    .bg(rgb(theme::BASE_LOW))
+                    .bg(rgb(theme::base_low()))
                     .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::SURFACE_HIGH)))
+                    .hover(|s| s.bg(rgb(theme::surface_high())))
                     .on_click(cx.listener(move |this, _, window, cx| this.select_channel(id, window, cx)))
                     .child(
                         div()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .flex()
                             .flex_col()
                             .gap_1()
@@ -298,9 +299,9 @@ impl Emerald {
                             })
                             .child(
                                 div()
-                                    .text_size(px(16.))
+                                    .text_size(zoomed(16.))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .truncate()
                                     .child(title),
                             )
@@ -312,7 +313,7 @@ impl Emerald {
                                     .gap_1()
                                     .text_xs()
                                     .text_color(theme::muted())
-                                    .child(icon(icons::THREAD, 14., theme::TEXT_MUTED))
+                                    .child(icon(icons::THREAD, 14., theme::text_muted()))
                                     .child(count.to_string())
                                     .child("·")
                                     .child(activity),
@@ -332,9 +333,9 @@ fn tag(label: impl Into<SharedString>) -> gpui::Div {
     div()
         .px_2()
         .rounded_full()
-        .bg(rgb(theme::BASE_LOWER))
+        .bg(rgb(theme::base_lower()))
         .text_xs()
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(theme::TEXT_DEFAULT))
+        .text_color(rgb(theme::text_default()))
         .child(label.into())
 }

@@ -1,6 +1,7 @@
 //! Modify Attachment: alt text and spoiler for one card.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// Opens "Modify Attachment" for the card at `ix`.
@@ -30,7 +31,7 @@ impl Emerald {
         let preview = file.preview.clone().map(|image| {
             div()
                 .relative()
-                .h(px(160.))
+                .h(zoomed(160.))
                 .flex()
                 .justify_center()
                 .rounded_md()
@@ -39,12 +40,12 @@ impl Emerald {
         });
         let modal = div()
             .id("attachment-modal")
-            .w(px(440.))
+            .w(zoomed(440.))
             .rounded_lg()
             .overflow_hidden()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
+            .bg(rgb(theme::surface_high()))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
                 div()
@@ -55,9 +56,9 @@ impl Emerald {
                     .children(preview)
                     .child(
                         div()
-                            .text_size(px(20.))
+                            .text_size(zoomed(20.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .truncate()
                             .child(file.upload.name.clone()),
                     )
@@ -70,7 +71,7 @@ impl Emerald {
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(rgb(theme::TEXT_DEFAULT))
+                                    .text_color(rgb(theme::text_default()))
                                     .child(t!("upload.description")),
                             )
                             .child(self.alt_input.clone())
@@ -98,7 +99,7 @@ impl Emerald {
                     .flex()
                     .justify_end()
                     .gap_2()
-                    .bg(rgb(theme::BASE_LOW))
+                    .bg(rgb(theme::base_low()))
                     .child(
                         widgets::button("attachment-cancel", t!("common.cancel"), widgets::ButtonKind::Secondary)
                             .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),

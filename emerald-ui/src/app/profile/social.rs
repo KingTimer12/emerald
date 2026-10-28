@@ -6,6 +6,7 @@ use super::*;
 use gpui::Focusable;
 
 use emerald_discord::Command;
+use crate::zoom::zoomed;
 
 /// The tabs of the full profile.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -71,7 +72,7 @@ impl Emerald {
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().px_2().rounded_md().bg(rgb(theme::BASE_LOWER)).child(self.note_input.clone()))
+                .child(div().px_2().rounded_md().bg(rgb(theme::base_lower())).child(self.note_input.clone()))
                 .child(div().text_xs().text_color(theme::muted()).child(t!("note.hint"))),
         )
     }
@@ -96,11 +97,11 @@ impl Emerald {
                 .pb_2()
                 .border_b_2()
                 .border_color(if on { theme::text() } else { gpui::transparent_black() })
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
-                .hover(|s| s.text_color(rgb(theme::TEXT_STRONG)))
+                .text_color(rgb(if on { theme::text_strong() } else { theme::interactive() }))
+                .hover(|s| s.text_color(rgb(theme::text_strong())))
                 .child(text)
                 .on_click(cx.listener(move |this, _, _, cx| this.set_profile_tab(user, tab, cx)))
         };
@@ -129,7 +130,7 @@ impl Emerald {
                 row(("mutual-server", ix))
                     .child(
                         div()
-                            .size(px(40.))
+                            .size(zoomed(40.))
                             .flex_none()
                             .rounded_xl()
                             .overflow_hidden()
@@ -137,8 +138,8 @@ impl Emerald {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_size(px(14.))
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_size(zoomed(14.))
+                            .text_color(rgb(theme::text_strong()))
                             .map(|tile| match icon {
                                 Some(image) => tile.child(img(image).size_full()),
                                 None => tile.child(space.initials.clone()),
@@ -147,10 +148,10 @@ impl Emerald {
                     .child(
                         div()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .flex()
                             .flex_col()
-                            .child(div().truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::TEXT_STRONG)).child(space.name.clone()))
+                            .child(div().truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::text_strong())).child(space.name.clone()))
                             .children(mutual.nick.map(|nick| div().text_xs().text_color(theme::muted()).child(nick))),
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -173,8 +174,8 @@ impl Emerald {
             let friend = *friend;
             let name: SharedString = self.people.friend_name(friend).unwrap_or("?").to_owned().into();
             row(("mutual-friend", ix))
-                .child(widgets::avatar(&name, friend, self.user_avatar(friend), 40., Some((self.people.presence(friend), theme::BASE_LOWEST))))
-                .child(div().flex_1().min_w(px(0.)).truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::TEXT_STRONG)).child(name))
+                .child(widgets::avatar(&name, friend, self.user_avatar(friend), 40., Some((self.people.presence(friend), theme::base_lowest()))))
+                .child(div().flex_1().min_w(zoomed(0.)).truncate().font_weight(FontWeight::MEDIUM).text_color(rgb(theme::text_strong())).child(name))
                 .on_click(cx.listener(move |this, _, window, cx| this.open_profile(friend, None, window, cx)))
         }))
     }
@@ -183,7 +184,7 @@ impl Emerald {
 fn row(id: (&'static str, usize)) -> gpui::Stateful<Div> {
     div()
         .id(id)
-        .h(px(56.))
+        .h(zoomed(56.))
         .flex_none()
         .flex()
         .items_center()

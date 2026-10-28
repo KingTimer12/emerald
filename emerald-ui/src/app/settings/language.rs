@@ -2,7 +2,7 @@
 //! language's flag and own name, and the 12/24-hour clock choice, laid out
 //! like Discord's page.
 
-use gpui::{AnyElement, Context, Focusable, FontWeight, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Focusable, FontWeight, Window, div, prelude::*, rgb};
 
 use super::super::super::icons::{self, icon};
 use super::super::super::{theme, time};
@@ -11,6 +11,7 @@ use super::{SettingsView, page_title, section_title};
 use emerald_discord::Command;
 use emerald_core::i18n::{self, Language};
 use crate::settings::TimeFormat;
+use crate::zoom::zoomed;
 
 /// Rows the open picker shows before it scrolls.
 const LIST_HEIGHT: f32 = 320.;
@@ -39,19 +40,19 @@ impl Emerald {
         let shown = i18n::available().find(|l| l.code == current);
         let trigger = div()
             .id("language-picker")
-            .h(px(44.))
+            .h(zoomed(44.))
             .px_3()
             .flex()
             .items_center()
             .gap_2()
             .rounded_lg()
             .border_1()
-            .border_color(if view.language_open { rgb(theme::BRAND) } else { theme::border() })
-            .bg(rgb(theme::BASE_LOWEST))
+            .border_color(if view.language_open { rgb(theme::brand()) } else { theme::border() })
+            .bg(rgb(theme::base_lowest()))
             .cursor_pointer()
             .children(shown.map(language_label))
             .child(div().flex_1())
-            .child(icon(icons::CHEVRON, 16., theme::INTERACTIVE))
+            .child(icon(icons::CHEVRON, 16., theme::interactive()))
             .on_click(cx.listener(|this, _, window, cx| this.toggle_language_picker(window, cx)));
 
         let list = view.language_open.then(|| {
@@ -65,12 +66,12 @@ impl Emerald {
                 .rounded_lg()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::BASE_LOWEST))
+                .bg(rgb(theme::base_lowest()))
                 .child(view.language_query.clone())
                 .child(
                     div()
                         .id("language-list")
-                        .max_h(px(LIST_HEIGHT))
+                        .max_h(zoomed(LIST_HEIGHT))
                         .overflow_y_scroll()
                         .flex()
                         .flex_col()
@@ -78,7 +79,7 @@ impl Emerald {
                             let selected = language.code == current;
                             div()
                                 .id(("language", ix))
-                                .h(px(40.))
+                                .h(zoomed(40.))
                                 .px_2()
                                 .flex()
                                 .items_center()
@@ -89,7 +90,7 @@ impl Emerald {
                                 .when(!selected, |row| row.hover(|s| s.bg(theme::hover())))
                                 .child(language_label(language))
                                 .child(div().flex_1())
-                                .when(selected, |row| row.child(div().text_color(rgb(theme::BRAND)).child("✓")))
+                                .when(selected, |row| row.child(div().text_color(rgb(theme::brand())).child("✓")))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.pick_language(language.code, window, cx)
                                 }))
@@ -173,7 +174,7 @@ impl Emerald {
             .child(
                 div()
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .child(label),
             )
             .on_click(cx.listener(move |this, _, window, cx| this.set_time_format(format, window, cx)))
@@ -211,20 +212,20 @@ fn language_label(language: Language) -> impl IntoElement {
         .flex()
         .items_center()
         .gap_2()
-        .child(div().w(px(24.)).text_size(px(18.)).child(language.flag))
-        .child(div().text_color(rgb(theme::TEXT_STRONG)).child(language.name))
+        .child(div().w(zoomed(24.)).text_size(zoomed(18.)).child(language.flag))
+        .child(div().text_color(rgb(theme::text_strong())).child(language.name))
 }
 
 /// Discord's radio button: a ring, filled in the brand color when chosen.
 fn radio(selected: bool) -> impl IntoElement {
     div()
-        .size(px(20.))
+        .size(zoomed(20.))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
         .rounded_full()
         .border_2()
-        .border_color(rgb(if selected { theme::BRAND } else { theme::INTERACTIVE }))
-        .when(selected, |ring| ring.child(div().size(px(10.)).rounded_full().bg(rgb(theme::BRAND))))
+        .border_color(rgb(if selected { theme::brand() } else { theme::interactive() }))
+        .when(selected, |ring| ring.child(div().size(zoomed(10.)).rounded_full().bg(rgb(theme::brand()))))
 }

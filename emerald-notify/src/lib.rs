@@ -21,6 +21,8 @@
 
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "macos")]
+mod menu_bar;
 #[cfg(windows)]
 mod windows;
 
@@ -45,6 +47,56 @@ pub struct Notice<'a> {
     pub body: &'a str,
     /// Handed back through [`Notifier::clicks`] when the user clicks it.
     pub tag: &'a str,
+}
+
+/// What the user picked in the menu bar item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrayAction {
+    /// Bring the window up.
+    Show,
+    /// Quit the app.
+    Quit,
+}
+
+/// The app's item in the menu bar, with the unread count beside its icon.
+/// Only macOS has one so far; elsewhere it does nothing and `actions` stays
+/// quiet.
+pub struct Tray {
+    #[cfg(target_os = "macos")]
+    item: Option<menu_bar::Item>,
+    actions: async_channel::Receiver<TrayAction>,
+}
+
+impl Tray {
+    /// Puts the item in the menu bar. Call it on the thread that runs the
+    /// app's windows; `show` and `quit` are the menu's titles.
+    pub fn new(show: &str, quit: &str) -> Self {
+        let (sender, actions) = async_channel::unbounded();
+        #[cfg(target_os = "macos")]
+        let item = menu_bar::Item::new(sender, show, quit);
+        #[cfg(not(target_os = "macos"))]
+        drop((sender, show, quit));
+        Self {
+            #[cfg(target_os = "macos")]
+            item,
+            actions,
+        }
+    }
+
+    /// Shows `count` beside the icon; zero leaves it bare.
+    pub fn set_count(&self, count: u32) {
+        #[cfg(target_os = "macos")]
+        if let Some(item) = &self.item {
+            item.set_count(count);
+        }
+        #[cfg(not(target_os = "macos"))]
+        drop(count);
+    }
+
+    /// What the user picked in the menu.
+    pub fn actions(&self) -> &async_channel::Receiver<TrayAction> {
+        &self.actions
+    }
 }
 
 pub struct Notifier {

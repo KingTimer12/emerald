@@ -3,13 +3,14 @@
 //! switches. Changes apply at once and go to Discord, which echoes them.
 
 use gpui::{
-    AnyElement, Context, FontWeight, Pixels, Point, SharedString, anchored, deferred, div, prelude::*, px, rgb,
+    AnyElement, Context, FontWeight, Pixels, Point, SharedString, anchored, deferred, div, prelude::*, rgb,
 };
 
 use super::super::{icons, theme};
 use super::Emerald;
 use emerald_discord::model::{Notify, Snowflake};
 use emerald_discord::{Command, MUTE_WINDOWS, SettingsChange};
+use crate::zoom::zoomed;
 
 /// What the menu is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -158,14 +159,14 @@ impl Emerald {
         }
         let list = div()
             .id("place-menu")
-            .w(px(240.))
+            .w(zoomed(240.))
             .flex()
             .flex_col()
             .p_2()
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
+            .bg(rgb(theme::surface_high()))
             .shadow_lg()
             .occlude()
             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
@@ -174,7 +175,7 @@ impl Emerald {
             }))
             .children(items);
         Some(
-            deferred(anchored().position(menu.position).snap_to_window_with_margin(px(8.)).child(list))
+            deferred(anchored().position(menu.position).snap_to_window_with_margin(zoomed(8.)).child(list))
                 .with_priority(1)
                 .into_any_element(),
         )
@@ -190,7 +191,7 @@ impl Emerald {
         let now = crate::time::now_secs();
         let mute = self.notify.mute(guild, channel);
         let muted = mute.active(now);
-        let separator = || div().my_1().h(px(1.)).bg(theme::border()).into_any_element();
+        let separator = || div().my_1().h(zoomed(1.)).bg(theme::border()).into_any_element();
         match target {
             Target::Guild(guild) => items.push(
                 item(("menu-read", 0), t!("read.mark_read").into(), None)
@@ -267,19 +268,19 @@ impl Emerald {
 pub(super) fn item(id: (&'static str, usize), label: SharedString, trailing: Option<&'static str>) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
-        .h(px(32.))
+        .h(zoomed(32.))
         .px_2()
         .flex()
         .items_center()
         .gap_2()
         .rounded_md()
         .cursor_pointer()
-        .text_size(px(14.))
+        .text_size(zoomed(14.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(rgb(theme::TEXT_DEFAULT))
+        .text_color(rgb(theme::text_default()))
         .hover(|s| s.bg(theme::hover()))
         .child(div().flex_1().child(label))
-        .children(trailing.map(|glyph| icons::icon(glyph, 16., theme::INTERACTIVE)))
+        .children(trailing.map(|glyph| icons::icon(glyph, 16., theme::interactive())))
 }
 
 fn back(id: &'static str, cx: &mut Context<Emerald>) -> AnyElement {

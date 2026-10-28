@@ -2,11 +2,13 @@
 //! "Create Thread" names the thread after its message as the web client
 //! does; a post takes a title, tags and its first message.
 
+use crate::zoom::zoomed;
+
 mod forms;
 
 use gpui::{
     AnyElement, Context, Entity, Focusable, FontWeight, MouseButton, SharedString, Subscription, Window, div,
-    prelude::*, px, rgb,
+    prelude::*, rgb,
 };
 
 use super::super::super::text_input::{PastedImage, Submitted, TextInput};
@@ -245,7 +247,7 @@ impl Emerald {
         let forum_post = thread.parent_id.and_then(|p| self.spaces.channel(p)).is_some_and(|p| p.kind.is_forum());
         Some(
             widgets::button("thread-membership", label, kind)
-                .h(px(32.))
+                .h(zoomed(32.))
                 .when(busy, |button| button.opacity(0.5))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.run(Action::ThreadMembership, Command::ThreadMembership { thread: id, join: !joined, forum_post }, cx);

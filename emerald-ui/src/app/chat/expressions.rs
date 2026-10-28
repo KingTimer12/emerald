@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Context, FontWeight, ListAlignment, ListState, SharedString, Window, div, img, list, prelude::*, px,
+    AnyElement, Context, FontWeight, ListAlignment, ListState, SharedString, Window, div, img, list, prelude::*,
     uniform_list,
 };
 
@@ -17,6 +17,7 @@ use super::super::state::Sticker;
 use super::picker::{PickerTab, WIDTH};
 use emerald_discord::model::{Gif, Snowflake, StickerItem};
 use emerald_discord::{Command, permissions, rest};
+use crate::zoom::zoomed;
 
 /// The web client waits this long after a keystroke before searching GIFs.
 const GIF_SEARCH_DELAY: Duration = Duration::from_millis(250);
@@ -43,7 +44,7 @@ pub(in super::super) struct StickerList {
 impl Default for StickerList {
     fn default() -> Self {
         Self {
-            state: ListState::new(0, ListAlignment::Top, px(200.)),
+            state: ListState::new(0, ListAlignment::Top, zoomed(200.)),
             built_for: Default::default(),
         }
     }
@@ -269,7 +270,7 @@ impl Emerald {
                     let id = sticker.id;
                     div()
                         .id(("sticker", id.0))
-                        .size(px(STICKER + 4.))
+                        .size(zoomed(STICKER + 4.))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -305,7 +306,7 @@ impl Emerald {
                 range
                     .map(|row| {
                         div()
-                            .h(px(GIF_ROW))
+                            .h(zoomed(GIF_ROW))
                             .flex()
                             .gap_2()
                             .pb_2()
@@ -314,7 +315,7 @@ impl Emerald {
                                 let image = gif.image_url().and_then(|url| this.avatar_image(url));
                                 div()
                                     .id(("gif", ix))
-                                    .w(px(cell))
+                                    .w(zoomed(cell))
                                     .h_full()
                                     .rounded_md()
                                     .overflow_hidden()
@@ -341,7 +342,7 @@ impl Emerald {
     /// by players of its own drawn at the picker's size. Only rows on
     /// screen are drawn, so only those load and play.
     fn render_picker_sticker(&self, sticker: &Sticker) -> AnyElement {
-        let Some(url) = sticker.url.as_deref().filter(|_| sticker.lottie) else {
+        let Some(url) = sticker.url.as_deref().filter(|_| sticker.lottie && self.animates()) else {
             return self.render_sticker(sticker, STICKER);
         };
         let frame = self.images.picker_animation(url, &*self.net).and_then(|player| {
@@ -349,8 +350,8 @@ impl Emerald {
             player.frame(self.animation_clock.elapsed())
         });
         match frame {
-            Some(frame) => img(frame).size(px(STICKER)).into_any_element(),
-            None => div().size(px(STICKER)).rounded_lg().bg(theme::hover()).into_any_element(),
+            Some(frame) => img(frame).size(zoomed(STICKER)).into_any_element(),
+            None => div().size(zoomed(STICKER)).rounded_lg().bg(theme::hover()).into_any_element(),
         }
     }
 }

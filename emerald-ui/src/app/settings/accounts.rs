@@ -3,6 +3,7 @@
 
 use super::*;
 use emerald_discord::token::{Account, MAX_ACCOUNTS};
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn render_accounts(&self, view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
@@ -47,15 +48,15 @@ impl Emerald {
             .gap_3()
             .p_3()
             .rounded_lg()
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .child(widgets::avatar(&name, id, avatar, 40., None))
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .min_w(px(0.))
-                    .child(div().truncate().font_weight(FontWeight::SEMIBOLD).text_color(rgb(theme::TEXT_STRONG)).child(name))
+                    .min_w(zoomed(0.))
+                    .child(div().truncate().font_weight(FontWeight::SEMIBOLD).text_color(rgb(theme::text_strong())).child(name))
                     .when(!account.username.is_empty(), |col| col.child(hint(account.username.clone()).truncate())),
             )
             .when(active, |row| row.child(hint(t!("accounts.active"))))

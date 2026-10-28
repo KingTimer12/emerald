@@ -5,6 +5,7 @@ use super::*;
 
 use emerald_discord::Command;
 use emerald_discord::model::Message;
+use crate::zoom::zoomed;
 
 /// Mentions come 25 at a time; a full page means there may be more.
 const MENTIONS_PAGE: usize = 25;
@@ -71,9 +72,9 @@ impl Emerald {
                 .py_1()
                 .rounded_md()
                 .cursor_pointer()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+                .text_color(rgb(if on { theme::text_strong() } else { theme::interactive() }))
                 .when(on, |b| b.bg(theme::selected()))
                 .hover(|s| s.bg(theme::hover()))
                 .child(label)
@@ -85,7 +86,7 @@ impl Emerald {
         };
         div()
             .flex_1()
-            .min_h(px(0.))
+            .min_h(zoomed(0.))
             .flex()
             .flex_col()
             .child(
@@ -128,7 +129,7 @@ impl Emerald {
         div()
             .id("unreads")
             .flex_1()
-            .min_h(px(0.))
+            .min_h(zoomed(0.))
             .overflow_y_scroll()
             .p_2()
             .flex()
@@ -138,7 +139,7 @@ impl Emerald {
                 let mentions = self.reads.mentions(channel);
                 div()
                     .id(("unread", ix))
-                    .h(px(40.))
+                    .h(zoomed(40.))
                     .px_3()
                     .flex()
                     .items_center()
@@ -150,17 +151,17 @@ impl Emerald {
                     .child(
                         div()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .truncate()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .child(self.place_label(guild, channel)),
                     )
                     .when(mentions > 0, |row| row.child(widgets::badge(mentions as usize)))
                     .child(
                         div()
                             .id(("unread-read", ix))
-                            .child(icons::icon(icons::CHECK, 18., theme::INTERACTIVE))
+                            .child(icons::icon(icons::CHECK, 18., theme::interactive()))
                             .tooltip(widgets::tooltip(t!("read.mark_read")))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();

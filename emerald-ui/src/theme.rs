@@ -1,59 +1,153 @@
-//! Discord's dark theme (2025 visual refresh), resolved from the `.theme-dark`
-//! design tokens in the web client's CSS on 2026-10-19 with the default
-//! saturation factor and no custom theme. Names follow the CSS variables.
+//! Discord's dark and light themes (2025 visual refresh), resolved from the
+//! `.theme-dark` and `.theme-light` design tokens in the web client's CSS on
+//! 2026-10-19 and 2026-10-27 with the default saturation factor and no custom
+//! theme. Names follow the CSS variables.
+//!
+//! Every color is a function that picks its value for the theme in use, so
+//! one switch (`set_light`) recolors the whole window on its next draw.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{Hsla, Rgba, rgb, rgba};
 
+static LIGHT: AtomicBool = AtomicBool::new(false);
+
+/// Switches every color to the light palette, or back to the dark one.
+pub fn set_light(light: bool) {
+    LIGHT.store(light, Ordering::Relaxed);
+}
+
+/// Whether the light palette is in use.
+pub fn is_light() -> bool {
+    LIGHT.load(Ordering::Relaxed)
+}
+
+fn pick(dark: u32, light: u32) -> u32 {
+    if is_light() { light } else { dark }
+}
+
 /// `--background-base-lowest`: server list and channel sidebar.
-pub const BASE_LOWEST: u32 = 0x2c2d32;
+pub fn base_lowest() -> u32 {
+    pick(0x2c2d32, 0xf3f3f4)
+}
+
 /// `--background-base-lower`: chat column.
-pub const BASE_LOWER: u32 = 0x323339;
+pub fn base_lower() -> u32 {
+    pick(0x323339, 0xfbfbfb)
+}
+
 /// `--background-base-low`: server icons without an image.
-pub const BASE_LOW: u32 = 0x36373e;
+pub fn base_low() -> u32 {
+    pick(0x36373e, 0xfbfbfb)
+}
+
 /// `--chat-background-default`: message box and the user panel surface.
-pub const SURFACE_HIGH: u32 = 0x393a41;
+pub fn surface_high() -> u32 {
+    pick(0x393a41, 0xffffff)
+}
+
 /// `--background-brand`.
-pub const BRAND: u32 = 0x5865f2;
+pub fn brand() -> u32 {
+    0x5865f2
+}
+
 /// `--status-danger`.
-pub const DANGER: u32 = 0xf23f43;
+pub fn danger() -> u32 {
+    pick(0xf23f43, 0xda373c)
+}
+
 /// `--status-online`.
-pub const ONLINE: u32 = 0x23a55a;
+pub fn online() -> u32 {
+    pick(0x23a55a, 0x24934e)
+}
+
 /// `--text-default`.
-pub const TEXT_DEFAULT: u32 = 0xf3f3f4;
+pub fn text_default() -> u32 {
+    pick(0xf3f3f4, 0x2e2e34)
+}
+
 /// `--text-strong`, also `--interactive-text-hover` / `-active`.
-pub const TEXT_STRONG: u32 = 0xffffff;
+pub fn text_strong() -> u32 {
+    pick(0xffffff, 0x28282d)
+}
+
 /// `--text-muted`.
-pub const TEXT_MUTED: u32 = 0xabacb2;
+pub fn text_muted() -> u32 {
+    pick(0xabacb2, 0x6c6d76)
+}
+
 /// `--interactive-text-default`.
-pub const INTERACTIVE: u32 = 0xc5c6ca;
+pub fn interactive() -> u32 {
+    pick(0xc5c6ca, 0x595a63)
+}
+
 /// `--channels-default`, also `--channel-icon`.
-pub const CHANNELS_DEFAULT: u32 = 0x999aa1;
+pub fn channels_default() -> u32 {
+    pick(0x999aa1, 0x666770)
+}
+
 /// `--interactive-muted`: channels the user cannot read.
-pub const INTERACTIVE_MUTED: u32 = 0x4e5058;
+pub fn interactive_muted() -> u32 {
+    pick(0x4e5058, 0xc4c9ce)
+}
+
 /// `--channel-text-area-placeholder`.
-pub const PLACEHOLDER: u32 = 0x6d6f78;
+pub fn placeholder() -> u32 {
+    pick(0x6d6f78, 0x80848e)
+}
+
 /// `--text-link`.
-pub const LINK: u32 = 0x76aff6;
-/// `--text-feedback-positive` / `--text-feedback-critical`.
-pub const FEEDBACK_POSITIVE: u32 = 0x7ecb94;
-pub const FEEDBACK_CRITICAL: u32 = 0xffa09b;
-/// `--control-primary-background-default` / `-hover`.
-pub const BUTTON_BRAND_HOVER: u32 = 0x4452bb;
+pub fn link() -> u32 {
+    pick(0x76aff6, 0x006dd4)
+}
+
+/// `--text-feedback-positive`.
+pub fn feedback_positive() -> u32 {
+    pick(0x7ecb94, 0x01713a)
+}
+
+/// `--text-feedback-critical`.
+pub fn feedback_critical() -> u32 {
+    pick(0xffa09b, 0xb92733)
+}
+
+/// `--control-primary-background-hover`.
+pub fn button_brand_hover() -> u32 {
+    0x4452bb
+}
+
 /// `--control-connected-background-default` / `-hover`.
-pub const BUTTON_POSITIVE: u32 = 0x008545;
-pub const BUTTON_POSITIVE_HOVER: u32 = 0x006c37;
+pub fn button_positive() -> u32 {
+    0x008545
+}
+
+pub fn button_positive_hover() -> u32 {
+    0x006c37
+}
+
 /// `--control-critical-primary-background-default` / `-hover`, also
 /// `--background-feedback-notification` (mention badges).
-pub const BUTTON_DANGER: u32 = 0xd22d39;
-pub const BUTTON_DANGER_HOVER: u32 = 0xa9232e;
-/// Presence colors; idle and offline are not in `.theme-dark`, these are
-/// Discord's long-standing values.
-pub const IDLE: u32 = 0xf0b232;
-pub const OFFLINE: u32 = 0x80848e;
+pub fn button_danger() -> u32 {
+    0xd22d39
+}
 
-/// `--background-scrim`: black at 72%.
+pub fn button_danger_hover() -> u32 {
+    0xa9232e
+}
+
+/// Presence colors; idle and offline are not in the theme tokens, these are
+/// Discord's long-standing values.
+pub fn idle() -> u32 {
+    0xf0b232
+}
+
+pub fn offline() -> u32 {
+    0x80848e
+}
+
+/// `--background-scrim`: black at 72%, or 52% on light.
 pub fn scrim() -> Rgba {
-    rgba(0x000000b8)
+    rgba(pick(0x000000b8, 0x00000085))
 }
 
 /// `color` (RGB) at `alpha`, for tints such as a folder's color.
@@ -87,15 +181,18 @@ pub fn border() -> Rgba {
 }
 
 pub fn text() -> Hsla {
-    rgb(TEXT_DEFAULT).into()
+    rgb(text_default()).into()
 }
 
 pub fn muted() -> Hsla {
-    rgb(TEXT_MUTED).into()
+    rgb(text_muted()).into()
 }
 
 /// Mention pill: `--mention-foreground` on the brand color at 30%.
-pub const MENTION_TEXT: u32 = 0xc9cdfb;
+pub fn mention_text() -> u32 {
+    pick(0xc9cdfb, 0x2e3c88)
+}
+
 pub fn mention_bg() -> Rgba {
     rgba(0x5865f24d)
 }
@@ -105,10 +202,14 @@ pub fn mention_bg() -> Rgba {
 pub fn mentioned() -> Rgba {
     rgba(0xf0b2321a)
 }
+
 pub fn mentioned_hover() -> Rgba {
     rgba(0xf0b23229)
 }
-pub const MENTIONED_BAR: u32 = 0xf0b232;
+
+pub fn mentioned_bar() -> u32 {
+    0xf0b232
+}
 
 /// A message the user jumped to, flashed like `--background-message-highlight`.
 pub fn jumped() -> Rgba {
@@ -125,14 +226,16 @@ pub fn reaction_mine() -> Rgba {
     rgba(0x5865f226)
 }
 
-/// Inline code and spoiler background.
+/// Inline code and spoiler background: `--background-code`.
 pub fn code_bg() -> Rgba {
-    rgba(0x1e1f2299)
+    rgba(pick(0x1e1f2299, 0x5865f20a))
 }
 
 /// A text spoiler still hidden: `--spoiler-hidden-background`, opaque so
 /// the text under it cannot be read.
-pub const SPOILER_HIDDEN: u32 = 0x1e1f22;
+pub fn spoiler_hidden() -> u32 {
+    pick(0x1e1f22, 0x8f9097)
+}
 
 /// Code blocks: the system's monospace face, as the web client falls back
 /// to when its own font is missing.
@@ -140,3 +243,18 @@ pub const SPOILER_HIDDEN: u32 = 0x1e1f22;
 pub const MONO: &str = "Menlo";
 #[cfg(not(target_os = "macos"))]
 pub const MONO: &str = "Consolas";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn light_palette_only_while_switched() {
+        set_light(false);
+        assert_eq!(base_lowest(), 0x2c2d32);
+        set_light(true);
+        assert_eq!(base_lowest(), 0xf3f3f4);
+        assert_eq!(brand(), 0x5865f2);
+        set_light(false);
+    }
+}

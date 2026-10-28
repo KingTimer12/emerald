@@ -1,6 +1,8 @@
 //! Files for the next message: picked with the + button, dropped on the
 //! chat or pasted, shown as cards above the message box and sent with it.
 
+use crate::zoom::zoomed;
+
 mod modal;
 mod picking;
 
@@ -11,7 +13,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, Context, ExternalPaths, Focusable, FontWeight, Image, ImageFormat, MouseButton, PathPromptOptions,
-    SharedString, Window, div, img, prelude::*, px, rgb,
+    SharedString, Window, div, img, prelude::*, rgb,
 };
 
 use super::super::icons::{self, icon};
@@ -58,19 +60,19 @@ impl Emerald {
         let cards = self.composer.attachments.iter().enumerate().map(|(ix, file)| {
             let shown = match &file.preview {
                 Some(image) => img(image.clone()).size_full().rounded_md().into_any_element(),
-                None => div().text_size(px(48.)).child("📄").into_any_element(),
+                None => div().text_size(zoomed(48.)).child("📄").into_any_element(),
             };
             let spoiler = file.upload.spoiler;
             let tools = div()
                 .absolute()
-                .top(px(-8.))
-                .right(px(-8.))
+                .top(zoomed(-8.))
+                .right(zoomed(-8.))
                 .flex()
                 .rounded_md()
                 .overflow_hidden()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::SURFACE_HIGH))
+                .bg(rgb(theme::surface_high()))
                 .child(
                     tool(("attachment-spoiler", ix), icons::EYE, t!("upload.spoiler"), spoiler).on_click(
                         cx.listener(move |this, _, _, cx| {
@@ -99,18 +101,18 @@ impl Emerald {
                 );
             div()
                 .relative()
-                .w(px(CARD))
+                .w(zoomed(CARD))
                 .flex_none()
                 .flex()
                 .flex_col()
                 .gap_2()
                 .p_2()
                 .rounded_md()
-                .bg(rgb(theme::BASE_LOW))
+                .bg(rgb(theme::base_low()))
                 .child(
                     div()
                         .relative()
-                        .h(px(CARD - 48.))
+                        .h(zoomed(CARD - 48.))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -126,12 +128,12 @@ impl Emerald {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .bg(rgb(theme::BASE_LOWEST))
+                                    .bg(rgb(theme::base_lowest()))
                                     .child(super::chat::spoiler_pill()),
                             )
                         }),
                 )
-                .child(div().text_size(px(14.)).truncate().child(file.upload.name.clone()))
+                .child(div().text_size(zoomed(14.)).truncate().child(file.upload.name.clone()))
                 .child(
                     div()
                         .text_xs()
@@ -154,7 +156,7 @@ impl Emerald {
                 .pt_4()
                 .overflow_x_scroll()
                 .rounded_t_lg()
-                .bg(rgb(theme::BASE_LOWER))
+                .bg(rgb(theme::base_lower()))
                 .children(cards)
                 .into_any_element(),
         )
@@ -171,8 +173,8 @@ impl Emerald {
                 .id("attach")
                 .flex_none()
                 // Centered on a one-row message box.
-                .mt(px(7.))
-                .size(px(32.))
+                .mt(zoomed(7.))
+                .size(zoomed(32.))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -180,7 +182,7 @@ impl Emerald {
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .tooltip(widgets::tooltip(t!("upload.attach")))
-                .child(icon(icons::ATTACH, 22., theme::INTERACTIVE))
+                .child(icon(icons::ATTACH, 22., theme::interactive()))
                 .on_click(cx.listener(|this, _, _, cx| this.pick_files(cx)))
                 .into_any_element(),
         )
@@ -191,14 +193,14 @@ impl Emerald {
 fn tool(id: (&'static str, usize), path: &'static str, label: &'static str, on: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
-        .size(px(28.))
+        .size(zoomed(28.))
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .tooltip(widgets::tooltip(label))
-        .child(icon(path, 18., if on { theme::BRAND } else { theme::INTERACTIVE }))
+        .child(icon(path, 18., if on { theme::brand() } else { theme::interactive() }))
 }
 
 /// `1.5 MB`, in the units Discord uses for its limits.

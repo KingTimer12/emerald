@@ -1,6 +1,7 @@
 //! The suggestion list above the message box.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// The list, above the message box.
@@ -36,7 +37,7 @@ impl Emerald {
                 .right_0()
                 .bottom(relative(1.))
                 .mb_2()
-                .max_h(px(ROW * 10. + 64.))
+                .max_h(zoomed(ROW * 10. + 64.))
                 .overflow_y_scroll()
                 .p_2()
                 .flex()
@@ -44,7 +45,7 @@ impl Emerald {
                 .rounded_lg()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::SURFACE_HIGH))
+                .bg(rgb(theme::surface_high()))
                 .shadow_lg()
                 .occlude()
                 .children(rows)
@@ -58,46 +59,46 @@ impl Emerald {
                 widgets::avatar(name, *id, self.user_avatar(*id), 24., None).into_any_element(),
                 name.clone(),
                 Some(username.clone()),
-                color.unwrap_or(theme::TEXT_STRONG),
+                color.unwrap_or(theme::text_strong()),
             ),
             Suggestion::Role { name, color, .. } => (
-                div().w(px(24.)).flex().justify_center().child("@").into_any_element(),
+                div().w(zoomed(24.)).flex().justify_center().child("@").into_any_element(),
                 format!("@{name}").into(),
                 None,
-                color.unwrap_or(theme::TEXT_STRONG),
+                color.unwrap_or(theme::text_strong()),
             ),
             Suggestion::Everyone(word) => (
-                div().w(px(24.)).flex().justify_center().child("@").into_any_element(),
+                div().w(zoomed(24.)).flex().justify_center().child("@").into_any_element(),
                 format!("@{word}").into(),
                 Some(if *word == "here" { t!("autocomplete.here") } else { t!("autocomplete.everyone") }.into()),
-                theme::TEXT_STRONG,
+                theme::text_strong(),
             ),
             Suggestion::Channel { name, icon, .. } => (
-                icons::icon(icon, 20., theme::CHANNELS_DEFAULT).into_any_element(),
+                icons::icon(icon, 20., theme::channels_default()).into_any_element(),
                 name.clone(),
                 None,
-                theme::TEXT_STRONG,
+                theme::text_strong(),
             ),
             Suggestion::Emoji { emoji, name } => (
                 self.emoji_image(emoji, 24.),
                 format!(":{name}:").into(),
                 None,
-                theme::TEXT_STRONG,
+                theme::text_strong(),
             ),
             Suggestion::Command { command, app } => (
-                div().w(px(24.)).flex().justify_center().child("/").into_any_element(),
+                div().w(zoomed(24.)).flex().justify_center().child("/").into_any_element(),
                 format!("/{}", command.name).into(),
                 Some(if command.description.is_empty() {
                     app.clone()
                 } else {
                     format!("{} · {app}", command.description).into()
                 }),
-                theme::TEXT_STRONG,
+                theme::text_strong(),
             ),
         };
         div()
             .id(("suggestion", ix))
-            .h(px(ROW))
+            .h(zoomed(ROW))
             .flex_none()
             .flex()
             .items_center()
@@ -106,7 +107,7 @@ impl Emerald {
             .rounded_md()
             .cursor_pointer()
             .when(selected, |row| row.bg(theme::selected()))
-            .child(div().size(px(24.)).flex_none().flex().items_center().justify_center().child(leading))
+            .child(div().size(zoomed(24.)).flex_none().flex().items_center().justify_center().child(leading))
             .child(
                 div()
                     .flex_none()
@@ -117,7 +118,7 @@ impl Emerald {
                     .child(name),
             )
             .children(detail.map(|detail| {
-                div().flex_1().min_w(px(0.)).truncate().text_size(px(14.)).text_color(theme::muted()).child(detail)
+                div().flex_1().min_w(zoomed(0.)).truncate().text_size(zoomed(14.)).text_color(theme::muted()).child(detail)
             }))
             .on_hover(cx.listener(move |this, inside: &bool, _, cx| {
                 if *inside && this.autocomplete.selected() != ix {

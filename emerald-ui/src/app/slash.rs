@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::{Emerald, widgets};
 use super::state::autocomplete;
@@ -15,6 +15,7 @@ use super::state::commands::{self, CommandError};
 use super::super::theme;
 use emerald_discord::model::{AppCommand, CHAT_INPUT, CommandIndex, Snowflake};
 use emerald_discord::{Command, IndexTarget, permissions, rest};
+use crate::zoom::zoomed;
 
 /// An index is fetched again when `/` is typed after this long.
 const INDEX_TTL: Duration = Duration::from_secs(10 * 60);
@@ -169,7 +170,7 @@ impl Emerald {
                 .px_1()
                 .rounded_sm()
                 .bg(theme::hover())
-                .text_color(rgb(if option.required { theme::TEXT_STRONG } else { theme::TEXT_MUTED }))
+                .text_color(rgb(if option.required { theme::text_strong() } else { theme::text_muted() }))
                 .child(label)
         });
         Some(
@@ -181,12 +182,12 @@ impl Emerald {
                 .px_3()
                 .py_2()
                 .rounded_t_lg()
-                .bg(rgb(theme::BASE_LOW))
-                .text_size(px(14.))
+                .bg(rgb(theme::base_low()))
+                .text_size(zoomed(14.))
                 .child(
                     div()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(rgb(theme::TEXT_STRONG))
+                        .text_color(rgb(theme::text_strong()))
                         .child(format!("/{}", command.name)),
                 )
                 .children(options)

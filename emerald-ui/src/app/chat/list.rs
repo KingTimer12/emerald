@@ -1,6 +1,8 @@
 //! The chat list's rows: the channel intro, messages with their replies,
 //! attachments, embeds and stickers, and day separators.
 
+use crate::zoom::zoomed;
+
 mod parts;
 
 use parts::*;
@@ -8,7 +10,7 @@ pub(in super::super) use parts::spoiler_pill;
 
 use gpui::{
     AnyElement, Context, Div, ElementId, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString,
-    Stateful, StyledText, div, img, prelude::*, px, rgb,
+    Stateful, StyledText, div, img, prelude::*, rgb,
 };
 
 use super::super::super::{icons, theme, time};
@@ -74,21 +76,21 @@ impl Emerald {
     /// history is loaded to its start.
     fn render_intro(&self, log: Option<&Log>) -> AnyElement {
         if !log.is_some_and(|log| log.complete) {
-            return div().h(px(1.)).into_any_element();
+            return div().h(zoomed(1.)).into_any_element();
         }
         let space = self.spaces.current();
         let Some(row) = self.selected_channel.and_then(|id| space.row(id)) else {
-            return div().h(px(1.)).into_any_element();
+            return div().h(zoomed(1.)).into_any_element();
         };
         let (icon, title, user) = (row.icon, &row.name, row.user);
         let intro = div().w_full().flex().flex_col().px_4().pt_4();
         let heading = |text: SharedString, size: f32| {
             div()
                 .mt_2()
-                .text_size(px(size))
-                .line_height(px((size * 1.25).round()))
+                .text_size(zoomed(size))
+                .line_height(zoomed((size * 1.25).round()))
                 .font_weight(FontWeight::BOLD)
-                .text_color(rgb(theme::TEXT_STRONG))
+                .text_color(rgb(theme::text_strong()))
                 .child(text)
         };
 
@@ -102,9 +104,9 @@ impl Emerald {
                 .child(heading(title.clone(), 30.))
                 .children(username.map(|username| {
                     div()
-                        .text_size(px(24.))
-                        .line_height(px(28.))
-                        .text_color(rgb(theme::TEXT_STRONG))
+                        .text_size(zoomed(24.))
+                        .line_height(zoomed(28.))
+                        .text_color(rgb(theme::text_strong()))
                         .child(username)
                 }))
                 .child(
@@ -113,7 +115,7 @@ impl Emerald {
                             name,
                             HighlightStyle {
                                 font_weight: Some(FontWeight::BOLD),
-                                color: Some(rgb(theme::TEXT_STRONG).into()),
+                                color: Some(rgb(theme::text_strong()).into()),
                                 ..Default::default()
                             },
                         )
@@ -124,13 +126,13 @@ impl Emerald {
             intro
                 .child(
                     div()
-                        .size(px(68.))
+                        .size(zoomed(68.))
                         .rounded_full()
                         .bg(theme::hover())
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(icons::icon(icon, 44., theme::TEXT_STRONG)),
+                        .child(icons::icon(icon, 44., theme::text_strong())),
                 )
                 .child(heading(t!("chat.welcome", name = title).into(), 32.))
                 .child(
@@ -185,8 +187,8 @@ impl Emerald {
                         .left_0()
                         .top_0()
                         .bottom_0()
-                        .w(px(2.))
-                        .bg(rgb(theme::MENTIONED_BAR)),
+                        .w(zoomed(2.))
+                        .bg(rgb(theme::mentioned_bar())),
                 )
             })
             .when(editing, |row| row.bg(theme::hover()))
@@ -202,21 +204,21 @@ impl Emerald {
                 .items_center()
                 .gap_4()
                 .px_4()
-                .py(px(2.))
-                .when(!new_day, |r| r.mt(px(15.)))
+                .py(zoomed(2.))
+                .when(!new_day, |r| r.mt(zoomed(15.)))
                 .child(
                     div()
-                        .w(px(40.))
+                        .w(zoomed(40.))
                         .flex_none()
                         .flex()
                         .justify_center()
-                        .text_color(rgb(theme::ONLINE))
+                        .text_color(rgb(theme::online()))
                         .child("→"),
                 )
                 .child(
                     div()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .text_color(theme::muted())
                         .child(text),
                 )
@@ -234,7 +236,7 @@ impl Emerald {
             row.flex()
                 .gap_2()
                 .px_4()
-                .py(px(1.))
+                .py(zoomed(1.))
                 .child(
                     div()
                         .flex_none()
@@ -246,7 +248,7 @@ impl Emerald {
                     div()
                         .flex()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .gap_1()
                         .child(
                             div()
@@ -267,9 +269,9 @@ impl Emerald {
                     && system_text(p.kind, "").is_none()
             })
         {
-            row.pl(px(72.))
+            row.pl(zoomed(72.))
                 .pr_4()
-                .py(px(2.))
+                .py(zoomed(2.))
                 .child(self.message_body(msg, ix, cx))
                 .children(toolbar)
                 .into_any_element()
@@ -278,12 +280,12 @@ impl Emerald {
             // separator already provides the gap.
             div()
                 .w_full()
-                .when(!new_day, |d| d.pt(px(15.)))
+                .when(!new_day, |d| d.pt(zoomed(15.)))
                 .child(
                     row.flex()
                         .flex_col()
                         .px_4()
-                        .py(px(2.))
+                        .py(zoomed(2.))
                         .children(msg.reply.as_ref().map(|reply| self.render_reply(reply, ix, cx)))
                         .child(
                             div()
@@ -292,7 +294,7 @@ impl Emerald {
                                 .child(
                                     div()
                                         .id(("author-avatar", ix))
-                                        .mt(px(2.))
+                                        .mt(zoomed(2.))
                                         .cursor_pointer()
                                         .child(widgets::avatar(
                                             &author,
@@ -311,11 +313,11 @@ impl Emerald {
                                         .flex()
                                         .flex_col()
                                         .flex_1()
-                                        .min_w(px(0.))
+                                        .min_w(zoomed(0.))
                                         .child(
                                             div()
                                                 .flex()
-                                                .gap(px(6.))
+                                                .gap(zoomed(6.))
                                                 .items_center()
                                                 .child(
                                                     div()
@@ -372,7 +374,7 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .text_size(px(14.))
+                    .text_size(zoomed(14.))
                     .text_color(theme::muted())
                     .child(label)
                     .child("—")
@@ -380,7 +382,7 @@ impl Emerald {
                         div()
                             .id(("show-hidden", ix))
                             .cursor_pointer()
-                            .text_color(rgb(theme::LINK))
+                            .text_color(rgb(theme::link()))
                             .hover(|s| s.underline())
                             .child(if count == 1 { t!("block.show_one") } else { t!("block.show") })
                             .on_click(cx.listener(move |this, _, _, cx| {

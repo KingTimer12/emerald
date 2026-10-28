@@ -7,7 +7,7 @@ use gpui::{App, Context, Focusable, Window};
 
 use super::Emerald;
 use super::chat::JumpTarget;
-use super::state::Row;
+use super::state::{DMS, Row};
 use emerald_discord::{Command, Page};
 use emerald_discord::model::{Channel, Snowflake};
 use emerald_discord::permissions;
@@ -62,6 +62,10 @@ impl Emerald {
         self.friends_open = false;
         self.requests_open = false;
         self.selected_channel = Some(id);
+        if self.settings.last_channel != Some(id) {
+            self.settings.last_channel = Some(id);
+            self.save_settings(cx);
+        }
         self.spaces.remember_channel(id);
         self.recent.visit(id);
         self.panel_follow(id);
@@ -232,6 +236,60 @@ impl Emerald {
 
     /// Newest known message in `channel`: the loaded log, else the channel's
     /// `last_message_id`.
+    /// Moves to the next or previous channel of this space in the order the
+    /// sidebar lists them, skipping categories and voice. With `unread`, only
+    /// channels with something new stop it.
+    pub(super) fn step_channel(&mut self, forward: bool, unread: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let channels: Vec<Snowflake> = self
+            .spaces
+            .current()
+            .rows()
+            .iter()
+            .filter_map(|row| match row {
+                Row::Channel(channel) if !channel.kind.is_voice() => Some(channel.id),
+                _ => None,
+            })
+            .collect();
+        let Some(current) = self.selected_channel else { return };
+        let Some(at) = channels.iter().position(|id| *id == current) else { return };
+        let count = channels.len();
+        for step in 1..count {
+            let next = if forward { (at + step) % count } else { (at + count - step) % count };
+            let id = channels[next];
+            if !unread || self.reads.is_unread(id) || self.reads.mentions(id) > 0 {
+                self.select_channel(id, window, cx);
+                return;
+            }
+        }
+    }
+
+    /// Marks the open channel read up to its newest message.
+    pub(super) fn mark_read(&mut self, cx: &mut Context<Self>) {
+        let Some(channel) = self.selected_channel else { return };
+        if let Some(last) = self.newest_message(channel) {
+            self.ack(channel, last, cx);
+        }
+    }
+
+    /// Opens the channel the last session ended on, in its space, if the
+    /// space still lists it. Returns whether it opened.
+    pub(super) fn restore_channel(&mut self, channel: Snowflake, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let space = if self.spaces.dms().row(channel).is_some() {
+            Some(DMS)
+        } else {
+            self.spaces.guild_id_of(channel)
+        };
+        let Some(ix) = space.and_then(|space| self.spaces.index(space)) else { return false };
+        // Remembered first, so the space opens on this channel and not its first one.
+        self.spaces.select(ix);
+        self.spaces.remember_channel(channel);
+        self.select_space(ix, window, cx);
+        if self.selected_channel != Some(channel) {
+            self.select_channel(channel, window, cx);
+        }
+        true
+    }
+
     pub(super) fn newest_message(&self, channel: Snowflake) -> Option<Snowflake> {
         let listed = self.spaces.channel(channel).and_then(|c| c.last_message_id);
         self.history.newest(channel).max(listed)

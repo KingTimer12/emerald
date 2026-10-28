@@ -1,9 +1,11 @@
 //! Friends list: the DM home screen with Online / All / Pending tabs and the
 //! "Add Friend" form, worded like the web client.
 
+use crate::zoom::zoomed;
+
 mod list;
 
-use gpui::{AnyElement, Context, Entity, Focusable, FontWeight, SharedString, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Entity, Focusable, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::super::text_input::TextInput;
 use super::super::theme;
@@ -113,14 +115,14 @@ impl Emerald {
                 .items_center()
                 .gap_2()
                 .px_2()
-                .py(px(2.))
+                .py(zoomed(2.))
                 .rounded_md()
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+                .text_color(rgb(if selected { theme::text_strong() } else { theme::interactive() }))
                 .when(selected, |t| t.bg(theme::selected()))
                 .when(!selected, |t| {
-                    t.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
+                    t.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::text_strong())))
                 })
                 .child(label)
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -133,7 +135,7 @@ impl Emerald {
         let adding = self.friends.tab == FriendsTab::Add;
 
         let header = div()
-            .h(px(48.))
+            .h(zoomed(48.))
             .flex_none()
             .flex()
             .items_center()
@@ -143,11 +145,11 @@ impl Emerald {
             .border_color(theme::border())
             .child(
                 div()
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(t!("friends.title")),
             )
-            .child(div().w(px(1.)).h(px(24.)).bg(theme::selected()))
+            .child(div().w(zoomed(1.)).h(zoomed(24.)).bg(theme::selected()))
             .child(tab("tab-online", t!("friends.tab_online"), FriendsTab::Online, cx))
             .child(tab("tab-all", t!("friends.tab_all"), FriendsTab::All, cx))
             .child(
@@ -160,15 +162,15 @@ impl Emerald {
                 div()
                     .id("tab-add")
                     .px_2()
-                    .py(px(2.))
+                    .py(zoomed(2.))
                     .rounded_md()
                     .font_weight(FontWeight::MEDIUM)
                     .cursor_pointer()
-                    .when(adding, |t| t.text_color(rgb(theme::ONLINE)))
+                    .when(adding, |t| t.text_color(rgb(theme::online())))
                     .when(!adding, |t| {
-                        t.bg(rgb(theme::BUTTON_POSITIVE))
-                            .text_color(rgb(theme::TEXT_STRONG))
-                            .hover(|s| s.bg(rgb(theme::BUTTON_POSITIVE_HOVER)))
+                        t.bg(rgb(theme::button_positive()))
+                            .text_color(rgb(theme::text_strong()))
+                            .hover(|s| s.bg(rgb(theme::button_positive_hover())))
                     })
                     .child(t!("friends.add"))
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -188,9 +190,9 @@ impl Emerald {
             .flex()
             .flex_col()
             .flex_1()
-            .min_w(px(0.))
+            .min_w(zoomed(0.))
             .h_full()
-            .bg(rgb(theme::BASE_LOWER))
+            .bg(rgb(theme::base_lower()))
             .border_l_1()
             .border_color(theme::border())
             .child(header)
@@ -204,21 +206,21 @@ impl Emerald {
             .flex()
             .flex_col()
             .gap_2()
-            .px(px(30.))
+            .px(zoomed(30.))
             .py_5()
             .border_b_1()
             .border_color(theme::border())
             .child(
                 div()
-                    .text_size(px(20.))
+                    .text_size(zoomed(20.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .child(t!("friends.add")),
             )
             .child(
                 div()
-                    .text_size(px(14.))
-                    .text_color(rgb(theme::TEXT_MUTED))
+                    .text_size(zoomed(14.))
+                    .text_color(rgb(theme::text_muted()))
                     .child(t!("friends.add_hint")),
             )
             .child(

@@ -3,7 +3,7 @@
 
 use gpui::{
     AnyElement, App, AppContext, Context, Entity, FontWeight, SharedString, Subscription, Window, div, prelude::*,
-    px, rgb,
+    rgb,
 };
 
 use super::super::text_input::{Submitted, TextInput};
@@ -12,7 +12,8 @@ use super::widgets::{self, ButtonKind};
 use super::{Emerald, Feedback, Overlay};
 use emerald_discord::model::{Snowflake, Status, avatar_url};
 use emerald_discord::{Action, Command};
-use crate::settings::FONT_SIZES;
+use crate::settings::{FONT_SIZES, ThemeChoice};
+use crate::zoom::zoomed;
 
 mod account;
 mod accounts;
@@ -22,6 +23,7 @@ mod devices;
 mod language;
 mod privacy;
 mod profiles;
+mod shortcuts;
 
 pub(super) use profiles::ProfileForm;
 
@@ -34,6 +36,7 @@ pub enum Page {
     Accounts,
     Status,
     Appearance,
+    Shortcuts,
     Language,
 }
 
@@ -53,6 +56,8 @@ pub struct SettingsView {
     privacy_ask: Option<privacy::Ask>,
     /// The accounts signed in here, read when Accounts opens.
     accounts: emerald_discord::token::Accounts,
+    /// The shortcut waiting for its new keys, if any.
+    recording: Option<crate::shortcuts::Shortcut>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -65,6 +70,7 @@ impl Emerald {
             view.page = page;
             view.feedback = None;
             view.privacy_ask = None;
+            view.recording = None;
         }
         match page {
             Page::Profiles => self.open_profile_form(None, cx),
@@ -110,6 +116,7 @@ impl Emerald {
             custom_status,
             privacy_ask: None,
             accounts: Default::default(),
+            recording: None,
             _subscriptions: subscriptions,
         })));
         window.focus(&self.focus_handle);
@@ -128,32 +135,32 @@ impl Emerald {
             div()
                 .id(id)
                 .px_2p5()
-                .py(px(6.))
+                .py(zoomed(6.))
                 .rounded_md()
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+                .text_color(rgb(if selected { theme::text_strong() } else { theme::interactive() }))
                 .when(selected, |i| i.bg(theme::selected()))
                 .when(!selected, |i| {
-                    i.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
+                    i.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::text_strong())))
                 })
                 .child(label)
                 .on_click(cx.listener(move |this, _, window, cx| this.open_settings(page, window, cx)))
         };
-        let separator = || div().mx_2p5().my_2().h(px(1.)).bg(theme::border());
+        let separator = || div().mx_2p5().my_2().h(zoomed(1.)).bg(theme::border());
 
         let sidebar = div()
             .id("settings-sidebar")
-            .w(px(260.))
+            .w(zoomed(260.))
             .h_full()
             .flex_none()
             .flex()
             .flex_col()
-            .gap(px(2.))
-            .pt(px(60.))
+            .gap(zoomed(2.))
+            .pt(zoomed(60.))
             .px_3()
             .overflow_y_scroll()
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .child(widgets::label(t!("settings.user_settings")).px_2p5().pb_1())
             .child(item("page-account", t!("settings.my_account"), Page::Account, cx))
             .child(item("page-profiles", t!("settings.profiles"), Page::Profiles, cx))
@@ -164,17 +171,18 @@ impl Emerald {
             .child(separator())
             .child(widgets::label(t!("settings.app_settings")).px_2p5().pb_1())
             .child(item("page-appearance", t!("settings.appearance"), Page::Appearance, cx))
+            .child(item("page-shortcuts", t!("settings.shortcuts"), Page::Shortcuts, cx))
             .child(item("page-language", t!("settings.language_time"), Page::Language, cx))
             .child(separator())
             .child(
                 div()
                     .id("settings-logout")
                     .px_2p5()
-                    .py(px(6.))
+                    .py(zoomed(6.))
                     .rounded_md()
                     .font_weight(FontWeight::MEDIUM)
                     .cursor_pointer()
-                    .text_color(rgb(theme::DANGER))
+                    .text_color(rgb(theme::danger()))
                     .hover(|s| s.bg(theme::hover()))
                     .child(t!("settings.log_out"))
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(crate::Logout), cx)),
@@ -188,13 +196,14 @@ impl Emerald {
             Page::Accounts => self.render_accounts(view, cx),
             Page::Status => self.render_status(view, cx),
             Page::Appearance => self.render_appearance(cx),
+            Page::Shortcuts => self.render_shortcuts(view, cx),
             Page::Language => self.render_language(view, cx),
         };
 
         let close = div()
-            .w(px(72.))
+            .w(zoomed(72.))
             .flex_none()
-            .pt(px(60.))
+            .pt(zoomed(60.))
             .flex()
             .flex_col()
             .items_center()
@@ -202,16 +211,16 @@ impl Emerald {
             .child(
                 div()
                     .id("close-settings")
-                    .size(px(36.))
+                    .size(zoomed(36.))
                     .rounded_full()
                     .border_2()
-                    .border_color(rgb(theme::INTERACTIVE))
+                    .border_color(rgb(theme::interactive()))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .text_color(rgb(theme::INTERACTIVE))
+                    .text_color(rgb(theme::interactive()))
                     .cursor_pointer()
-                    .hover(|s| s.border_color(rgb(theme::TEXT_STRONG)).text_color(rgb(theme::TEXT_STRONG)))
+                    .hover(|s| s.border_color(rgb(theme::text_strong())).text_color(rgb(theme::text_strong())))
                     .child("✕")
                     .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
             )
@@ -219,7 +228,7 @@ impl Emerald {
                 div()
                     .text_xs()
                     .font_weight(FontWeight::BOLD)
-                    .text_color(rgb(theme::INTERACTIVE))
+                    .text_color(rgb(theme::interactive()))
                     .child("ESC"),
             );
 
@@ -230,20 +239,20 @@ impl Emerald {
             .left_0()
             .size_full()
             .flex()
-            .bg(rgb(theme::BASE_LOWER))
+            .bg(rgb(theme::base_lower()))
             .occlude()
             .child(sidebar)
             .child(
                 div()
                     .id("settings-page")
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .h_full()
                     .overflow_y_scroll()
-                    .pt(px(60.))
+                    .pt(zoomed(60.))
                     .px_10()
                     .pb_10()
-                    .child(div().max_w(px(740.)).child(page)),
+                    .child(div().max_w(zoomed(740.)).child(page)),
             )
             .child(close)
     }
@@ -252,22 +261,22 @@ impl Emerald {
 pub(super) fn page_title(text: &'static str) -> gpui::Div {
     div()
         .mb_5()
-        .text_size(px(20.))
+        .text_size(zoomed(20.))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .child(text)
 }
 
 pub(super) fn section_title(text: &'static str) -> gpui::Div {
     div()
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .child(text)
 }
 
 /// The muted line under a setting's title.
 pub(super) fn hint(text: impl Into<SharedString>) -> gpui::Div {
-    div().text_size(px(14.)).text_color(rgb(theme::TEXT_MUTED)).child(text.into())
+    div().text_size(zoomed(14.)).text_color(rgb(theme::text_muted())).child(text.into())
 }
 
 /// A setting with a switch on the right, as Discord lists them.
@@ -293,7 +302,7 @@ pub(super) fn switch_row(
                 .flex()
                 .flex_col()
                 .flex_1()
-                .min_w(px(0.))
+                .min_w(zoomed(0.))
                 .gap_1()
                 .child(section_title(title).font_weight(FontWeight::MEDIUM))
                 .child(hint(note)),

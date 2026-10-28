@@ -2,9 +2,11 @@
 //! file cards (voice messages and audio included), embeds with their
 //! fields and media, and the box a forwarded message comes in.
 
+use crate::zoom::zoomed;
+
 mod embed;
 
-use gpui::{AnyElement, Context, ElementId, FontWeight, SharedString, div, img, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, ElementId, FontWeight, SharedString, div, img, prelude::*, rgb};
 
 use super::super::super::{icons, markdown, theme, time};
 use super::super::attachments::format_size;
@@ -30,8 +32,8 @@ impl Emerald {
             .id(id)
             .relative()
             .flex_none()
-            .w(px(picture.width))
-            .h(px(picture.height))
+            .w(zoomed(picture.width))
+            .h(zoomed(picture.height))
             .rounded_lg()
             .overflow_hidden();
         if picture.spoiler && !self.revealed.contains(&picture.url) {
@@ -72,7 +74,7 @@ impl Emerald {
             .items_center()
             .justify_center()
             .cursor_pointer()
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .child(spoiler_pill())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.revealed.insert(key.clone());
@@ -88,7 +90,7 @@ impl Emerald {
         let card = div()
             .id(id)
             .relative()
-            .max_w(px(432.))
+            .max_w(zoomed(432.))
             .flex()
             .items_center()
             .gap_3()
@@ -96,10 +98,10 @@ impl Emerald {
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOW));
+            .bg(rgb(theme::base_low()));
         if file.spoiler && !self.revealed.contains(&file.url) {
             // The card keeps its size, its contents out of sight.
-            return self.spoiler_cover(card.h(px(66.)).w(px(432.)), file.url.clone(), cx);
+            return self.spoiler_cover(card.h(zoomed(66.)).w(zoomed(432.)), file.url.clone(), cx);
         }
         let url = markdown::web_url(&file.url).map(str::to_owned);
         let (name, detail): (SharedString, SharedString) = match file.kind {
@@ -108,7 +110,7 @@ impl Emerald {
         };
         let icon = match file.kind {
             FileKind::Audio | FileKind::Voice(_) | FileKind::Video => play_button(36.).into_any_element(),
-            FileKind::Other => icons::icon(icons::FILE, 32., theme::INTERACTIVE).into_any_element(),
+            FileKind::Other => icons::icon(icons::FILE, 32., theme::interactive()).into_any_element(),
         };
         card.child(icon)
             .child(
@@ -116,11 +118,11 @@ impl Emerald {
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .child(
                         div()
                             .truncate()
-                            .text_color(rgb(if url.is_some() { theme::LINK } else { theme::TEXT_STRONG }))
+                            .text_color(rgb(if url.is_some() { theme::link() } else { theme::text_strong() }))
                             .child(name),
                     )
                     .child(div().text_xs().text_color(theme::muted()).child(detail)),
@@ -154,22 +156,22 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .text_size(px(14.))
+                    .text_size(zoomed(14.))
                     .italic()
                     .text_color(theme::muted())
-                    .child(icons::icon(icons::FORWARD, 16., theme::TEXT_MUTED))
+                    .child(icons::icon(icons::FORWARD, 16., theme::text_muted()))
                     .child(t!("chat.forwarded")),
             )
             .child(
                 div()
                     .flex()
-                    .child(div().flex_none().w(px(4.)).rounded_sm().bg(rgb(theme::INTERACTIVE_MUTED)))
+                    .child(div().flex_none().w(zoomed(4.)).rounded_sm().bg(rgb(theme::interactive_muted())))
                     .child(
                         div()
                             .flex()
                             .flex_col()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .gap_1()
                             .pl_3()
                             .when(!forward.content.is_empty(), |body| {
@@ -221,13 +223,13 @@ impl Emerald {
 fn play_button(size: f32) -> gpui::Div {
     div()
         .flex_none()
-        .size(px(size))
+        .size(zoomed(size))
         .rounded_full()
         .bg(theme::scrim())
         .flex()
         .items_center()
         .justify_center()
-        .child(icons::icon(icons::PLAY, size * 0.5, theme::TEXT_STRONG))
+        .child(icons::icon(icons::PLAY, size * 0.5, theme::text_strong()))
         .map(|button| {
             // Over a picture it sits in the middle; in a card, inline.
             if size > 40. {
@@ -248,14 +250,14 @@ fn play_button(size: f32) -> gpui::Div {
 fn badge(text: &'static str) -> gpui::Div {
     div()
         .absolute()
-        .bottom(px(6.))
-        .left(px(6.))
+        .bottom(zoomed(6.))
+        .left(zoomed(6.))
         .px_1()
         .rounded_sm()
         .bg(theme::scrim())
         .text_xs()
         .font_weight(FontWeight::BOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .child(text)
 }
 

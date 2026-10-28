@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, Context, PathPromptOptions, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, PathPromptOptions, div, prelude::*, rgb};
 
 use super::super::theme;
 use super::Emerald;
@@ -12,6 +12,7 @@ use super::place_menu::{Target, item};
 use emerald_discord::Command;
 use emerald_discord::model::{ChannelKind, Snowflake};
 use emerald_discord::permissions;
+use crate::zoom::zoomed;
 
 /// Discord refuses group icons larger than this.
 const ICON_LIMIT: usize = 8 * 1024 * 1024;
@@ -35,8 +36,8 @@ impl Emerald {
     }
 
     pub(super) fn more_place_items(&self, target: Target, items: &mut Vec<AnyElement>, cx: &mut Context<Self>) {
-        let separator = || div().my_1().h(px(1.)).bg(theme::border()).into_any_element();
-        let danger = |id: &'static str, label: &'static str| item((id, 0), label.into(), None).text_color(rgb(theme::FEEDBACK_CRITICAL));
+        let separator = || div().my_1().h(zoomed(1.)).bg(theme::border()).into_any_element();
+        let danger = |id: &'static str, label: &'static str| item((id, 0), label.into(), None).text_color(rgb(theme::feedback_critical()));
         match target {
             Target::Guild(guild) => {
                 items.push(separator());

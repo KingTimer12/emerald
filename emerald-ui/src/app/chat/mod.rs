@@ -1,6 +1,8 @@
 //! The chat column: header, message list with the channel intro and day
 //! separators, composer with the typing indicator, and the DM profile panel.
 
+use crate::zoom::zoomed;
+
 mod actions;
 mod forum;
 mod jump;
@@ -27,7 +29,7 @@ pub(super) use select::TextSelection;
 pub(super) use threads::{NewPost, NewThread};
 
 use gpui::{
-    AnyElement, Context, ExternalPaths, FontWeight, SharedString, div, list, prelude::*, px,
+    AnyElement, Context, ExternalPaths, FontWeight, SharedString, div, list, prelude::*,
     rgb,
 };
 
@@ -81,7 +83,7 @@ impl Emerald {
 
         let has_topic = topic.is_some();
         let header = div()
-            .h(px(48.))
+            .h(zoomed(48.))
             .flex_none()
             .flex()
             .items_center()
@@ -95,10 +97,10 @@ impl Emerald {
                     user,
                     self.user_avatar(user),
                     24.,
-                    Some((self.people.presence(user), theme::BASE_LOWER)),
+                    Some((self.people.presence(user), theme::base_lower())),
                 )),
                 None if !icon.is_empty() => {
-                    header.child(icons::icon(icon, 24., theme::CHANNELS_DEFAULT))
+                    header.child(icons::icon(icon, 24., theme::channels_default()))
                 }
                 None => header,
             })
@@ -108,17 +110,17 @@ impl Emerald {
                     .items_center()
                     .gap_2()
                     .flex_none()
-                    .text_color(rgb(theme::TEXT_MUTED))
+                    .text_color(rgb(theme::text_muted()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(parent)
-                    .child(icons::icon(icons::CHEVRON, 12., theme::TEXT_MUTED).with_transformation(
+                    .child(icons::icon(icons::CHEVRON, 12., theme::text_muted()).with_transformation(
                         gpui::Transformation::rotate(gpui::radians(-std::f32::consts::FRAC_PI_2)),
                     ))
             }))
             .child(
                 div()
                     .flex_none()
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(title.clone()),
             )
@@ -128,17 +130,17 @@ impl Emerald {
                 div()
                     .flex()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .items_center()
                     .gap_2()
-                    .child(div().flex_none().w(px(1.)).h(px(24.)).bg(theme::border()))
+                    .child(div().flex_none().w(zoomed(1.)).h(zoomed(24.)).bg(theme::border()))
                     .child(
                         div()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .truncate()
-                            .text_size(px(14.))
-                            .text_color(rgb(theme::TEXT_MUTED))
+                            .text_size(zoomed(14.))
+                            .text_color(rgb(theme::text_muted()))
                             .child(topic),
                     )
             }))
@@ -212,12 +214,12 @@ impl Emerald {
             .size_full()
             .pb_4()
             // Discord's 1.375 line height, scaled with the chosen font size.
-            .text_size(px(self.settings.font_size))
-            .line_height(px((self.settings.font_size * 1.375).round()));
+            .text_size(zoomed(self.settings.font_size))
+            .line_height(zoomed((self.settings.font_size * 1.375).round()));
             div()
                 .relative()
                 .flex_1()
-                .min_h(px(0.))
+                .min_h(zoomed(0.))
                 .child(messages)
                 .children(self.render_unread_bar(cx))
                 .children(self.render_present_bar(cx))
@@ -232,8 +234,8 @@ impl Emerald {
             .px_4()
             .children(self.composer.error.clone().map(|error| {
                 div()
-                    .text_size(px(14.))
-                    .text_color(rgb(theme::FEEDBACK_CRITICAL))
+                    .text_size(zoomed(14.))
+                    .text_color(rgb(theme::feedback_critical()))
                     .child(error)
             }))
             .child(
@@ -253,18 +255,18 @@ impl Emerald {
                             .items_start()
                             .gap_1()
                             .children(self.render_plus_button(cx))
-                            .child(div().flex_1().min_w(px(0.)).child(self.composer.input.clone()))
+                            .child(div().flex_1().min_w(zoomed(0.)).child(self.composer.input.clone()))
                             .children(self.render_emoji_button(cx)),
                     ),
             )
             // Typing indicator in the strip under the input, as on Discord.
             .child(
                 div()
-                    .h(px(24.))
+                    .h(zoomed(24.))
                     .flex()
                     .items_center()
                     .text_xs()
-                    .text_color(rgb(theme::TEXT_DEFAULT))
+                    .text_color(rgb(theme::text_default()))
                     .children(self.typing_text()),
             );
 
@@ -273,7 +275,7 @@ impl Emerald {
             .flex()
             .flex_col()
             .flex_1()
-            .min_w(px(0.))
+            .min_w(zoomed(0.))
             .h_full()
             .drag_over::<ExternalPaths>(|style, _, _, _| style.bg(theme::hover()))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| this.on_drop_files(paths, cx)))
@@ -290,9 +292,9 @@ impl Emerald {
             .flex()
             .flex_col()
             .flex_1()
-            .min_w(px(0.))
+            .min_w(zoomed(0.))
             .h_full()
-            .bg(rgb(theme::BASE_LOWER))
+            .bg(rgb(theme::base_lower()))
             .border_l_1()
             .border_color(theme::border())
             .child(header)
@@ -300,7 +302,7 @@ impl Emerald {
                 div()
                     .flex()
                     .flex_1()
-                    .min_h(px(0.))
+                    .min_h(zoomed(0.))
                     .child(column)
                     .map(|row| match self.render_panel(cx) {
                         // A panel takes the place of the profile or member list.
@@ -353,7 +355,7 @@ impl Emerald {
 
     pub(super) fn author_style(&self, msg: &Msg) -> (SharedString, u32) {
         let (name, color) = self.member_style(msg.author_id, &msg.author);
-        (name, color.unwrap_or(theme::TEXT_STRONG))
+        (name, color.unwrap_or(theme::text_strong()))
     }
 }
 
@@ -367,7 +369,7 @@ fn header_toggle(
 ) -> impl IntoElement {
     div()
         .id(id)
-        .size(px(32.))
+        .size(zoomed(32.))
         .flex_none()
         .flex()
         .items_center()
@@ -376,6 +378,6 @@ fn header_toggle(
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .tooltip(widgets::tooltip(if open { hide } else { show }))
-        .child(icons::icon(icon, 24., if open { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+        .child(icons::icon(icon, 24., if open { theme::text_strong() } else { theme::interactive() }))
         .on_click(on_click)
 }

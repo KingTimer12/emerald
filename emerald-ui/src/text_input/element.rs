@@ -1,6 +1,7 @@
 //! The element that lays the text out, scrolls it and paints it with the cursor and selection.
 
 use super::*;
+use crate::zoom::zoomed;
 
 pub(super) struct TextElement {
     pub(super) input: Entity<TextInput>,
@@ -112,7 +113,7 @@ impl Element for TextElement {
 
         let selected_range = input.selected_range.clone();
         let (selection, cursor) = if selected_range.is_empty() {
-            let cursor = fill(Bounds::new(origin + cursor_at, size(px(2.), line_height)), theme::text());
+            let cursor = fill(Bounds::new(origin + cursor_at, size(zoomed(2.), line_height)), theme::text());
             (Vec::new(), Some(cursor))
         } else {
             let quads = layout

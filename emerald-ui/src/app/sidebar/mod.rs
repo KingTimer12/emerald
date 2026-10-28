@@ -3,7 +3,7 @@
 //! The server list, with its folders, is in [`servers`].
 
 use gpui::{
-    AnyElement, Context, FontWeight, MouseButton, SharedString, Transformation, div, img, prelude::*, px, radians, rgb,
+    AnyElement, Context, FontWeight, MouseButton, SharedString, Transformation, div, img, prelude::*, radians, rgb,
     uniform_list,
 };
 
@@ -15,6 +15,7 @@ use super::state::{ChannelRow, Row, Space};
 use emerald_discord::model::Snowflake;
 use super::activity::activity_text;
 use super::{Emerald, widgets};
+use crate::zoom::zoomed;
 
 /// Height of the floating user panel plus its margins; lists pad by this.
 pub(super) const PANEL_CLEARANCE: f32 = 72.;
@@ -27,7 +28,7 @@ impl Emerald {
         let space = self.spaces.current();
         let dms = space.is_dms();
         let header = div()
-            .h(px(48.))
+            .h(zoomed(48.))
             .flex_none()
             .flex()
             .items_center()
@@ -40,10 +41,10 @@ impl Emerald {
             header
                 .px_4()
                 .gap_1()
-                .text_color(rgb(theme::TEXT_STRONG))
+                .text_color(rgb(theme::text_strong()))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(div().flex_1().min_w(px(0.)).truncate().child(space.name.clone()))
-                .child(icon(icons::CHEVRON, 18., theme::INTERACTIVE))
+                .child(div().flex_1().min_w(zoomed(0.)).truncate().child(space.name.clone()))
+                .child(icon(icons::CHEVRON, 18., theme::interactive()))
         };
         let visible = self.visible_rows(cx);
         let searching = dms && visible.is_empty() && !self.dm_search.read(cx).text().trim().is_empty();
@@ -51,7 +52,7 @@ impl Emerald {
         div()
             .flex()
             .flex_col()
-            .w(px(240.))
+            .w(zoomed(240.))
             .h_full()
             .flex_none()
             .child(header)
@@ -59,7 +60,7 @@ impl Emerald {
                 sidebar.child(
                     div()
                         .p_4()
-                        .text_size(px(14.))
+                        .text_size(zoomed(14.))
                         .text_color(theme::muted())
                         .child(t!("dm.no_results")),
                 )
@@ -76,7 +77,7 @@ impl Emerald {
                 )
                 .flex_1()
                 .pt_2()
-                .pb(px(PANEL_CLEARANCE)),
+                .pb(zoomed(PANEL_CLEARANCE)),
             )
     }
 
@@ -87,9 +88,9 @@ impl Emerald {
         let height = if self.spaces.current().is_dms() { 42. } else { 34. };
         div()
             .w_full()
-            .h(px(height))
+            .h(zoomed(height))
             .px_2()
-            .py(px(1.))
+            .py(zoomed(1.))
             .child(self.render_channel_row_body(ix, cx))
             .into_any_element()
     }
@@ -100,26 +101,26 @@ impl Emerald {
             Row::Friends => {
                 let selected = self.friends_open;
                 let pending = self.people.incoming_requests();
-                let color = if selected { theme::TEXT_STRONG } else { theme::CHANNELS_DEFAULT };
+                let color = if selected { theme::text_strong() } else { theme::channels_default() };
                 row.group("friends-row")
                     .gap_3()
                     .rounded_lg()
                     .cursor_pointer()
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::CHANNELS_DEFAULT }))
+                    .text_color(rgb(if selected { theme::text_strong() } else { theme::channels_default() }))
                     .when(selected, |r| r.bg(theme::selected()))
                     .when(!selected, |r| {
-                        r.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
+                        r.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::text_strong())))
                     })
                     // Icon in a 32px slot so it lines up with the DM avatars.
                     .child(
                         div()
                             .flex_none()
-                            .w(px(32.))
+                            .w(zoomed(32.))
                             .flex()
                             .justify_center()
                             .child(icon(icons::FRIENDS, 24., color).group_hover("friends-row", |s| {
-                                s.text_color(rgb(theme::TEXT_STRONG))
+                                s.text_color(rgb(theme::text_strong()))
                             })),
                     )
                     .child(div().flex_1().child(t!("friends.title")))
@@ -140,20 +141,20 @@ impl Emerald {
                 row.group(group.clone())
                     .items_end()
                     .gap_1()
-                    .pb(px(4.))
-                    .text_size(px(12.))
+                    .pb(zoomed(4.))
+                    .text_size(zoomed(12.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme::CHANNELS_DEFAULT))
-                    .hover(|s| s.text_color(rgb(theme::TEXT_DEFAULT)))
+                    .text_color(rgb(theme::channels_default()))
+                    .hover(|s| s.text_color(rgb(theme::text_default())))
                     .child(div().truncate().child(title.clone()))
                     .when(category.is_none() && self.spaces.current().is_dms(), |row| row.child(self.new_dm_button(cx)))
                     .when_some(category, |row, category| {
                         // Chevron after the name, pointing right when collapsed.
                         row.cursor_pointer()
                             .child(
-                                div().pb(px(1.)).child(
-                                    icon(icons::CHEVRON, 12., theme::CHANNELS_DEFAULT)
-                                        .group_hover(group, |s| s.text_color(rgb(theme::TEXT_DEFAULT)))
+                                div().pb(zoomed(1.)).child(
+                                    icon(icons::CHEVRON, 12., theme::channels_default())
+                                        .group_hover(group, |s| s.text_color(rgb(theme::text_default())))
                                         .when(collapsed, |chevron| {
                                             chevron.with_transformation(Transformation::rotate(radians(
                                                 -std::f32::consts::FRAC_PI_2,
@@ -201,56 +202,56 @@ impl Emerald {
                 let mentions = self.reads.mentions(id);
                 let forbidden = self.history.is_forbidden(id);
                 let (color, icon_color) = if forbidden || (muted && !selected) {
-                    (theme::INTERACTIVE_MUTED, theme::INTERACTIVE_MUTED)
+                    (theme::interactive_muted(), theme::interactive_muted())
                 } else if selected || unread {
-                    (theme::TEXT_STRONG, theme::CHANNELS_DEFAULT)
+                    (theme::text_strong(), theme::channels_default())
                 } else {
-                    (theme::CHANNELS_DEFAULT, theme::CHANNELS_DEFAULT)
+                    (theme::channels_default(), theme::channels_default())
                 };
                 row.relative()
-                    .gap(px(6.))
+                    .gap(zoomed(6.))
                     .rounded_lg()
                     .cursor_pointer()
                     .font_weight(if unread { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
                     .text_color(rgb(color))
                     .when(selected, |r| r.bg(theme::selected()))
                     .when(!selected && !forbidden, |r| {
-                        r.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
+                        r.hover(|s| s.bg(theme::hover()).text_color(rgb(theme::text_strong())))
                     })
                     .when(unread && !selected, |r| {
                         // Unread marker hugging the sidebar's left edge.
                         r.child(
                             div()
                                 .absolute()
-                                .left(px(-8.))
-                                .top(px(13.))
-                                .w(px(4.))
-                                .h(px(8.))
-                                .rounded_r(px(4.))
-                                .bg(rgb(theme::TEXT_STRONG)),
+                                .left(zoomed(-8.))
+                                .top(zoomed(13.))
+                                .w(zoomed(4.))
+                                .h(zoomed(8.))
+                                .rounded_r(zoomed(4.))
+                                .bg(rgb(theme::text_strong())),
                         )
                     })
                     .map(|r| match user {
                         // Threads hang under their channel, without an icon,
                         // from a line like the web client's.
-                        _ if thread => r.w_auto().ml(px(26.)).text_size(px(15.)).child(
+                        _ if thread => r.w_auto().ml(zoomed(26.)).text_size(zoomed(15.)).child(
                             div()
                                 .absolute()
-                                .left(px(-14.))
-                                .top(px(-6.))
-                                .w(px(12.))
-                                .h(px(22.))
+                                .left(zoomed(-14.))
+                                .top(zoomed(-6.))
+                                .w(zoomed(12.))
+                                .h(zoomed(22.))
                                 .border_l_1()
                                 .border_b_1()
-                                .rounded_bl(px(8.))
-                                .border_color(rgb(theme::INTERACTIVE_MUTED)),
+                                .rounded_bl(zoomed(8.))
+                                .border_color(rgb(theme::interactive_muted())),
                         ),
                         Some(user) => r.gap_3().child(widgets::avatar(
                             name,
                             user,
                             self.user_avatar(user),
                             32.,
-                            Some((self.people.presence(user), theme::BASE_LOWEST)),
+                            Some((self.people.presence(user), theme::base_lowest())),
                         )),
                         None => match picture {
                             Some(url) => r.gap_3().child(self.group_picture(url)),
@@ -261,34 +262,34 @@ impl Emerald {
                         // Group DMs say how many are in them under the name.
                         Some(count) => div()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .flex()
                             .flex_col()
-                            .child(div().truncate().line_height(px(18.)).child(name.clone()))
+                            .child(div().truncate().line_height(zoomed(18.)).child(name.clone()))
                             .child(
                                 div()
                                     .text_xs()
                                     .font_weight(FontWeight::NORMAL)
-                                    .text_color(rgb(theme::CHANNELS_DEFAULT))
+                                    .text_color(rgb(theme::channels_default()))
                                     .child(t!("group.member_count", count = count)),
                             ),
                         // A friend's custom status or game, under their name.
                         None => match user.and_then(|u| activity_text(self.people.activities(u))) {
                             Some(activity) => div()
                                 .flex_1()
-                                .min_w(px(0.))
+                                .min_w(zoomed(0.))
                                 .flex()
                                 .flex_col()
-                                .child(div().truncate().line_height(px(18.)).child(name.clone()))
+                                .child(div().truncate().line_height(zoomed(18.)).child(name.clone()))
                                 .child(
                                     div()
                                         .truncate()
                                         .text_xs()
                                         .font_weight(FontWeight::NORMAL)
-                                        .text_color(rgb(theme::CHANNELS_DEFAULT))
+                                        .text_color(rgb(theme::channels_default()))
                                         .child(activity),
                                 ),
-                            None => div().flex_1().min_w(px(0.)).truncate().child(name.clone()),
+                            None => div().flex_1().min_w(zoomed(0.)).truncate().child(name.clone()),
                         },
                     })
                     .when(mentions > 0 && !selected, |r| r.child(widgets::badge(mentions as usize)))

@@ -8,7 +8,7 @@ mod render;
 
 use std::time::{Duration, Instant};
 
-use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px, relative, rgb};
+use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, relative, rgb};
 
 use super::super::text_input::MenuKey;
 use super::super::{emoji, icons, theme};

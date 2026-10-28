@@ -1,6 +1,7 @@
 //! Pieces of a message row: the reply line, the body, thread chips, stickers, system lines and day separators.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// Discord's reply line: a curved connector into the avatar column, then
@@ -14,19 +15,19 @@ impl Emerald {
             .flex()
             .items_center()
             .gap_1()
-            .pl(px(20.))
-            .h(px(22.))
-            .text_size(px(14.));
+            .pl(zoomed(20.))
+            .h(zoomed(22.))
+            .text_size(zoomed(14.));
         let connector = div()
             .flex_none()
-            .w(px(32.))
-            .h(px(10.))
-            .mt(px(8.))
+            .w(zoomed(32.))
+            .h(zoomed(10.))
+            .mt(zoomed(8.))
             .mr_1()
             .border_l_2()
             .border_t_2()
-            .rounded_tl(px(6.))
-            .border_color(rgb(theme::INTERACTIVE_MUTED));
+            .rounded_tl(zoomed(6.))
+            .border_color(rgb(theme::interactive_muted()));
         let Some(content) = &reply.content else {
             return line.child(connector).child(
                 div()
@@ -54,13 +55,13 @@ impl Emerald {
                 div()
                     .flex_none()
                     .font_weight(FontWeight::MEDIUM)
-                    .text_color(rgb(color.unwrap_or(theme::TEXT_STRONG)))
+                    .text_color(rgb(color.unwrap_or(theme::text_strong())))
                     .child(format!("@{name}")),
             )
             .child(
                 div()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .truncate()
                     .text_color(theme::muted())
                     // Brighter on hover, as the web client hints the link.
@@ -74,7 +75,7 @@ impl Emerald {
             .flex()
             .flex_col()
             .gap_1()
-            .min_w(px(0.))
+            .min_w(zoomed(0.))
             .text_color(if msg.pending { theme::muted() } else { theme::text() })
             .map(|body| {
                 if self.is_editing(msg) {
@@ -117,7 +118,7 @@ impl Emerald {
         let opened = thread.clone();
         div()
             .id(("thread-chip", ix))
-            .max_w(px(432.))
+            .max_w(zoomed(432.))
             .flex()
             .items_center()
             .gap_2()
@@ -125,15 +126,15 @@ impl Emerald {
             .py_2()
             .rounded_lg()
             .cursor_pointer()
-            .bg(rgb(theme::BASE_LOW))
-            .hover(|s| s.bg(rgb(theme::SURFACE_HIGH)))
-            .child(icons::icon(icons::THREAD, 18., theme::INTERACTIVE))
-            .child(div().min_w(px(0.)).truncate().font_weight(FontWeight::SEMIBOLD).child(name))
+            .bg(rgb(theme::base_low()))
+            .hover(|s| s.bg(rgb(theme::surface_high())))
+            .child(icons::icon(icons::THREAD, 18., theme::interactive()))
+            .child(div().min_w(zoomed(0.)).truncate().font_weight(FontWeight::SEMIBOLD).child(name))
             .child(
                 div()
                     .flex_none()
-                    .text_size(px(14.))
-                    .text_color(rgb(theme::LINK))
+                    .text_size(zoomed(14.))
+                    .text_color(rgb(theme::link()))
                     .child(t!("thread.messages", count = count)),
             )
             .on_click(cx.listener(move |this, _, window, cx| this.open_thread(opened.clone(), window, cx)))
@@ -147,16 +148,16 @@ impl Emerald {
             Some(url) if sticker.lottie => self.images.animation(url, &*self.net).and_then(|player| {
                 self.animating.set(true);
                 let frame = player.frame(self.animation_clock.elapsed())?;
-                Some(img(frame).size(px(size)).into_any_element())
+                Some(img(frame).size(zoomed(size)).into_any_element())
             }),
-            Some(url) => self.avatar_image(url).map(|image| img(image).size(px(size)).into_any_element()),
+            Some(url) => self.avatar_image(url).map(|image| img(image).size(zoomed(size)).into_any_element()),
             None => None,
         };
         // Unknown formats, and stickers still downloading: a card with the
         // sticker's name in its place.
         shown.unwrap_or_else(|| {
             div()
-                        .size(px(size))
+                        .size(zoomed(size))
                         .rounded_lg()
                         .bg(theme::hover())
                         .flex()
@@ -164,7 +165,7 @@ impl Emerald {
                         .items_center()
                         .justify_center()
                         .gap_1()
-                        .text_size(px(14.))
+                        .text_size(zoomed(14.))
                         .text_color(theme::muted())
                         .child(div().text_xs().child(t!("chat.sticker")))
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(sticker.name.clone()))
@@ -185,15 +186,15 @@ pub(super) fn system_text(kind: u8, author: &str) -> Option<String> {
 
 /// "19 de outubro de 2026" between two hairlines.
 pub(super) fn day_separator(label: String) -> Div {
-    let line = || div().flex_1().h(px(1.)).bg(theme::border());
+    let line = || div().flex_1().h(zoomed(1.)).bg(theme::border());
     div()
         .w_full()
         .flex()
         .items_center()
         .gap_1()
         .px_4()
-        .mt(px(24.))
-        .mb(px(8.))
+        .mt(zoomed(24.))
+        .mb(zoomed(8.))
         .child(line())
         .child(
             div()
@@ -213,8 +214,8 @@ pub(in super::super::super) fn spoiler_pill() -> gpui::Div {
         .py_1()
         .rounded_full()
         .bg(theme::scrim())
-        .text_size(px(14.))
+        .text_size(zoomed(14.))
         .font_weight(FontWeight::BOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .child(t!("chat.spoiler"))
 }

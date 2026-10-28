@@ -4,13 +4,14 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use gpui::{AnyElement, ClipboardItem, Context, FontWeight, MouseButton, SharedString, div, img, prelude::*, px, rgb};
+use gpui::{AnyElement, ClipboardItem, Context, FontWeight, MouseButton, SharedString, div, img, prelude::*, rgb};
 
 use super::super::{markdown, theme};
 use super::widgets::{self, ButtonKind};
 use super::{Emerald, Overlay};
 use emerald_discord::model::{Invite, Snowflake};
 use emerald_discord::{Action, Command};
+use crate::zoom::zoomed;
 
 /// Cards under one message, at most.
 const CARDS_PER_MESSAGE: usize = 3;
@@ -102,7 +103,7 @@ impl Emerald {
             .child(
                 div()
                     .id("invite-modal")
-                    .w(px(440.))
+                    .w(zoomed(440.))
                     .flex()
                     .flex_col()
                     .gap_3()
@@ -110,16 +111,16 @@ impl Emerald {
                     .rounded_lg()
                     .border_1()
                     .border_color(theme::border())
-                    .bg(rgb(theme::SURFACE_HIGH))
+                    .bg(rgb(theme::surface_high()))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
-                            .text_size(px(20.))
+                            .text_size(zoomed(20.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .child(title),
                     )
-                    .child(div().text_size(px(14.)).text_color(theme::muted()).child(format!("# {channel}")))
+                    .child(div().text_size(zoomed(14.)).text_color(theme::muted()).child(format!("# {channel}")))
                     .child(widgets::label(t!("invite.link_label")))
                     .child(
                         div()
@@ -129,11 +130,11 @@ impl Emerald {
                             .p_1()
                             .pl_3()
                             .rounded_md()
-                            .bg(rgb(theme::BASE_LOWEST))
-                            .child(div().flex_1().min_w(px(0.)).truncate().text_color(rgb(theme::TEXT_DEFAULT)).child(link.clone()))
+                            .bg(rgb(theme::base_lowest()))
+                            .child(div().flex_1().min_w(zoomed(0.)).truncate().text_color(rgb(theme::text_default())).child(link.clone()))
                             .child(
                                 widgets::button("invite-copy", copy_label, if modal.copied { ButtonKind::Positive } else { ButtonKind::Brand })
-                                    .h(px(32.))
+                                    .h(zoomed(32.))
                                     .when(!ready, |b| b.opacity(0.5))
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if !ready {
@@ -147,7 +148,7 @@ impl Emerald {
                                     })),
                             ),
                     )
-                    .children(error.map(|error| div().text_size(px(14.)).text_color(rgb(theme::FEEDBACK_CRITICAL)).child(error)))
+                    .children(error.map(|error| div().text_size(zoomed(14.)).text_color(rgb(theme::feedback_critical())).child(error)))
                     .child(div().text_xs().text_color(theme::muted()).child(t!("invite.expires"))),
             )
             .into_any_element()
@@ -168,14 +169,14 @@ impl Emerald {
     fn render_invite_card(&self, code: &str, message: Snowflake, id: usize, cx: &mut Context<Self>) -> AnyElement {
         let found = self.invite_cards.get(code, &*self.net);
         let card = div()
-            .w(px(432.))
+            .w(zoomed(432.))
             .max_w_full()
             .flex()
             .flex_col()
             .gap_3()
             .p_4()
             .rounded_lg()
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .border_1()
             .border_color(theme::border())
             .child(widgets::label(t!("invite.card_title")));
@@ -185,7 +186,7 @@ impl Emerald {
         };
         let Some((invite, guild)) = guild else {
             return card
-                .child(div().font_weight(FontWeight::SEMIBOLD).text_color(rgb(theme::FEEDBACK_CRITICAL)).child(t!("invite.invalid")))
+                .child(div().font_weight(FontWeight::SEMIBOLD).text_color(rgb(theme::feedback_critical())).child(t!("invite.invalid")))
                 .into_any_element();
         };
         let joined = self.spaces.index(guild.id).is_some();
@@ -203,7 +204,7 @@ impl Emerald {
                 .gap_3()
                 .child(
                     div()
-                        .size(px(50.))
+                        .size(zoomed(50.))
                         .flex_none()
                         .rounded_xl()
                         .overflow_hidden()
@@ -213,16 +214,16 @@ impl Emerald {
                         .justify_center()
                         .map(|tile| match icon {
                             Some(image) => tile.child(img(image).size_full()),
-                            None => tile.text_color(rgb(theme::TEXT_STRONG)).child(name.chars().next().unwrap_or('?').to_string()),
+                            None => tile.text_color(rgb(theme::text_strong())).child(name.chars().next().unwrap_or('?').to_string()),
                         }),
                 )
                 .child(
                     div()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .flex()
                         .flex_col()
-                        .child(div().truncate().font_weight(FontWeight::SEMIBOLD).text_color(rgb(theme::TEXT_STRONG)).child(name))
+                        .child(div().truncate().font_weight(FontWeight::SEMIBOLD).text_color(rgb(theme::text_strong())).child(name))
                         .children(counts.map(|counts| div().text_xs().text_color(theme::muted()).child(counts))),
                 )
                 .child(

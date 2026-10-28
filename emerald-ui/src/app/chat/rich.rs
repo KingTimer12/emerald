@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, Bounds, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, SharedString,
-    StrikethroughStyle, StyledText, TextLayout, UnderlineStyle, canvas, div, point, prelude::*, px, rgb, rgba, size,
+    StrikethroughStyle, StyledText, TextLayout, UnderlineStyle, canvas, div, point, prelude::*, rgb, rgba, size,
 };
 
 use super::super::super::markdown::{self, Block, Mention, Rich, Style, TextKind};

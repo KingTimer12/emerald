@@ -10,13 +10,9 @@ mod login;
 
 use emerald_core::{i18n, paths};
 use emerald_discord as discord;
+use emerald_notify::TrayAction;
 use emerald_ui::settings;
-use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, TitlebarOptions, WindowBounds,
-    WindowOptions, actions, px, size,
-};
-
-actions!(emerald, [Quit]);
+use gpui::{App, AppContext, Application, TitlebarOptions, WindowOptions};
 
 /// Child mode (see `login`): runs one webview flow, prints its result and
 /// exits before any gpui / NSApplication setup in this process.
@@ -81,26 +77,22 @@ fn main() {
     let (events, commands) = discord::spawn(token, settings.status);
 
     Application::new().with_assets(emerald_ui::Icons).run(move |cx: &mut App| {
-        emerald_ui::text_input::bind_keys(cx);
-        emerald_ui::bind_keys(cx);
-        cx.bind_keys([
-            KeyBinding::new("secondary-q", Quit, None),
-            KeyBinding::new("secondary-shift-l", emerald_ui::Logout, None),
-        ]);
-        cx.on_action(|_: &Quit, cx| {
+        emerald_ui::bind_keys(cx, &settings.shortcuts);
+        cx.on_action(|_: &emerald_ui::Quit, cx| {
             tracing::info!("quitting");
             cx.quit()
         });
 
         // Before the window opens, so the taskbar groups it under the
         // notifications' app id.
+        let window_bounds = emerald_ui::initial_bounds(&settings, cx);
         let alerts = alerts::DesktopAlerts::new();
         let clicks = alerts.clicks();
-        let bounds = Bounds::centered(None, size(px(1200.), px(780.)), cx);
+        let tray_actions = alerts.tray_actions();
         let window = cx
             .open_window(
                 WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_bounds: Some(window_bounds),
                     titlebar: Some(TitlebarOptions {
                         title: Some("Emerald".into()),
                         ..Default::default()
@@ -127,6 +119,26 @@ fn main() {
                     view.open_notified(channel, window, cx);
                 });
                 if alive.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
+
+        // The menu bar item: show the window, or quit the way Cmd+Q does.
+        cx.spawn(async move |cx| {
+            while let Ok(action) = tray_actions.recv().await {
+                let alive = match action {
+                    TrayAction::Show => window.update(cx, |_, window, _| window.activate_window()).is_ok(),
+                    TrayAction::Quit => {
+                        cx.update(|cx| {
+                            tracing::info!("quitting");
+                            cx.quit()
+                        })
+                        .is_ok()
+                    }
+                };
+                if !alive {
                     break;
                 }
             }

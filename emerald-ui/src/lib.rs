@@ -11,13 +11,15 @@ mod emoji;
 mod icons;
 mod lottie;
 mod markdown;
+mod shortcuts;
 pub mod settings;
 pub mod text_input;
 mod theme;
 mod time;
+mod zoom;
 
-pub use app::{Alerts, Emerald, bind_keys};
+pub use app::{Alerts, Emerald, initial_bounds};
 pub use icons::Icons;
 pub use time::set_time_format;
 
-gpui::actions!(emerald, [Logout]);
+pub use shortcuts::{Logout, Quit, Shortcut, bind as bind_keys, describe as describe_key};

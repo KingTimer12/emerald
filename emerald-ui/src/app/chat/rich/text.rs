@@ -1,6 +1,7 @@
 //! One run of styled text: spoilers, links, mentions, selection and animated emoji painted over it.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// The selection over piece `part` of `message`, if it holds one.
@@ -22,7 +23,7 @@ impl Emerald {
                 .items_end()
                 .gap_1()
                 .child(text)
-                .child(div().pb_1().text_color(rgb(theme::TEXT_MUTED)).child(note.to_owned()))
+                .child(div().pb_1().text_color(rgb(theme::text_muted())).child(note.to_owned()))
                 .into_any_element(),
             None => text,
         }
@@ -110,7 +111,7 @@ impl Emerald {
                 .into_any_element()
         };
         let layer = selectable.map(|s| select::selection_layer(s, text, layout.clone()));
-        let animate = self.window_active;
+        let animate = self.animates();
         let emojis: Vec<_> = rich
             .emojis
             .into_iter()
@@ -131,7 +132,7 @@ impl Emerald {
         let elapsed = self.animation_clock.elapsed();
         div()
             .relative()
-            .when(jumbo, |text| text.text_size(px(JUMBO * 0.8)).line_height(px(JUMBO + 4.)))
+            .when(jumbo, |text| text.text_size(zoomed(JUMBO * 0.8)).line_height(zoomed(JUMBO + 4.)))
             .children(layer)
             .child(shown)
             .child(
@@ -215,7 +216,7 @@ pub(super) fn emoji_bounds(layout: &TextLayout, range: Range<usize>, jumbo: bool
     let start = layout.position_for_index(range.start)?;
     let end = layout.position_for_index(range.end)?;
     let line = layout.line_height();
-    let side = if jumbo { px(JUMBO) } else { line * 1.1 };
+    let side = if jumbo { zoomed(JUMBO) } else { line * 1.1 };
     // A room split by wrapping shows the emoji where it starts.
     let room = if end.y == start.y { end.x - start.x } else { side };
     let origin = point(start.x + (room - side) / 2., start.y + (line - side) / 2.);

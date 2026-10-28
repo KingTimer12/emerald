@@ -4,22 +4,23 @@ use std::sync::Arc;
 
 use gpui::{
     AnyView, App, Context, Div, ElementId, FontWeight, Image, SharedString, Stateful, Window, div,
-    img, prelude::*, px, rgb,
+    img, prelude::*, rgb,
 };
 
 use super::super::{icons, theme};
 use super::Feedback;
 use emerald_discord::model::Snowflake;
+use crate::zoom::zoomed;
 
 /// Discord's default avatar colors, picked by user id.
 const AVATAR_COLORS: [u32; 6] = [0x5865f2, 0x3ba55c, 0xfaa61a, 0xed4245, 0xeb459e, 0x747f8d];
 
 pub fn status_color(status: &str) -> u32 {
     match status {
-        "online" => theme::ONLINE,
-        "idle" => theme::IDLE,
-        "dnd" => theme::DANGER,
-        _ => theme::OFFLINE,
+        "online" => theme::online(),
+        "idle" => theme::idle(),
+        "dnd" => theme::danger(),
+        _ => theme::offline(),
     }
 }
 
@@ -57,15 +58,15 @@ pub fn avatar(
     div()
         .relative()
         .flex_none()
-        .size(px(size))
+        .size(zoomed(size))
         .rounded_full()
         .bg(rgb(color))
         .flex()
         .items_center()
         .justify_center()
-        .text_size(px((size * 0.45).round()))
+        .text_size(zoomed((size * 0.45).round()))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .map(|avatar| match image {
             // The id keeps an animated avatar's frame between redraws;
             // still ones cost nothing more.
@@ -76,9 +77,9 @@ pub fn avatar(
             avatar.child(
                 div()
                     .absolute()
-                    .right(px(-2.))
-                    .bottom(px(-2.))
-                    .size(px(dot))
+                    .right(zoomed(-2.))
+                    .bottom(zoomed(-2.))
+                    .size(zoomed(dot))
                     .rounded_full()
                     .border_2()
                     .border_color(rgb(ring))
@@ -88,7 +89,7 @@ pub fn avatar(
                     .justify_center()
                     // Offline is a hollow ring, as on Discord.
                     .when(!matches!(status, "online" | "idle" | "dnd"), |ring_dot| {
-                        ring_dot.child(div().size(px(((dot - 4.) * 0.5).max(2.))).rounded_full().bg(rgb(ring)))
+                        ring_dot.child(div().size(zoomed(((dot - 4.) * 0.5).max(2.))).rounded_full().bg(rgb(ring)))
                     }),
             )
         })
@@ -98,17 +99,17 @@ pub fn avatar(
 pub fn badge(count: usize) -> Div {
     div()
         .flex_none()
-        .min_w(px(16.))
-        .h(px(16.))
+        .min_w(zoomed(16.))
+        .h(zoomed(16.))
         .px_1()
         .rounded_full()
-        .bg(rgb(theme::BUTTON_DANGER))
+        .bg(rgb(theme::button_danger()))
         .flex()
         .items_center()
         .justify_center()
         .text_xs()
         .font_weight(FontWeight::BOLD)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .child(count.to_string())
 }
 
@@ -122,24 +123,24 @@ pub enum ButtonKind {
 
 pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: ButtonKind) -> Stateful<Div> {
     let (bg, hover) = match kind {
-        ButtonKind::Brand => (rgb(theme::BRAND), rgb(theme::BUTTON_BRAND_HOVER)),
+        ButtonKind::Brand => (rgb(theme::brand()), rgb(theme::button_brand_hover())),
         ButtonKind::Secondary => (theme::hover(), theme::active()),
-        ButtonKind::Positive => (rgb(theme::BUTTON_POSITIVE), rgb(theme::BUTTON_POSITIVE_HOVER)),
-        ButtonKind::Danger => (rgb(theme::BUTTON_DANGER), rgb(theme::BUTTON_DANGER_HOVER)),
+        ButtonKind::Positive => (rgb(theme::button_positive()), rgb(theme::button_positive_hover())),
+        ButtonKind::Danger => (rgb(theme::button_danger()), rgb(theme::button_danger_hover())),
     };
     div()
         .id(id)
         .flex_none()
-        .h(px(38.))
+        .h(zoomed(38.))
         .px_4()
         .flex()
         .items_center()
         .justify_center()
         .rounded_lg()
         .bg(bg)
-        .text_size(px(14.))
+        .text_size(zoomed(14.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(rgb(theme::TEXT_STRONG))
+        .text_color(rgb(theme::text_strong()))
         .cursor_pointer()
         .hover(move |s| s.bg(hover))
         .child(label.into())
@@ -152,11 +153,11 @@ pub fn link_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> 
         .flex_none()
         .px_2()
         .py_1()
-        .text_size(px(14.))
+        .text_size(zoomed(14.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(rgb(theme::INTERACTIVE))
+        .text_color(rgb(theme::interactive()))
         .cursor_pointer()
-        .hover(|s| s.text_color(rgb(theme::TEXT_STRONG)))
+        .hover(|s| s.text_color(rgb(theme::text_strong())))
         .child(label.into())
 }
 
@@ -164,15 +165,15 @@ pub fn icon_button(id: impl Into<ElementId>, glyph: &'static str) -> Stateful<Di
     div()
         .id(id)
         .flex_none()
-        .size(px(32.))
+        .size(zoomed(32.))
         .flex()
         .items_center()
         .justify_center()
         .rounded_md()
-        .text_size(px(18.))
-        .text_color(rgb(theme::INTERACTIVE))
+        .text_size(zoomed(18.))
+        .text_color(rgb(theme::interactive()))
         .cursor_pointer()
-        .hover(|s| s.bg(theme::hover()).text_color(rgb(theme::TEXT_STRONG)))
+        .hover(|s| s.bg(theme::hover()).text_color(rgb(theme::text_strong())))
         .child(glyph)
 }
 
@@ -183,7 +184,7 @@ pub fn svg_button(id: &'static str, path: &'static str) -> Stateful<Div> {
         .id(id)
         .group(id)
         .flex_none()
-        .size(px(32.))
+        .size(zoomed(32.))
         .flex()
         .items_center()
         .justify_center()
@@ -191,8 +192,8 @@ pub fn svg_button(id: &'static str, path: &'static str) -> Stateful<Div> {
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .child(
-            icons::icon(path, 20., theme::INTERACTIVE)
-                .group_hover(id, |s| s.text_color(rgb(theme::TEXT_STRONG))),
+            icons::icon(path, 20., theme::interactive())
+                .group_hover(id, |s| s.text_color(rgb(theme::text_strong()))),
         )
 }
 
@@ -201,17 +202,17 @@ pub fn label(text: impl Into<SharedString>) -> Div {
     div()
         .text_xs()
         .font_weight(FontWeight::BOLD)
-        .text_color(rgb(theme::TEXT_MUTED))
+        .text_color(rgb(theme::text_muted()))
         .child(text.into())
 }
 
 pub fn feedback(feedback: &Feedback) -> Div {
     div()
-        .text_size(px(14.))
+        .text_size(zoomed(14.))
         .text_color(rgb(if feedback.ok {
-            theme::FEEDBACK_POSITIVE
+            theme::feedback_positive()
         } else {
-            theme::FEEDBACK_CRITICAL
+            theme::feedback_critical()
         }))
         .child(feedback.text.clone())
 }
@@ -222,19 +223,19 @@ pub fn toggle(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
         .id(id)
         .relative()
         .flex_none()
-        .w(px(40.))
-        .h(px(24.))
+        .w(zoomed(40.))
+        .h(zoomed(24.))
         .rounded_full()
-        .bg(rgb(if on { theme::BRAND } else { theme::INTERACTIVE_MUTED }))
+        .bg(rgb(if on { theme::brand() } else { theme::interactive_muted() }))
         .cursor_pointer()
         .child(
             div()
                 .absolute()
-                .top(px(3.))
-                .left(px(if on { 19. } else { 3. }))
-                .size(px(18.))
+                .top(zoomed(3.))
+                .left(zoomed(if on { 19. } else { 3. }))
+                .size(zoomed(18.))
                 .rounded_full()
-                .bg(rgb(theme::TEXT_STRONG)),
+                .bg(rgb(theme::text_strong())),
         )
 }
 
@@ -245,15 +246,15 @@ impl Render for Tooltip {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
             .px_3()
-            .py(px(6.))
+            .py(zoomed(6.))
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
-            .text_size(px(14.))
-            .line_height(px(18.))
+            .bg(rgb(theme::surface_high()))
+            .text_size(zoomed(14.))
+            .line_height(zoomed(18.))
             .font_weight(FontWeight::MEDIUM)
-            .text_color(rgb(theme::TEXT_DEFAULT))
+            .text_color(rgb(theme::text_default()))
             .child(self.0.clone())
     }
 }

@@ -1,6 +1,7 @@
 //! The full profile, opened over the window from a name or an avatar.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(in super::super) fn render_profile_modal(
@@ -30,14 +31,14 @@ impl Emerald {
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgb(theme::TEXT_MUTED))
+                                .text_color(rgb(theme::text_muted()))
                                 .child(kind.clone()),
                         )
                         .child(
                             div()
-                                .text_size(px(14.))
+                                .text_size(zoomed(14.))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(theme::TEXT_STRONG))
+                                .text_color(rgb(theme::text_strong()))
                                 .child(name.clone()),
                         )
                 })),
@@ -49,18 +50,18 @@ impl Emerald {
                 t!("profile.roles"),
                 div().flex().flex_wrap().gap_1().children(card.roles.iter().map(|(name, color)| {
                     // Roles without a color are drawn grey, like Discord does.
-                    let color = if *color == 0 { theme::INTERACTIVE_MUTED } else { *color };
+                    let color = if *color == 0 { theme::interactive_muted() } else { *color };
                     div()
                         .flex()
                         .items_center()
                         .gap_1()
                         .px_2()
-                        .py(px(2.))
+                        .py(zoomed(2.))
                         .rounded_md()
                         .bg(theme::hover())
-                        .text_size(px(12.))
-                        .text_color(rgb(theme::TEXT_DEFAULT))
-                        .child(div().size(px(10.)).flex_none().rounded_full().bg(rgb(color)))
+                        .text_size(zoomed(12.))
+                        .text_color(rgb(theme::text_default()))
+                        .child(div().size(zoomed(10.)).flex_none().rounded_full().bg(rgb(color)))
                         .child(name.clone())
                 })),
             )
@@ -86,14 +87,14 @@ impl Emerald {
                 div()
                     .id("profile-modal")
                     .relative()
-                    .w(px(600.))
+                    .w(zoomed(600.))
                     .flex()
                     .flex_col()
                     .rounded_lg()
                     .overflow_hidden()
                     .border_1()
                     .border_color(theme::border())
-                    .bg(rgb(theme::BASE_LOWEST))
+                    .bg(rgb(theme::base_lowest()))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(self.banner(&card, BANNER))
                     .child(
@@ -110,7 +111,7 @@ impl Emerald {
                     .child(
                         div()
                             .absolute()
-                            .top(px(BANNER - AVATAR / 2. - RING))
+                            .top(zoomed(BANNER - AVATAR / 2. - RING))
                             .left_6()
                             .child(self.avatar_ring(user, &card, AVATAR, RING)),
                     )
@@ -121,7 +122,7 @@ impl Emerald {
                             .flex_col()
                             .gap_4()
                             .px_6()
-                            .pt(px(AVATAR / 2. + RING + 16.))
+                            .pt(zoomed(AVATAR / 2. + RING + 16.))
                             .pb_6()
                             .child(
                                 div()
@@ -130,24 +131,24 @@ impl Emerald {
                                     .gap_1()
                                     .child(
                                         div()
-                                            .text_size(px(24.))
-                                            .line_height(px(30.))
+                                            .text_size(zoomed(24.))
+                                            .line_height(zoomed(30.))
                                             .font_weight(FontWeight::BOLD)
-                                            .text_color(rgb(theme::TEXT_STRONG))
+                                            .text_color(rgb(theme::text_strong()))
                                             .child(card.name.clone()),
                                     )
                                     .child(self.name_line(&card, 16., 24.))
                                     .children(card.pronouns.clone().map(|p| {
                                         div()
-                                            .text_size(px(14.))
-                                            .text_color(rgb(theme::TEXT_MUTED))
+                                            .text_size(zoomed(14.))
+                                            .text_color(rgb(theme::text_muted()))
                                             .child(p)
                                     })),
                             )
                             .map(|body| {
                                 if self.people.is_me(user) {
                                     return body
-                                        .child(div().w_full().h(px(1.)).bg(theme::border()))
+                                        .child(div().w_full().h(zoomed(1.)).bg(theme::border()))
                                         .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
                                         .child(section(t!("profile.member_since"), member_since(user, &card, guild_name)))
                                         .children(roles)

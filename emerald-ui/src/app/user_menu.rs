@@ -2,7 +2,7 @@
 //! profile, a message, a note, the friend nickname, removing them from a
 //! group, ignoring and blocking.
 
-use gpui::{AnyElement, Context, MouseButton, MouseDownEvent, Pixels, Point, anchored, deferred, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, MouseButton, MouseDownEvent, Pixels, Point, anchored, deferred, div, prelude::*, rgb};
 
 use super::super::theme;
 use super::dialogs::{Ask, Prompt};
@@ -10,6 +10,7 @@ use super::place_menu::item;
 use super::Emerald;
 use emerald_discord::Command;
 use emerald_discord::model::{ChannelKind, Snowflake};
+use crate::zoom::zoomed;
 
 pub(super) struct UserMenu {
     user: Snowflake,
@@ -54,7 +55,7 @@ impl Emerald {
         let (user, guild, group) = (menu.user, menu.guild, menu.group);
         let me = self.people.is_me(user);
         let mut items: Vec<AnyElement> = Vec::new();
-        let separator = || div().my_1().h(px(1.)).bg(theme::border()).into_any_element();
+        let separator = || div().my_1().h(zoomed(1.)).bg(theme::border()).into_any_element();
         items.push(
             item(("user-profile", 0), t!("user_menu.profile").into(), None)
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -99,7 +100,7 @@ impl Emerald {
             items.push(separator());
             items.push(
                 item(("user-remove", 0), t!("group.remove").into(), None)
-                    .text_color(rgb(theme::FEEDBACK_CRITICAL))
+                    .text_color(rgb(theme::feedback_critical()))
                     .on_click(cx.listener(move |this, _, _, cx| this.ask(Ask::RemoveRecipient { channel, user }, cx)))
                     .into_any_element(),
             );
@@ -125,7 +126,7 @@ impl Emerald {
                 if blocked { t!("user_menu.unblock") } else { t!("user_menu.block") }.into(),
                 None,
             )
-            .text_color(rgb(theme::FEEDBACK_CRITICAL));
+            .text_color(rgb(theme::feedback_critical()));
             items.push(
                 block
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -142,14 +143,14 @@ impl Emerald {
         }
         let list = div()
             .id("user-menu")
-            .w(px(220.))
+            .w(zoomed(220.))
             .flex()
             .flex_col()
             .p_2()
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
+            .bg(rgb(theme::surface_high()))
             .shadow_lg()
             .occlude()
             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
@@ -159,7 +160,7 @@ impl Emerald {
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .children(items);
         Some(
-            deferred(anchored().position(menu.position).snap_to_window_with_margin(px(8.)).child(list))
+            deferred(anchored().position(menu.position).snap_to_window_with_margin(zoomed(8.)).child(list))
                 .with_priority(1)
                 .into_any_element(),
         )

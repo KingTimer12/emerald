@@ -1,6 +1,7 @@
 //! My Account: display name, email and status.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// An empty name resets the display name to the username.
@@ -31,7 +32,7 @@ impl Emerald {
                 .flex_col()
                 .gap_1()
                 .child(widgets::label(caption))
-                .child(div().text_color(rgb(theme::TEXT_DEFAULT)).child(value))
+                .child(div().text_color(rgb(theme::text_default())).child(value))
         };
         let busy = self.busy.contains(&Action::UpdateProfile);
 
@@ -43,8 +44,8 @@ impl Emerald {
                 div()
                     .rounded_lg()
                     .overflow_hidden()
-                    .bg(rgb(theme::BASE_LOWEST))
-                    .child(div().h(px(100.)).bg(rgb(theme::BRAND)))
+                    .bg(rgb(theme::base_lowest()))
+                    .child(div().h(zoomed(100.)).bg(rgb(theme::brand())))
                     .child(
                         div()
                             .flex()
@@ -54,24 +55,24 @@ impl Emerald {
                             .child(
                                 // Ring around the avatar where it overlaps the banner.
                                 div()
-                                    .mt(px(-40.))
-                                    .p(px(6.))
+                                    .mt(zoomed(-40.))
+                                    .p(zoomed(6.))
                                     .rounded_full()
-                                    .bg(rgb(theme::BASE_LOWEST))
+                                    .bg(rgb(theme::base_lowest()))
                                     .child(widgets::avatar(
                                         &name,
                                         me.id,
                                         self.avatar_image(&me.avatar_url()),
                                         80.,
-                                        self.own_status().map(|s| (s, theme::BASE_LOWEST)),
+                                        self.own_status().map(|s| (s, theme::base_lowest())),
                                     )),
                             )
                             .child(
                                 div()
                                     .pb_3()
-                                    .text_size(px(20.))
+                                    .text_size(zoomed(20.))
                                     .font_weight(FontWeight::BOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(name.clone()),
                             ),
                     )
@@ -80,7 +81,7 @@ impl Emerald {
                             .m_4()
                             .p_4()
                             .rounded_lg()
-                            .bg(rgb(theme::BASE_LOW))
+                            .bg(rgb(theme::base_low()))
                             .flex()
                             .flex_col()
                             .gap_6()
@@ -96,8 +97,8 @@ impl Emerald {
                                         row.child(
                                             div()
                                                 .id("reveal-email")
-                                                .text_size(px(14.))
-                                                .text_color(rgb(theme::LINK))
+                                                .text_size(zoomed(14.))
+                                                .text_color(rgb(theme::link()))
                                                 .cursor_pointer()
                                                 .hover(|s| s.underline())
                                                 .child(if view.reveal_email { t!("common.hide") } else { t!("common.show") })
@@ -121,8 +122,8 @@ impl Emerald {
                     .child(section_title(t!("settings.edit_display_name")))
                     .child(
                         div()
-                            .text_size(px(14.))
-                            .text_color(rgb(theme::TEXT_MUTED))
+                            .text_size(zoomed(14.))
+                            .text_color(rgb(theme::text_muted()))
                             .child(t!("settings.display_name_hint")),
                     )
                     .child(
@@ -160,8 +161,8 @@ impl Emerald {
             .child(
                 div()
                     .mb_4()
-                    .text_size(px(14.))
-                    .text_color(rgb(theme::TEXT_MUTED))
+                    .text_size(zoomed(14.))
+                    .text_color(rgb(theme::text_muted()))
                     .child(t!("settings.status_hint")),
             )
             .children(Status::ALL.into_iter().map(|status| {
@@ -183,14 +184,14 @@ impl Emerald {
                     .py_3()
                     .rounded_lg()
                     .border_1()
-                    .border_color(if selected { rgb(theme::BRAND) } else { theme::border() })
+                    .border_color(if selected { rgb(theme::brand()) } else { theme::border() })
                     .cursor_pointer()
                     .when(selected, |row| row.bg(theme::selected()))
                     .when(!selected, |row| row.hover(|s| s.bg(theme::hover())))
                     .child(
                         div()
                             .flex_none()
-                            .size(px(12.))
+                            .size(zoomed(12.))
                             .rounded_full()
                             .bg(rgb(widgets::status_color(status.as_str()))),
                     )
@@ -202,18 +203,18 @@ impl Emerald {
                             .child(
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(widgets::status_label(Some(status.as_str()))),
                             )
                             .children(description.map(|text| {
                                 div()
-                                    .text_size(px(14.))
-                                    .text_color(rgb(theme::TEXT_MUTED))
+                                    .text_size(zoomed(14.))
+                                    .text_color(rgb(theme::text_muted()))
                                     .child(text)
                             })),
                     )
                     .when(selected, |row| {
-                        row.child(div().text_color(rgb(theme::TEXT_STRONG)).child("✓"))
+                        row.child(div().text_color(rgb(theme::text_strong())).child("✓"))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| this.set_status(status, cx)))
             }))

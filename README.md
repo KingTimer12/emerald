@@ -138,12 +138,20 @@ CPU near zero when idle.
 - **Devices**: where the account is signed in, logging any of them out. When Discord asks for
   a password or two-factor code first, Emerald says so instead of signing out.
 - **Multiple accounts**: up to five signed in at once; switching restarts Emerald on the other.
-- **Settings**: font size, compact mode; language and 12/24-hour time.
+- **Settings**: font size, zoom from 90% to 150% (Cmd/Ctrl with + and -, 0 to reset), compact mode;
+  language and 12/24-hour time; dark, light or the system's theme; reduced motion (animated emoji, avatars and stickers stop on their first frame).
+- **Keyboard shortcuts**: each one can be changed under Settings > Keyboard shortcuts. Alt+Up and
+  Alt+Down move between channels, Alt+Shift+Down jumps to the next unread one, Shift+Escape marks
+  the channel read.
+- **Window and launch**: the window opens where it closed, and on the channel last open.
+- **Menu bar item** (macOS): the unread count beside an icon, with Show and Quit.
 
 Not there yet: voice; playing video and audio inside the app; animated avatars in the
 chat list (still there, as Discord shows them until hovered). On macOS, notifications go
 through `osascript` (Notification Center only takes bundled apps), so clicking one does
-not open its channel; search dates are taken in UTC.
+not open its channel; search dates are taken in UTC. No menu bar item on Windows yet, and
+screen readers get no labels, since gpui has no
+accessibility tree yet; keyboard focus does not move between controls with Tab.
 
 ## Requirements
 
@@ -253,7 +261,7 @@ emerald-ui/              the gpui interface
     ├── settings.rs      JSON preferences
     ├── markdown.rs      Discord markdown parser (blocks, inline spans, links)
     ├── text_input.rs    text field (editing, offsets, layout, element, IME)
-    ├── theme.rs, icons.rs, time.rs, emoji.rs, lottie.rs
+    ├── theme.rs, zoom.rs, icons.rs, time.rs, emoji.rs, lottie.rs
     ├── app.rs           `Emerald`: composes the stores; the window is drawn in app/render.rs
     └── app/             the main window
         ├── state/       UI-free stores, tested in isolation

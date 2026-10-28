@@ -2,13 +2,14 @@
 //! Discord put in the spam inbox. Listed apart from the DMs until accepted;
 //! opening one shows its messages with the answer in place of the box.
 
-use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::super::theme;
 use super::widgets::{self, ButtonKind};
 use super::Emerald;
 use emerald_discord::Command;
 use emerald_discord::model::{Channel, Snowflake};
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn open_requests(&mut self, cx: &mut Context<Self>) {
@@ -52,11 +53,11 @@ impl Emerald {
                 .items_center()
                 .gap_2()
                 .px_2()
-                .py(px(2.))
+                .py(zoomed(2.))
                 .rounded_md()
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+                .text_color(rgb(if on { theme::text_strong() } else { theme::interactive() }))
                 .when(on, |t| t.bg(theme::selected()))
                 .when(!on, |t| t.hover(|s| s.bg(theme::hover())))
                 .child(label)
@@ -67,7 +68,7 @@ impl Emerald {
                 }))
         };
         let header = div()
-            .h(px(48.))
+            .h(zoomed(48.))
             .flex_none()
             .flex()
             .items_center()
@@ -75,8 +76,8 @@ impl Emerald {
             .px_4()
             .border_b_1()
             .border_color(theme::border())
-            .child(div().text_color(rgb(theme::TEXT_STRONG)).font_weight(FontWeight::SEMIBOLD).child(t!("requests.title")))
-            .child(div().w(px(1.)).h(px(24.)).bg(theme::selected()))
+            .child(div().text_color(rgb(theme::text_strong())).font_weight(FontWeight::SEMIBOLD).child(t!("requests.title")))
+            .child(div().w(zoomed(1.)).h(zoomed(24.)).bg(theme::selected()))
             .child(tab("requests-pending", t!("requests.tab_requests"), counts[0], !spam, cx))
             .child(tab("requests-spam", t!("requests.tab_spam"), counts[1], spam, cx));
         let rows: Vec<AnyElement> = requests.iter().enumerate().map(|(ix, channel)| self.render_request(ix, channel, cx)).collect();
@@ -97,8 +98,8 @@ impl Emerald {
                 .flex()
                 .flex_col()
                 .overflow_y_scroll()
-                .pl(px(30.))
-                .pr(px(20.))
+                .pl(zoomed(30.))
+                .pr(zoomed(20.))
                 .pt_4()
                 .child(div().text_xs().text_color(theme::muted()).mb_2().child(if spam {
                     t!("requests.spam_hint")
@@ -112,9 +113,9 @@ impl Emerald {
             .flex()
             .flex_col()
             .flex_1()
-            .min_w(px(0.))
+            .min_w(zoomed(0.))
             .h_full()
-            .bg(rgb(theme::BASE_LOWER))
+            .bg(rgb(theme::base_lower()))
             .border_l_1()
             .border_color(theme::border())
             .child(header)
@@ -127,10 +128,10 @@ impl Emerald {
         let name = self.request_name(channel);
         let user = channel.recipient();
         let spam = channel.is_spam;
-        let small = |button: gpui::Stateful<gpui::Div>| button.h(px(32.)).px_3();
+        let small = |button: gpui::Stateful<gpui::Div>| button.h(zoomed(32.)).px_3();
         div()
             .id(("request", ix))
-            .h(px(62.))
+            .h(zoomed(62.))
             .flex_none()
             .flex()
             .items_center()
@@ -145,10 +146,10 @@ impl Emerald {
             .child(
                 div()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .truncate()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .child(name),
             )
             .child(
@@ -194,10 +195,10 @@ impl Emerald {
                 .flex_col()
                 .gap_3()
                 .rounded_lg()
-                .bg(rgb(theme::BASE_LOWEST))
+                .bg(rgb(theme::base_lowest()))
                 .border_1()
                 .border_color(theme::border())
-                .child(div().text_color(rgb(theme::TEXT_DEFAULT)).child(if spam {
+                .child(div().text_color(rgb(theme::text_default())).child(if spam {
                     t!("requests.spam_bar", name = name)
                 } else {
                     t!("requests.bar", name = name)

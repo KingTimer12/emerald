@@ -1,6 +1,9 @@
-//! Appearance: message size and density.
+//! Appearance: message size, zoom, theme, density and motion.
+
+use gpui::{Div, Stateful};
 
 use super::*;
+use crate::zoom::{self, zoomed};
 
 impl Emerald {
     pub(super) fn render_appearance(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -12,9 +15,9 @@ impl Emerald {
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOWER))
-            .text_size(px(size))
-            .line_height(px((size * 1.375).round()))
+            .bg(rgb(theme::base_lower()))
+            .text_size(zoomed(size))
+            .line_height(zoomed((size * 1.375).round()))
             .child(if compact {
                 div()
                     .flex()
@@ -23,7 +26,7 @@ impl Emerald {
                     .child(
                         div()
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .child("Wumpus"),
                     )
                     .child(div().child(preview_text))
@@ -45,7 +48,7 @@ impl Emerald {
                             .child(
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child("Wumpus"),
                             )
                             .child(div().child(preview_text)),
@@ -61,25 +64,21 @@ impl Emerald {
             .child(section_title(t!("settings.font_size")).mt_6())
             .child(
                 div().flex().gap_2().children(FONT_SIZES.into_iter().enumerate().map(|(ix, option)| {
-                    let selected = option == size;
-                    div()
-                        .id(("font-size", ix))
-                        .h(px(32.))
-                        .px_3()
-                        .flex()
-                        .items_center()
-                        .rounded_md()
-                        .text_size(px(14.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .cursor_pointer()
-                        .text_color(rgb(theme::TEXT_STRONG))
-                        .when(selected, |chip| chip.bg(rgb(theme::BRAND)))
-                        .when(!selected, |chip| chip.bg(theme::hover()).hover(|s| s.bg(theme::active())))
-                        .child(format!("{option}px"))
-                        .on_click(cx.listener(move |this, _, _, cx| {
+                    chip(("font-size", ix), format!("{option}px"), option == size).on_click(cx.listener(
+                        move |this, _, _, cx| {
                             this.settings.font_size = option;
                             this.save_settings(cx);
-                        }))
+                        },
+                    ))
+                })),
+            )
+            .child(section_title(t!("settings.zoom")).mt_6())
+            .child(hint(t!("settings.zoom_hint")))
+            .child(
+                div().flex().gap_2().children(zoom::LEVELS.into_iter().enumerate().map(|(ix, option)| {
+                    chip(("zoom-level", ix), format!("{option}%"), option == self.settings.zoom).on_click(
+                        cx.listener(move |this, _, _, cx| this.set_zoom(option, cx)),
+                    )
                 })),
             )
             .child(
@@ -98,8 +97,8 @@ impl Emerald {
                             .child(section_title(t!("settings.compact")))
                             .child(
                                 div()
-                                    .text_size(px(14.))
-                                    .text_color(rgb(theme::TEXT_MUTED))
+                                    .text_size(zoomed(14.))
+                                    .text_color(rgb(theme::text_muted()))
                                     .child(t!("settings.compact_hint")),
                             ),
                     )
@@ -109,6 +108,56 @@ impl Emerald {
                         this.save_settings(cx);
                     })),
             )
+            .child(section_title(t!("settings.theme")).mt_6())
+            .child(
+                div().flex().gap_2().children(ThemeChoice::ALL.into_iter().enumerate().map(|(ix, option)| {
+                    let label = match option {
+                        ThemeChoice::Dark => t!("settings.theme_dark"),
+                        ThemeChoice::Light => t!("settings.theme_light"),
+                        ThemeChoice::System => t!("settings.theme_system"),
+                    };
+                    chip(("theme-choice", ix), label, option == self.settings.theme).on_click(cx.listener(
+                        move |this, _, _, cx| {
+                            this.settings.theme = option;
+                            this.save_settings(cx);
+                            cx.notify();
+                        },
+                    ))
+                })),
+            )
+            .child(
+                switch_row(
+                    "reduced-motion",
+                    t!("settings.reduced_motion"),
+                    t!("settings.reduced_motion_hint"),
+                    self.settings.reduced_motion,
+                    true,
+                )
+                .mt_6()
+                .border_b_0()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.settings.reduced_motion = !this.settings.reduced_motion;
+                    this.save_settings(cx);
+                })),
+            )
             .into_any_element()
     }
+}
+
+/// A choice on the appearance page: filled in the brand color when picked.
+fn chip(id: (&'static str, usize), label: impl IntoElement, selected: bool) -> Stateful<Div> {
+    div()
+        .id(id)
+        .h(zoomed(32.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_md()
+        .text_size(zoomed(14.))
+        .font_weight(FontWeight::MEDIUM)
+        .cursor_pointer()
+        .text_color(rgb(theme::text_strong()))
+        .when(selected, |chip| chip.bg(rgb(theme::brand())))
+        .when(!selected, |chip| chip.bg(theme::hover()).hover(|s| s.bg(theme::active())))
+        .child(label)
 }

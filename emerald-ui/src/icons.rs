@@ -3,7 +3,8 @@
 
 use std::borrow::Cow;
 
-use gpui::{AssetSource, SharedString, Svg, prelude::*, px, rgb, svg};
+use gpui::{AssetSource, SharedString, Svg, prelude::*, rgb, svg};
+use crate::zoom::zoomed;
 
 pub const FRIENDS: &str = "icons/friends.svg";
 pub const PROFILE: &str = "icons/profile.svg";
@@ -88,5 +89,5 @@ impl AssetSource for Icons {
 }
 
 pub fn icon(path: &'static str, size: f32, color: u32) -> Svg {
-    svg().path(path).flex_none().size(px(size)).text_color(rgb(color))
+    svg().path(path).flex_none().size(zoomed(size)).text_color(rgb(color))
 }

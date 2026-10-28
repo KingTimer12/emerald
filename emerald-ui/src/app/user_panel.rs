@@ -1,11 +1,12 @@
 //! The floating panel with the user's avatar, name and status.
 
-use gpui::{Context, FontWeight, SharedString, div, prelude::*, px, rgb};
+use gpui::{Context, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::super::{icons, theme};
 use super::settings::Page;
 use super::{Emerald, widgets};
 use emerald_discord::model::Snowflake;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// Status shown on the user's own avatar: the picked one, else online
@@ -23,19 +24,19 @@ impl Emerald {
         let status = self.own_status();
         let custom = self.account.custom_status(super::account::now_ms()).map(|c| c.line());
         let (subtitle, subtitle_color) = match &self.connection.fatal {
-            Some(fatal) => (fatal.clone(), theme::DANGER),
+            Some(fatal) => (fatal.clone(), theme::danger()),
             // Like the web client, the custom status stands in for the status.
-            None if status.is_some() && custom.is_some() => (custom.unwrap_or_default().into(), theme::TEXT_MUTED),
-            None if status.is_some() => (widgets::status_label(status).into(), theme::TEXT_MUTED),
-            None => (self.connection.status.clone(), theme::TEXT_MUTED),
+            None if status.is_some() && custom.is_some() => (custom.unwrap_or_default().into(), theme::text_muted()),
+            None if status.is_some() => (widgets::status_label(status).into(), theme::text_muted()),
+            None => (self.connection.status.clone(), theme::text_muted()),
         };
 
         div()
             .absolute()
             .left_2()
             .bottom_2()
-            .w(px(72. + 240. - 16.))
-            .h(px(56.))
+            .w(zoomed(72. + 240. - 16.))
+            .h(zoomed(56.))
             .px_2()
             .flex()
             .items_center()
@@ -43,14 +44,14 @@ impl Emerald {
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOW))
+            .bg(rgb(theme::base_low()))
             .child(
                 // Avatar and name open the status picker, like Discord's popout.
                 div()
                     .id("me")
                     .flex()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .items_center()
                     .gap_2()
                     .p_1()
@@ -62,20 +63,20 @@ impl Emerald {
                         me.map_or(Snowflake(0), |me| me.id),
                         me.and_then(|me| self.profile_avatar(me.id)),
                         32.,
-                        Some((status.unwrap_or("offline"), theme::BASE_LOW)),
+                        Some((status.unwrap_or("offline"), theme::base_low())),
                     ))
                     .child(
                         div()
                             .flex()
                             .flex_col()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(zoomed(0.))
                             .child(
                                 div()
                                     .truncate()
-                                    .text_size(px(14.))
+                                    .text_size(zoomed(14.))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(theme::TEXT_DEFAULT))
+                                    .text_color(rgb(theme::text_default()))
                                     .child(name.clone()),
                             )
                             .child(

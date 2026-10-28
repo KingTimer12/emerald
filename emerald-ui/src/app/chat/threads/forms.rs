@@ -1,6 +1,7 @@
 //! The Create Thread and New Post forms.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(in super::super::super) fn render_thread_modal(&self, modal: &NewThread, cx: &mut Context<Self>) -> AnyElement {
@@ -43,14 +44,14 @@ impl Emerald {
                         div()
                             .id(("post-tag", ix))
                             .px_2()
-                            .py(px(2.))
+                            .py(zoomed(2.))
                             .rounded_full()
                             .border_1()
-                            .border_color(if on { rgb(theme::BRAND) } else { theme::border() })
-                            .bg(if on { theme::active() } else { rgb(theme::BASE_LOWER) })
+                            .border_color(if on { rgb(theme::brand()) } else { theme::border() })
+                            .bg(if on { theme::active() } else { rgb(theme::base_lower()) })
                             .text_xs()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::TEXT_DEFAULT }))
+                            .text_color(rgb(if on { theme::text_strong() } else { theme::text_default() }))
                             .cursor_pointer()
                             .hover(|s| s.bg(theme::hover()))
                             .child(label)
@@ -88,7 +89,7 @@ impl Emerald {
                                     .items_start()
                                     .gap_1()
                                     .children(self.render_attach_button(cx))
-                                    .child(div().flex_1().min_w(px(0.)).child(modal.content.clone())),
+                                    .child(div().flex_1().min_w(zoomed(0.)).child(modal.content.clone())),
                             ),
                     ),
             );
@@ -111,12 +112,12 @@ impl Emerald {
     ) -> AnyElement {
         let modal = div()
             .id(id)
-            .w(px(440.))
+            .w(zoomed(440.))
             .rounded_lg()
             .overflow_hidden()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
+            .bg(rgb(theme::surface_high()))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
                 div()
@@ -126,14 +127,14 @@ impl Emerald {
                     .p_4()
                     .child(
                         div()
-                            .text_size(px(20.))
+                            .text_size(zoomed(20.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .child(title),
                     )
                     .child(body)
                     .children(error.map(|error| {
-                        div().text_size(px(14.)).text_color(rgb(theme::FEEDBACK_CRITICAL)).child(error)
+                        div().text_size(zoomed(14.)).text_color(rgb(theme::feedback_critical())).child(error)
                     })),
             )
             .child(
@@ -142,7 +143,7 @@ impl Emerald {
                     .flex()
                     .justify_end()
                     .gap_2()
-                    .bg(rgb(theme::BASE_LOW))
+                    .bg(rgb(theme::base_low()))
                     .child(
                         widgets::button((id, 0usize), t!("common.cancel"), widgets::ButtonKind::Secondary)
                             .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),

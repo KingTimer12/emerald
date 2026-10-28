@@ -1,6 +1,7 @@
 //! The hover toolbar, the context menu and the delete confirmation.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn open_message_menu(&mut self, channel: Snowflake, message: Snowflake, position: Point<Pixels>, cx: &mut Context<Self>) {
@@ -70,7 +71,7 @@ impl Emerald {
         let button = |name: &'static str, glyph: &'static str, tip: &'static str| {
             div()
                 .id((name, ix))
-                .size(px(32.))
+                .size(zoomed(32.))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -78,25 +79,25 @@ impl Emerald {
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .tooltip(widgets::tooltip(tip))
-                .child(icon(glyph, 20., theme::INTERACTIVE))
+                .child(icon(glyph, 20., theme::interactive()))
         };
         Some(
             div()
                 .absolute()
-                .top(px(-16.))
-                .right(px(14.))
+                .top(zoomed(-16.))
+                .right(zoomed(14.))
                 .flex()
-                .p(px(2.))
+                .p(zoomed(2.))
                 .rounded_lg()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::BASE_LOWER))
+                .bg(rgb(theme::base_lower()))
                 .when(!open, |bar| bar.invisible().group_hover(group, |s| s.visible()))
                 .children(quick.into_iter().enumerate().map(|(n, emoji)| {
                     let label = emoji_label(&emoji);
                     div()
                         .id(("msg-quick", ix * QUICK_REACTIONS + n))
-                        .size(px(32.))
+                        .size(zoomed(32.))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -153,20 +154,20 @@ impl Emerald {
         let (_, msg) = self.history.find(channel, id)?;
         let rights = self.rights(channel, msg);
         let item = |name: &'static str, label: &'static str, glyph: &'static str, danger: bool| {
-            let color = if danger { theme::DANGER } else { theme::INTERACTIVE };
+            let color = if danger { theme::danger() } else { theme::interactive() };
             div()
                 .id(name)
-                .h(px(32.))
+                .h(zoomed(32.))
                 .px_2()
                 .flex()
                 .items_center()
                 .gap_2()
                 .rounded_md()
                 .cursor_pointer()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(if danger { theme::DANGER } else { theme::TEXT_DEFAULT }))
-                .hover(move |s| s.bg(if danger { rgb(theme::BUTTON_DANGER) } else { theme::hover() }))
+                .text_color(rgb(if danger { theme::danger() } else { theme::text_default() }))
+                .hover(move |s| s.bg(if danger { rgb(theme::button_danger()) } else { theme::hover() }))
                 .child(div().flex_1().child(label))
                 .child(icon(glyph, 18., color))
         };
@@ -176,14 +177,14 @@ impl Emerald {
         let position = menu.position;
         let list = div()
             .id("message-menu")
-            .w(px(220.))
+            .w(zoomed(220.))
             .flex()
             .flex_col()
             .p_2()
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
+            .bg(rgb(theme::surface_high()))
             .shadow_lg()
             .occlude()
             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
@@ -227,12 +228,12 @@ impl Emerald {
                     },
                 )))
             })
-            .child(div().my_1().h(px(1.)).bg(theme::border()))
+            .child(div().my_1().h(zoomed(1.)).bg(theme::border()))
             .child(item("menu-copy-id", t!("message.copy_id"), icons::COPY, false).on_click(cx.listener(
                 move |this, _, _, cx| this.copy_message(channel, id, true, cx),
             )));
         Some(
-            deferred(anchored().position(menu.position).snap_to_window_with_margin(px(8.)).child(list))
+            deferred(anchored().position(menu.position).snap_to_window_with_margin(zoomed(8.)).child(list))
                 .with_priority(1)
                 .into_any_element(),
         )
@@ -249,18 +250,18 @@ impl Emerald {
                 .rounded_lg()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::BASE_LOWER))
+                .bg(rgb(theme::base_lower()))
                 .child(widgets::avatar(&author, msg.author_id, self.avatar_image(&msg.avatar_url), 40., None))
                 .child(
                     div()
                         .flex()
                         .flex_col()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .child(
                             div()
                                 .flex()
-                                .gap(px(6.))
+                                .gap(zoomed(6.))
                                 .items_center()
                                 .child(div().text_color(rgb(color)).font_weight(FontWeight::MEDIUM).child(author))
                                 .child(div().text_xs().text_color(theme::muted()).child(msg.time.clone())),
@@ -283,12 +284,12 @@ impl Emerald {
             .child(
                 div()
                     .id("delete-modal")
-                    .w(px(440.))
+                    .w(zoomed(440.))
                     .rounded_lg()
                     .overflow_hidden()
                     .border_1()
                     .border_color(theme::border())
-                    .bg(rgb(theme::SURFACE_HIGH))
+                    .bg(rgb(theme::surface_high()))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -298,12 +299,12 @@ impl Emerald {
                             .p_4()
                             .child(
                                 div()
-                                    .text_size(px(20.))
+                                    .text_size(zoomed(20.))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(theme::TEXT_STRONG))
+                                    .text_color(rgb(theme::text_strong()))
                                     .child(t!("message.delete")),
                             )
-                            .child(div().text_color(rgb(theme::TEXT_DEFAULT)).child(t!("message.delete_confirm")))
+                            .child(div().text_color(rgb(theme::text_default())).child(t!("message.delete_confirm")))
                             .children(preview)
                             .child(div().text_xs().text_color(theme::muted()).child(t!("message.delete_tip"))),
                     )
@@ -313,7 +314,7 @@ impl Emerald {
                             .flex()
                             .justify_end()
                             .gap_2()
-                            .bg(rgb(theme::BASE_LOW))
+                            .bg(rgb(theme::base_low()))
                             .child(
                                 widgets::button("delete-cancel", t!("common.cancel"), widgets::ButtonKind::Secondary)
                                     .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),

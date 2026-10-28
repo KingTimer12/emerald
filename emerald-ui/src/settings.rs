@@ -2,14 +2,48 @@
 //! `settings.json` under `paths::config_dir`. Unknown or missing fields fall back to
 //! defaults, so older files keep loading.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use emerald_discord::model::Status;
+use emerald_discord::model::{Snowflake, Status};
 
 /// Message text sizes offered in Appearance, as in Discord's font scaling.
 pub const FONT_SIZES: [f32; 6] = [12., 14., 15., 16., 18., 20.];
+
+/// "Theme" in Appearance: the dark or light palette, or the system's choice.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeChoice {
+    #[default]
+    Dark,
+    Light,
+    System,
+}
+
+impl ThemeChoice {
+    pub const ALL: [ThemeChoice; 3] = [ThemeChoice::Dark, ThemeChoice::Light, ThemeChoice::System];
+
+    /// Whether this choice draws the light palette, given the system's.
+    pub fn is_light(self, system_light: bool) -> bool {
+        match self {
+            ThemeChoice::Dark => false,
+            ThemeChoice::Light => true,
+            ThemeChoice::System => system_light,
+        }
+    }
+}
+
+/// The window's last place and size, restored on the next launch.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WindowFrame {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub maximized: bool,
+}
 
 /// "Time format" in Language & Time: the language's own clock, or a fixed one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +78,18 @@ pub struct Settings {
     /// "Frequently Used" in the reaction picker, newest first: Unicode
     /// emoji as text, custom ones as `name:id`.
     pub recent_emojis: Vec<String>,
+    pub theme: ThemeChoice,
+    /// Animated emoji, avatars and embeds stay on their first frame.
+    pub reduced_motion: bool,
+    /// Interface zoom in percent, one of `zoom::LEVELS` when picked in the settings.
+    pub zoom: u32,
+    /// Keyboard shortcuts the user changed, by `Shortcut::id`, as keystrokes
+    /// such as `secondary-k`. Unset ones keep their default key.
+    pub shortcuts: BTreeMap<String, String>,
+    /// Where the window was when it last closed.
+    pub window: Option<WindowFrame>,
+    /// The channel open when Emerald last ran, reopened on the next launch.
+    pub last_channel: Option<Snowflake>,
 }
 
 impl Default for Settings {
@@ -57,6 +103,12 @@ impl Default for Settings {
             language: None,
             time_format: TimeFormat::Auto,
             recent_emojis: Vec::new(),
+            theme: ThemeChoice::Dark,
+            reduced_motion: false,
+            zoom: 100,
+            shortcuts: BTreeMap::new(),
+            window: None,
+            last_channel: None,
         }
     }
 }

@@ -121,7 +121,7 @@ impl Emerald {
             .my_3()
             .p_4()
             .rounded_lg()
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .flex()
             .flex_col()
             .gap_3()

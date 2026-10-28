@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, Context, Focusable, FontWeight, Pixels, Point, SharedString, Window, anchored, deferred, div,
-    prelude::*, px,
+    prelude::*,
     rgb, uniform_list,
 };
 
@@ -18,6 +18,7 @@ use super::expressions::{GifResults, StickerList};
 use super::reactions::emoji_label;
 use emerald_discord::ReactionSource;
 use emerald_discord::model::{Emoji, Snowflake};
+use crate::zoom::zoomed;
 
 const COLUMNS: usize = 9;
 /// Every row, headers included, has this height: `uniform_list` needs one.
@@ -78,7 +79,7 @@ impl Emerald {
         let Some(channel) = self.selected_channel else { return };
         // Opens over the chat, up and to the left of the button and clear
         // of the message box.
-        let position = position - gpui::point(px(WIDTH), px(HEIGHT + 24.));
+        let position = position - gpui::point(zoomed(WIDTH), zoomed(HEIGHT + 24.));
         self.open_picker(channel, None, position, window, cx);
     }
 
@@ -245,8 +246,8 @@ impl Emerald {
                     .rounded_md()
                     .cursor_pointer()
                     .font_weight(FontWeight::MEDIUM)
-                    .text_size(px(14.))
-                    .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::TEXT_MUTED }))
+                    .text_size(zoomed(14.))
+                    .text_color(rgb(if on { theme::text_strong() } else { theme::text_muted() }))
                     .when(on, |tab| tab.bg(theme::selected()))
                     .hover(|tab| tab.bg(theme::hover()))
                     .child(label)
@@ -264,7 +265,7 @@ impl Emerald {
         });
         let footer = picker.hovered.as_ref().filter(|_| picker.tab == PickerTab::Emoji).map(|emoji| {
             div()
-                .h(px(48.))
+                .h(zoomed(48.))
                 .flex_none()
                 .px_3()
                 .flex()
@@ -272,12 +273,12 @@ impl Emerald {
                 .gap_2()
                 .border_t_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::BASE_LOWEST))
+                .bg(rgb(theme::base_lowest()))
                 .child(self.emoji_image(emoji, EMOJI))
                 .child(
                     div()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .truncate()
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(emoji_label(emoji)),
@@ -285,15 +286,15 @@ impl Emerald {
         });
         let panel = div()
             .id("reaction-picker")
-            .w(px(WIDTH))
-            .h(px(HEIGHT))
+            .w(zoomed(WIDTH))
+            .h(zoomed(HEIGHT))
             .flex()
             .flex_col()
             .rounded_lg()
             .overflow_hidden()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::SURFACE_HIGH))
+            .bg(rgb(theme::surface_high()))
             .shadow_lg()
             .occlude()
             .on_mouse_down_out(cx.listener(|this, _, window, cx| {
@@ -301,17 +302,17 @@ impl Emerald {
             }))
             .children(tabs)
             .child(div().flex_none().p_2().child(self.emoji_query.clone()))
-            .child(div().flex_1().min_h(px(0.)).px_2().child(body))
+            .child(div().flex_1().min_h(zoomed(0.)).px_2().child(body))
             .children(footer);
         Some(
-            deferred(anchored().position(picker.position).snap_to_window_with_margin(px(8.)).child(panel))
+            deferred(anchored().position(picker.position).snap_to_window_with_margin(zoomed(8.)).child(panel))
                 .with_priority(2)
                 .into_any_element(),
         )
     }
 
     fn render_picker_row(&self, row: &Row, ix: usize, cx: &mut Context<Self>) -> AnyElement {
-        let line = div().h(px(CELL)).w_full().flex().items_center();
+        let line = div().h(zoomed(CELL)).w_full().flex().items_center();
         match row {
             Row::Header(label) => line
                 .pt_2()
@@ -330,7 +331,7 @@ impl Emerald {
                     let (picked, hovered) = (emoji.clone(), emoji.clone());
                     div()
                         .id(("emoji", ix * COLUMNS + n))
-                        .size(px(CELL))
+                        .size(zoomed(CELL))
                         .flex_none()
                         .flex()
                         .items_center()
@@ -368,8 +369,8 @@ impl Emerald {
             div()
                 .id("composer-emoji")
                 .flex_none()
-                .mt(px(7.))
-                .size(px(32.))
+                .mt(zoomed(7.))
+                .size(zoomed(32.))
                 .flex()
                 .items_center()
                 .justify_center()
@@ -377,7 +378,7 @@ impl Emerald {
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .tooltip(widgets::tooltip(t!("composer.emoji")))
-                .child(icons::icon(icons::REACTION, 22., if open { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+                .child(icons::icon(icons::REACTION, 22., if open { theme::text_strong() } else { theme::interactive() }))
                 .on_click(cx.listener(|this, event: &gpui::ClickEvent, window, cx| {
                     this.open_composer_picker(event.position(), window, cx)
                 }))

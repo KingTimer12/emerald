@@ -2,13 +2,14 @@
 //! be undone at a click (leaving a server or group, blocking), and a one
 //! line text field (a group's name, a friend's nickname).
 
-use gpui::{AnyElement, Context, Focusable, FontWeight, MouseButton, SharedString, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Focusable, FontWeight, MouseButton, SharedString, Window, div, prelude::*, rgb};
 
 use super::super::theme;
 use super::widgets::{self, ButtonKind};
 use super::{Emerald, Overlay};
 use emerald_discord::Command;
 use emerald_discord::model::Snowflake;
+use crate::zoom::zoomed;
 
 /// What a confirmation dialog asks about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -98,7 +99,7 @@ impl Emerald {
                 t!("group.remove"),
             ),
         };
-        let content = div().text_color(rgb(theme::TEXT_DEFAULT)).child(body).into_any_element();
+        let content = div().text_color(rgb(theme::text_default())).child(body).into_any_element();
         let confirm = widgets::button("dialog-confirm", button, ButtonKind::Danger)
             .on_click(cx.listener(move |this, _, window, cx| this.confirm(ask, window, cx)));
         dialog(title.into(), content, confirm, cx)
@@ -143,12 +144,12 @@ fn dialog(title: SharedString, content: AnyElement, action: gpui::Stateful<gpui:
         .child(
             div()
                 .id("dialog")
-                .w(px(440.))
+                .w(zoomed(440.))
                 .rounded_lg()
                 .overflow_hidden()
                 .border_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::SURFACE_HIGH))
+                .bg(rgb(theme::surface_high()))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(
                     div()
@@ -158,9 +159,9 @@ fn dialog(title: SharedString, content: AnyElement, action: gpui::Stateful<gpui:
                         .p_4()
                         .child(
                             div()
-                                .text_size(px(20.))
+                                .text_size(zoomed(20.))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(theme::TEXT_STRONG))
+                                .text_color(rgb(theme::text_strong()))
                                 .child(title),
                         )
                         .child(content),
@@ -171,7 +172,7 @@ fn dialog(title: SharedString, content: AnyElement, action: gpui::Stateful<gpui:
                         .flex()
                         .justify_end()
                         .gap_2()
-                        .bg(rgb(theme::BASE_LOW))
+                        .bg(rgb(theme::base_low()))
                         .child(
                             widgets::button("dialog-cancel", t!("common.cancel"), ButtonKind::Secondary)
                                 .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),

@@ -3,7 +3,7 @@
 //! [`state::switcher`](super::state::switcher).
 
 use gpui::{
-    AnyElement, Context, Entity, Focusable, FontWeight, MouseButton, Subscription, Window, div, prelude::*, px, rgb,
+    AnyElement, Context, Entity, Focusable, FontWeight, MouseButton, Subscription, Window, div, prelude::*, rgb,
 };
 
 use super::super::text_input::{MenuKey, TextInput};
@@ -11,6 +11,7 @@ use super::super::{icons, theme};
 use super::state::switcher::{self, Candidate, Place};
 use super::state::Row;
 use super::{Emerald, Overlay, widgets};
+use crate::zoom::zoomed;
 
 pub struct Switcher {
     input: Entity<TextInput>,
@@ -148,15 +149,15 @@ impl Emerald {
                     widgets::avatar(&candidate.name, user, self.user_avatar(user), 20., None).into_any_element()
                 }
                 (None, Place::Guild(_)) => div()
-                    .size(px(20.))
-                    .rounded(px(6.))
-                    .bg(rgb(theme::BASE_LOW))
+                    .size(zoomed(20.))
+                    .rounded(zoomed(6.))
+                    .bg(rgb(theme::base_low()))
                     .into_any_element(),
-                (None, _) => icons::icon(candidate.icon, 20., theme::CHANNELS_DEFAULT).into_any_element(),
+                (None, _) => icons::icon(candidate.icon, 20., theme::channels_default()).into_any_element(),
             };
             div()
                 .id(("switcher-row", ix))
-                .h(px(34.))
+                .h(zoomed(34.))
                 .flex_none()
                 .flex()
                 .items_center()
@@ -166,22 +167,22 @@ impl Emerald {
                 .cursor_pointer()
                 .when(selected, |row| row.bg(theme::selected()))
                 .hover(|s| s.bg(theme::hover()))
-                .child(div().size(px(20.)).flex_none().flex().items_center().justify_center().child(leading))
+                .child(div().size(zoomed(20.)).flex_none().flex().items_center().justify_center().child(leading))
                 .child(
                     div()
                         .flex_none()
-                        .max_w(px(320.))
+                        .max_w(zoomed(320.))
                         .truncate()
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(theme::TEXT_STRONG))
+                        .text_color(rgb(theme::text_strong()))
                         .child(candidate.name.clone()),
                 )
                 .children(candidate.detail.clone().map(|detail| {
                     div()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .truncate()
-                        .text_size(px(12.))
+                        .text_size(zoomed(12.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme::muted())
                         .child(detail.to_uppercase())
@@ -192,14 +193,14 @@ impl Emerald {
         let empty = switcher.results.is_empty().then(|| {
             div()
                 .p_4()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .text_color(theme::muted())
                 .child(t!("switcher.empty"))
         });
         let card = div()
             .id("switcher")
-            .w(px(570.))
-            .mt(px(120.))
+            .w(zoomed(570.))
+            .mt(zoomed(120.))
             .flex()
             .flex_col()
             .gap_3()
@@ -207,24 +208,24 @@ impl Emerald {
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOWER))
+            .bg(rgb(theme::base_lower()))
             .shadow_lg()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
                 div()
-                    .h(px(56.))
+                    .h(zoomed(56.))
                     .px_3()
                     .flex()
                     .items_center()
                     .rounded_md()
-                    .bg(rgb(theme::BASE_LOWEST))
-                    .text_size(px(18.))
+                    .bg(rgb(theme::base_lowest()))
+                    .text_size(zoomed(18.))
                     .child(div().flex_1().child(switcher.input.clone())),
             )
             .child(
                 div()
                     .id("switcher-results")
-                    .max_h(px(34. * 10.))
+                    .max_h(zoomed(34. * 10.))
                     .overflow_y_scroll()
                     .flex()
                     .flex_col()
@@ -233,7 +234,7 @@ impl Emerald {
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(zoomed(12.))
                     .text_color(theme::muted())
                     .child(t!("switcher.tip")),
             );

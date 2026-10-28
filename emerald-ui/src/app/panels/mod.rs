@@ -2,6 +2,8 @@
 //! pinned messages, search results, the inbox and a channel's threads.
 //! One is open at a time, in place of the member list or profile.
 
+use crate::zoom::zoomed;
+
 mod found;
 mod inbox;
 mod pins;
@@ -12,7 +14,7 @@ pub(super) use inbox::InboxTab;
 pub(super) use search::SearchPanel;
 pub(super) use threads::ThreadsPanel;
 
-use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::super::{icons, theme};
 use super::state::Msg;
@@ -146,16 +148,16 @@ impl Emerald {
             .when(channel.is_some(), |tools| {
                 tools.child(
                     div()
-                        .w(px(220.))
-                        .h(px(28.))
+                        .w(zoomed(220.))
+                        .h(zoomed(28.))
                         .px_2()
                         .flex()
                         .items_center()
                         .gap_1()
                         .rounded_md()
-                        .bg(rgb(theme::BASE_LOWEST))
-                        .child(icons::icon(icons::SEARCH, 16., theme::INTERACTIVE))
-                        .child(div().flex_1().min_w(px(0.)).child(self.search_input.clone())),
+                        .bg(rgb(theme::base_lowest()))
+                        .child(icons::icon(icons::SEARCH, 16., theme::interactive()))
+                        .child(div().flex_1().min_w(zoomed(0.)).child(self.search_input.clone())),
                 )
             })
             .child(tool(
@@ -178,17 +180,17 @@ impl Emerald {
         };
         Some(
             div()
-                .w(px(WIDTH))
+                .w(zoomed(WIDTH))
                 .flex_none()
                 .h_full()
                 .flex()
                 .flex_col()
                 .border_l_1()
                 .border_color(theme::border())
-                .bg(rgb(theme::BASE_LOWER))
+                .bg(rgb(theme::base_lower()))
                 .child(
                     div()
-                        .h(px(48.))
+                        .h(zoomed(48.))
                         .flex_none()
                         .px_4()
                         .flex()
@@ -199,10 +201,10 @@ impl Emerald {
                         .child(
                             div()
                                 .flex_1()
-                                .min_w(px(0.))
+                                .min_w(zoomed(0.))
                                 .truncate()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(theme::TEXT_STRONG))
+                                .text_color(rgb(theme::text_strong()))
                                 .child(title),
                         )
                         .child(
@@ -226,7 +228,7 @@ fn tool(
 ) -> impl IntoElement {
     div()
         .id(id)
-        .size(px(32.))
+        .size(zoomed(32.))
         .flex_none()
         .flex()
         .items_center()
@@ -235,7 +237,7 @@ fn tool(
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .tooltip(widgets::tooltip(tip))
-        .child(icons::icon(glyph, 24., if open { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+        .child(icons::icon(glyph, 24., if open { theme::text_strong() } else { theme::interactive() }))
         .on_click(on_click)
 }
 
@@ -245,7 +247,7 @@ fn note(text: impl Into<SharedString>) -> gpui::Div {
         .p_4()
         .flex()
         .justify_center()
-        .text_size(px(14.))
+        .text_size(zoomed(14.))
         .text_color(theme::muted())
         .child(text.into())
 }

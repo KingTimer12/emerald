@@ -8,6 +8,7 @@ use gpui::{Image, ImageFormat, PathPromptOptions, img};
 use super::*;
 use emerald_discord::model::{banner_url, guild_banner_url};
 use emerald_discord::{Picture, ProfileEdit};
+use crate::zoom::zoomed;
 
 /// Discord's limits on each field.
 const MAX_NAME: usize = 32;
@@ -219,10 +220,10 @@ impl Emerald {
                 .id(id)
                 .pb_2()
                 .border_b_2()
-                .border_color(if selected { rgb(theme::BRAND).into() } else { gpui::transparent_black() })
+                .border_color(if selected { rgb(theme::brand()).into() } else { gpui::transparent_black() })
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .text_color(rgb(if selected { theme::TEXT_STRONG } else { theme::INTERACTIVE }))
+                .text_color(rgb(if selected { theme::text_strong() } else { theme::interactive() }))
                 .child(label)
         };
         let field = |label: &'static str, input: &Entity<TextInput>, locked: bool| {
@@ -256,7 +257,7 @@ impl Emerald {
             .flex()
             .flex_col()
             .flex_1()
-            .min_w(px(0.))
+            .min_w(zoomed(0.))
             .gap_6()
             .child(field(
                 if guild.is_some() { t!("profiles.nickname") } else { t!("settings.display_name_label") },
@@ -361,14 +362,14 @@ impl Emerald {
             let selected = current == color;
             div()
                 .id(("accent", ix))
-                .size(px(32.))
+                .size(zoomed(32.))
                 .rounded_md()
                 .cursor_pointer()
                 .border_2()
-                .border_color(if selected { rgb(theme::TEXT_STRONG) } else { theme::border() })
-                .bg(rgb(color.unwrap_or(theme::BASE_LOWEST)))
+                .border_color(if selected { rgb(theme::text_strong()) } else { theme::border() })
+                .bg(rgb(color.unwrap_or(theme::base_lowest())))
                 .when(color.is_none(), |s| {
-                    s.flex().items_center().justify_center().text_color(rgb(theme::TEXT_MUTED)).child("∅")
+                    s.flex().items_center().justify_center().text_color(rgb(theme::text_muted())).child("∅")
                 })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(form) = this.settings_view().and_then(|v| v.profile.as_mut()) {
@@ -407,11 +408,11 @@ impl Emerald {
                     .px_3()
                     .py_2()
                     .rounded_md()
-                    .bg(rgb(theme::BASE_LOWEST))
+                    .bg(rgb(theme::base_lowest()))
                     .cursor_pointer()
                     .flex()
                     .justify_between()
-                    .text_color(rgb(theme::TEXT_DEFAULT))
+                    .text_color(rgb(theme::text_default()))
                     .child(current.unwrap_or_default())
                     .child(if open { "▴" } else { "▾" })
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -425,10 +426,10 @@ impl Emerald {
                 col.child(
                     div()
                         .id("server-choices")
-                        .max_h(px(240.))
+                        .max_h(zoomed(240.))
                         .overflow_y_scroll()
                         .rounded_md()
-                        .bg(rgb(theme::BASE_LOWEST))
+                        .bg(rgb(theme::base_lowest()))
                         .children(self.spaces.iter().filter(|s| !s.is_dms()).enumerate().map(|(ix, space)| {
                             let guild = space.id;
                             div()
@@ -436,7 +437,7 @@ impl Emerald {
                                 .px_3()
                                 .py_2()
                                 .cursor_pointer()
-                                .text_color(rgb(theme::TEXT_DEFAULT))
+                                .text_color(rgb(theme::text_default()))
                                 .hover(|s| s.bg(theme::hover()))
                                 .child(space.name.clone())
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -479,7 +480,7 @@ impl Emerald {
         let accent = form
             .accent_color
             .unwrap_or_else(|| global.and_then(|p| p.user.accent_color))
-            .unwrap_or(theme::BRAND);
+            .unwrap_or(theme::brand());
         let avatar = match &form.avatar {
             Some(Some(_)) => form.avatar_preview.clone(),
             Some(None) => self.avatar_image(&emerald_discord::model::avatar_url(id, None)),
@@ -487,23 +488,23 @@ impl Emerald {
         };
 
         div()
-            .w(px(300.))
+            .w(zoomed(300.))
             .flex_none()
             .rounded_lg()
             .overflow_hidden()
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .child(match banner_image {
-                Some(image) => div().h(px(105.)).overflow_hidden().child(img(image).w_full().h(px(105.)).object_fit(gpui::ObjectFit::Cover)),
-                None => div().h(px(105.)).bg(rgb(accent)),
+                Some(image) => div().h(zoomed(105.)).overflow_hidden().child(img(image).w_full().h(zoomed(105.)).object_fit(gpui::ObjectFit::Cover)),
+                None => div().h(zoomed(105.)).bg(rgb(accent)),
             })
             .child(
                 div().px_4().child(
                     div()
-                        .mt(px(-40.))
-                        .p(px(6.))
-                        .w(px(92.))
+                        .mt(zoomed(-40.))
+                        .p(zoomed(6.))
+                        .w(zoomed(92.))
                         .rounded_full()
-                        .bg(rgb(theme::BASE_LOWEST))
+                        .bg(rgb(theme::base_lowest()))
                         .child(widgets::avatar(&shown_name, id, avatar, 80., None)),
                 ),
             )
@@ -515,14 +516,14 @@ impl Emerald {
                     .gap_1()
                     .child(
                         div()
-                            .text_size(px(20.))
+                            .text_size(zoomed(20.))
                             .font_weight(FontWeight::BOLD)
-                            .text_color(rgb(theme::TEXT_STRONG))
+                            .text_color(rgb(theme::text_strong()))
                             .child(shown_name),
                     )
                     .children(me.map(|me| hint(me.username.clone())))
                     .when(!pronouns.is_empty(), |col| col.child(hint(pronouns)))
-                    .when(!bio.is_empty(), |col| col.child(div().mt_3().text_size(px(14.)).text_color(rgb(theme::TEXT_DEFAULT)).child(bio))),
+                    .when(!bio.is_empty(), |col| col.child(div().mt_3().text_size(zoomed(14.)).text_color(rgb(theme::text_default())).child(bio))),
             )
     }
 }

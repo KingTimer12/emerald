@@ -2,13 +2,14 @@
 //! voted, closed or asked for. Voting sends the whole choice at once, as
 //! the web client does; the counts follow the gateway's vote events.
 
-use gpui::{AnyElement, Context, FontWeight, SharedString, div, img, prelude::*, px, relative, rgb};
+use gpui::{AnyElement, Context, FontWeight, SharedString, div, img, prelude::*, relative, rgb};
 
 use super::super::super::{theme, time};
 use super::super::state::Msg;
 use super::super::Emerald;
 use emerald_discord::model::{Poll, Snowflake, custom_url, iso_secs};
 use emerald_discord::{Action, Command};
+use crate::zoom::zoomed;
 
 /// Results asked for by "Show results" are remembered for this many polls.
 const MAX_SHOWN_RESULTS: usize = 64;
@@ -40,7 +41,7 @@ impl Emerald {
             let emoji = answer.poll_media.emoji.as_ref().and_then(|emoji| match emoji.id {
                 Some(id) => self
                     .avatar_image(&custom_url(id))
-                    .map(|image| img(image).size(px(20.)).into_any_element()),
+                    .map(|image| img(image).size(zoomed(20.)).into_any_element()),
                 None => emoji.name.clone().map(|name| div().child(name).into_any_element()),
             });
             let text: SharedString = answer.poll_media.text.clone().unwrap_or_default().into();
@@ -55,8 +56,8 @@ impl Emerald {
                 .rounded_md()
                 .overflow_hidden()
                 .border_1()
-                .border_color(if picked || mine { rgb(theme::BRAND) } else { theme::border() })
-                .bg(rgb(theme::BASE_LOWER));
+                .border_color(if picked || mine { rgb(theme::brand()) } else { theme::border() })
+                .bg(rgb(theme::base_lower()));
             let row = if showing {
                 // The share of votes fills the row from the left.
                 row.child(
@@ -73,13 +74,13 @@ impl Emerald {
             };
             let row = row
                 .children(emoji)
-                .child(div().relative().flex_1().min_w(px(0.)).truncate().child(text))
+                .child(div().relative().flex_1().min_w(zoomed(0.)).truncate().child(text))
                 .when(showing, |row| {
                     row.child(
                         div()
                             .relative()
                             .flex_none()
-                            .text_size(px(14.))
+                            .text_size(zoomed(14.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(format!("{}%", (share * 100.).round())),
                     )
@@ -91,7 +92,7 @@ impl Emerald {
             } else {
                 let multiple = poll.allow_multiselect;
                 row.cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::SURFACE_HIGH)))
+                    .hover(|s| s.bg(rgb(theme::surface_high())))
                     .on_click(cx.listener(move |this, _, _, cx| this.pick_answer(message, id, multiple, cx)))
                     .into_any_element()
             }
@@ -118,10 +119,10 @@ impl Emerald {
                 .py_1()
                 .rounded_md()
                 .cursor_pointer()
-                .text_size(px(14.))
+                .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(theme::TEXT_STRONG))
-                .bg(if primary { rgb(theme::BRAND) } else { theme::hover() })
+                .text_color(rgb(theme::text_strong()))
+                .bg(if primary { rgb(theme::brand()) } else { theme::hover() })
                 .child(label)
         };
         let actions = channel.filter(|_| can_vote).map(|channel| {
@@ -157,7 +158,7 @@ impl Emerald {
         });
 
         div()
-            .max_w(px(520.))
+            .max_w(zoomed(520.))
             .flex()
             .flex_col()
             .gap_2()
@@ -165,12 +166,12 @@ impl Emerald {
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOW))
+            .bg(rgb(theme::base_low()))
             .child(
                 div()
-                    .text_size(px(17.))
+                    .text_size(zoomed(17.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(theme::TEXT_STRONG))
+                    .text_color(rgb(theme::text_strong()))
                     .child(poll.question.text.clone().unwrap_or_default()),
             )
             .when(!closed, |card| {
@@ -187,7 +188,7 @@ impl Emerald {
                     .items_center()
                     .justify_between()
                     .gap_2()
-                    .child(div().text_size(px(14.)).text_color(theme::muted()).child(footer_text))
+                    .child(div().text_size(zoomed(14.)).text_color(theme::muted()).child(footer_text))
                     .children(actions),
             )
             .into_any_element()
@@ -229,12 +230,12 @@ fn vote_count(count: u32) -> SharedString {
 /// The box an answer shows before voting: round for one answer, square
 /// for several, filled once picked.
 fn check_box(picked: bool, multiple: bool) -> gpui::Div {
-    let side = px(20.);
+    let side = zoomed(20.);
     div()
         .flex_none()
         .size(side)
         .border_2()
-        .border_color(if picked { rgb(theme::BRAND) } else { rgb(theme::INTERACTIVE_MUTED) })
-        .when(picked, |b| b.bg(rgb(theme::BRAND)))
+        .border_color(if picked { rgb(theme::brand()) } else { rgb(theme::interactive_muted()) })
+        .when(picked, |b| b.bg(rgb(theme::brand())))
         .map(|b| if multiple { b.rounded_sm() } else { b.rounded_full() })
 }

@@ -1,11 +1,13 @@
 //! The window drawn: sidebars, the chat, panels and overlays.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Render for Emerald {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Read here, not only on change: the window may start out focused.
         self.window_active = window.is_window_active();
+        self.apply_appearance(window);
         for image in self.images.take_retired() {
             cx.drop_image(image, Some(window));
         }
@@ -43,6 +45,14 @@ impl Render for Emerald {
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.dismiss(window, cx)))
             .on_action(cx.listener(|this, _: &EditLast, window, cx| this.edit_last(window, cx)))
             .on_action(cx.listener(|this, _: &QuickSwitch, window, cx| this.open_switcher(window, cx)))
+            .on_action(cx.listener(|this, _: &MarkRead, _, cx| this.mark_read(cx)))
+            .on_action(cx.listener(|this, _: &NextUnread, window, cx| this.step_channel(true, true, window, cx)))
+            .on_action(cx.listener(|this, _: &ZoomIn, _, cx| this.zoom_by(true, cx)))
+            .on_action(cx.listener(|this, _: &ZoomOut, _, cx| this.zoom_by(false, cx)))
+            .on_action(cx.listener(|this, _: &ZoomReset, _, cx| this.zoom_reset(cx)))
+            .on_action(cx.listener(|this, _: &PreviousChannel, window, cx| this.step_channel(false, false, window, cx)))
+            .on_action(cx.listener(|this, _: &NextChannel, window, cx| this.step_channel(true, false, window, cx)))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| this.record_shortcut(event, cx)))
             .on_action(cx.listener(|this, _: &crate::text_input::Copy, _, cx| {
                 this.copy_selection(cx);
             }))
@@ -50,8 +60,8 @@ impl Render for Emerald {
             .relative()
             .flex()
             .size_full()
-            .bg(rgb(theme::BASE_LOWEST))
-            .text_size(px(16.))
+            .bg(rgb(theme::base_lowest()))
+            .text_size(zoomed(16.))
             // gpui defaults to 1.618; Discord's interface sits near 1.25.
             .line_height(relative(1.25))
             .text_color(theme::text())
@@ -60,9 +70,9 @@ impl Render for Emerald {
                 div()
                     .flex()
                     .flex_1()
-                    .min_w(px(0.))
+                    .min_w(zoomed(0.))
                     .h_full()
-                    .rounded_tl(px(8.))
+                    .rounded_tl(zoomed(8.))
                     .border_l_1()
                     .border_t_1()
                     .border_color(theme::border())

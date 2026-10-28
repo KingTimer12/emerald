@@ -1,12 +1,14 @@
 //! The member list beside guild channels, fed by `state::MemberList`.
 
+use crate::zoom::zoomed;
+
 mod row;
 
 
 use std::ops::Range;
 use std::time::Duration;
 
-use gpui::{AnyElement, Context, FontWeight, ScrollStrategy, SharedString, div, prelude::*, px, rgb, uniform_list};
+use gpui::{AnyElement, Context, FontWeight, ScrollStrategy, SharedString, div, prelude::*, rgb, uniform_list};
 
 use super::super::theme;
 use super::state::MemberList;
@@ -146,16 +148,16 @@ impl Emerald {
             .into_any_element()
         };
         div()
-            .w(px(WIDTH))
+            .w(zoomed(WIDTH))
             .flex_none()
             .h_full()
             .flex()
             .flex_col()
             .border_l_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .child(div().w_full().flex_none().p_2().child(self.member_query.clone()))
-            .child(div().w_full().flex_1().min_h(px(0.)).child(body))
+            .child(div().w_full().flex_1().min_h(zoomed(0.)).child(body))
     }
 
     fn render_search_results(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -169,8 +171,8 @@ impl Emerald {
             return div()
                 .w_full()
                 .p_4()
-                .text_size(px(14.))
-                .text_color(rgb(theme::TEXT_MUTED))
+                .text_size(zoomed(14.))
+                .text_color(rgb(theme::text_muted()))
                 .child(text)
                 .into_any_element();
         }

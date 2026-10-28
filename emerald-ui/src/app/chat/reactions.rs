@@ -2,7 +2,7 @@
 //! keeping counts in step with the gateway. Ours show at once and are
 //! undone if Discord refuses them.
 
-use gpui::{Context, Div, FontWeight, SharedString, div, img, prelude::*, px, rgb};
+use gpui::{Context, Div, FontWeight, SharedString, div, img, prelude::*, rgb};
 
 use super::super::super::icons::{self, icon};
 use super::super::super::{emoji, theme};
@@ -10,6 +10,7 @@ use super::super::state::{Msg, Reacted};
 use super::super::{Emerald, shown, widgets};
 use emerald_discord::model::{Emoji, Snowflake, custom_url};
 use emerald_discord::{Command, ReactionEvent, ReactionSource, permissions};
+use crate::zoom::zoomed;
 
 /// Emoji kept for "Frequently Used", newest first.
 const RECENT_EMOJI: usize = 27;
@@ -144,7 +145,7 @@ impl Emerald {
         let add = self.may_react(channel, msg, true).then(|| {
             div()
                 .id(("reaction-add", ix))
-                .h(px(28.))
+                .h(zoomed(28.))
                 .px_2()
                 .flex()
                 .items_center()
@@ -152,10 +153,10 @@ impl Emerald {
                 .cursor_pointer()
                 .border_1()
                 .border_color(gpui::transparent_black())
-                .bg(rgb(theme::BASE_LOW))
+                .bg(rgb(theme::base_low()))
                 .hover(|s| s.border_color(theme::border()))
                 .tooltip(widgets::tooltip(t!("reaction.add")))
-                .child(icon(icons::REACTION, 18., theme::INTERACTIVE))
+                .child(icon(icons::REACTION, 18., theme::interactive()))
                 .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
                     this.open_reaction_picker(channel, id, event.position(), window, cx)
                 }))
@@ -172,31 +173,31 @@ impl Emerald {
         let name = emoji_label(&reaction.emoji);
         div()
             .id(SharedString::from(format!("reaction-{}-{}", id.0, id.1)))
-            .h(px(28.))
+            .h(zoomed(28.))
             .px_2()
             .flex()
             .items_center()
-            .gap(px(6.))
+            .gap(zoomed(6.))
             .rounded_lg()
             .border_1()
             .map(|chip| {
                 if mine {
-                    chip.bg(theme::reaction_mine()).border_color(rgb(theme::BRAND))
+                    chip.bg(theme::reaction_mine()).border_color(rgb(theme::brand()))
                 } else {
-                    chip.bg(rgb(theme::BASE_LOW))
+                    chip.bg(rgb(theme::base_low()))
                         .border_color(gpui::transparent_black())
                         .hover(|s| s.border_color(theme::border()))
                 }
             })
             // Super reactions: Discord's gradient outline, approximated.
-            .when(burst && !mine, |chip| chip.border_color(rgb(theme::IDLE)))
+            .when(burst && !mine, |chip| chip.border_color(rgb(theme::idle())))
             .tooltip(widgets::tooltip(name))
             .child(self.emoji_image(&reaction.emoji, CHIP_EMOJI))
             .child(
                 div()
-                    .text_size(px(14.))
+                    .text_size(zoomed(14.))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(if mine { rgb(theme::MENTION_TEXT).into() } else { theme::muted() })
+                    .text_color(if mine { rgb(theme::mention_text()).into() } else { theme::muted() })
                     .child(count.to_string()),
             )
     }
@@ -206,13 +207,13 @@ impl Emerald {
     pub(in super::super) fn emoji_image(&self, emoji: &Emoji, size: f32) -> gpui::AnyElement {
         match emoji.id {
             Some(id) => match self.avatar_image(&custom_url(id)) {
-                Some(image) => img(image).size(px(size)).flex_none().into_any_element(),
-                None => div().size(px(size)).flex_none().into_any_element(),
+                Some(image) => img(image).size(zoomed(size)).flex_none().into_any_element(),
+                None => div().size(zoomed(size)).flex_none().into_any_element(),
             },
             None => div()
                 .flex_none()
-                .text_size(px(size))
-                .line_height(px(size * 1.2))
+                .text_size(zoomed(size))
+                .line_height(zoomed(size * 1.2))
                 .child(emoji.name.clone().unwrap_or_default())
                 .into_any_element(),
         }

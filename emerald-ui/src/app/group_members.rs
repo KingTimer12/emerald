@@ -1,11 +1,12 @@
 //! The people in a group DM, beside its chat in place of a server's member
 //! list, with the owner marked.
 
-use gpui::{AnyElement, Context, FontWeight, MouseButton, SharedString, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, FontWeight, MouseButton, SharedString, div, prelude::*, rgb};
 
 use super::super::theme;
 use super::{Emerald, widgets};
 use emerald_discord::model::Snowflake;
+use crate::zoom::zoomed;
 
 impl Emerald {
     pub(super) fn render_group_members(&self, channel: Snowflake, cx: &mut Context<Self>) -> AnyElement {
@@ -23,7 +24,7 @@ impl Emerald {
             let status = self.people.presence(id);
             div()
                 .id(("group-member", ix))
-                .h(px(44.))
+                .h(zoomed(44.))
                 .flex_none()
                 .flex()
                 .items_center()
@@ -33,14 +34,14 @@ impl Emerald {
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .when(status == "offline", |row| row.opacity(0.3))
-                .child(widgets::avatar(&name, id, self.user_avatar(id), 32., Some((status, theme::BASE_LOWEST))))
+                .child(widgets::avatar(&name, id, self.user_avatar(id), 32., Some((status, theme::base_lowest()))))
                 .child(
                     div()
                         .flex_1()
-                        .min_w(px(0.))
+                        .min_w(zoomed(0.))
                         .truncate()
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgb(theme::CHANNELS_DEFAULT))
+                        .text_color(rgb(theme::channels_default()))
                         .child(name),
                 )
                 .when(owner == Some(id), |row| {
@@ -48,8 +49,8 @@ impl Emerald {
                         div()
                             .id(("group-owner", ix))
                             .flex_none()
-                            .text_size(px(14.))
-                            .text_color(rgb(theme::MENTIONED_BAR))
+                            .text_size(zoomed(14.))
+                            .text_color(rgb(theme::mentioned_bar()))
                             .tooltip(widgets::tooltip(t!("group.owner")))
                             .child("♛"),
                     )
@@ -59,7 +60,7 @@ impl Emerald {
         });
         div()
             .id("group-members")
-            .w(px(240.))
+            .w(zoomed(240.))
             .flex_none()
             .h_full()
             .overflow_y_scroll()
@@ -67,7 +68,7 @@ impl Emerald {
             .pt_4()
             .border_l_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOWEST))
+            .bg(rgb(theme::base_lowest()))
             .flex()
             .flex_col()
             .child(widgets::label(t!("group.members", count = count)).px_2().mb_2())

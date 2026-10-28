@@ -2,6 +2,7 @@
 //! "New Post". Each change pages the posts in again from the start.
 
 use super::*;
+use crate::zoom::zoomed;
 
 impl Emerald {
     /// Changes the forum's sort, tags or search, and pages again.
@@ -47,15 +48,15 @@ impl Emerald {
                     .child(
                         div()
                             .flex_1()
-                            .h(px(32.))
+                            .h(zoomed(32.))
                             .px_2()
                             .flex()
                             .items_center()
                             .gap_1()
                             .rounded_md()
-                            .bg(rgb(theme::BASE_LOWEST))
-                            .child(icon(icons::SEARCH, 16., theme::INTERACTIVE))
-                            .child(div().flex_1().min_w(px(0.)).child(self.forum_query.clone())),
+                            .bg(rgb(theme::base_lowest()))
+                            .child(icon(icons::SEARCH, 16., theme::interactive()))
+                            .child(div().flex_1().min_w(zoomed(0.)).child(self.forum_query.clone())),
                     )
                     .child(
                         chip(("forum-sort", 0), sort.into(), false)
@@ -67,7 +68,7 @@ impl Emerald {
                     .when(postable, |row| {
                         row.child(
                             widgets::button("new-post", t!("forum.new_post"), widgets::ButtonKind::Brand)
-                                .h(px(32.))
+                                .h(zoomed(32.))
                                 .on_click(cx.listener(move |this, _, window, cx| this.open_create_post(forum, window, cx))),
                         )
                     }),
@@ -97,14 +98,14 @@ fn chip(id: (&'static str, usize), label: SharedString, on: bool) -> gpui::State
     div()
         .id(id)
         .px_2()
-        .py(px(2.))
+        .py(zoomed(2.))
         .rounded_full()
         .border_1()
-        .border_color(if on { rgb(theme::BRAND) } else { theme::border() })
-        .bg(if on { theme::active() } else { rgb(theme::BASE_LOWER) })
+        .border_color(if on { rgb(theme::brand()) } else { theme::border() })
+        .bg(if on { theme::active() } else { rgb(theme::base_lower()) })
         .text_xs()
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(if on { theme::TEXT_STRONG } else { theme::TEXT_DEFAULT }))
+        .text_color(rgb(if on { theme::text_strong() } else { theme::text_default() }))
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .child(label)

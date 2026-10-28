@@ -4,6 +4,7 @@
 use super::*;
 
 use emerald_discord::model::Message;
+use crate::zoom::zoomed;
 
 impl Found {
     /// `message` as a card; its guild from the message, else from where
@@ -34,7 +35,7 @@ impl Emerald {
         let footer = if results.loading {
             Some(note(t!("common.loading")).into_any_element())
         } else if let Some(error) = &results.error {
-            Some(note(error.clone()).text_color(rgb(theme::FEEDBACK_CRITICAL)).into_any_element())
+            Some(note(error.clone()).text_color(rgb(theme::feedback_critical())).into_any_element())
         } else if results.items.is_empty() {
             Some(note(empty).into_any_element())
         } else if results.more {
@@ -55,7 +56,7 @@ impl Emerald {
         div()
             .id(id)
             .flex_1()
-            .min_h(px(0.))
+            .min_h(zoomed(0.))
             .overflow_y_scroll()
             .p_2()
             .flex()
@@ -81,9 +82,9 @@ impl Emerald {
             .rounded_lg()
             .border_1()
             .border_color(theme::border())
-            .bg(rgb(theme::BASE_LOW))
+            .bg(rgb(theme::base_low()))
             .cursor_pointer()
-            .hover(|s| s.bg(rgb(theme::SURFACE_HIGH)))
+            .hover(|s| s.bg(rgb(theme::surface_high())))
             .on_click(cx.listener(move |this, _, window, cx| this.open_channel_link(guild, channel, Some(message), window, cx)))
             .children(place.map(|place| {
                 div()
@@ -99,13 +100,13 @@ impl Emerald {
                     .items_center()
                     .gap_2()
                     .child(widgets::avatar(&author, msg.author_id, self.avatar_image(&msg.avatar_url), 24., None))
-                    .child(div().text_color(rgb(color)).font_weight(FontWeight::MEDIUM).text_size(px(14.)).child(author))
+                    .child(div().text_color(rgb(color)).font_weight(FontWeight::MEDIUM).text_size(zoomed(14.)).child(author))
                     .child(div().text_xs().text_color(theme::muted()).child(msg.time.clone())),
             )
             .child(
                 div()
-                    .text_size(px(14.))
-                    .text_color(rgb(theme::TEXT_DEFAULT))
+                    .text_size(zoomed(14.))
+                    .text_color(rgb(theme::text_default()))
                     .child(self.rich_text((id, ix), &msg.content, &msg.mentions)),
             )
             .when(attachments > 0, |card| {
@@ -116,7 +117,7 @@ impl Emerald {
                         .gap_1()
                         .text_xs()
                         .text_color(theme::muted())
-                        .child(icons::icon(icons::ATTACH, 14., theme::TEXT_MUTED))
+                        .child(icons::icon(icons::ATTACH, 14., theme::text_muted()))
                         .child(t!("panel.attachments", count = attachments)),
                 )
             })
