@@ -35,12 +35,16 @@ use gpui::{
 };
 
 use super::super::{icons, lottie, theme};
-use super::{Emerald, widgets};
+use super::{Emerald, MEMBERS_MIN_WINDOW, PROFILE_MIN_WINDOW, widgets};
 use super::state::Msg;
 use emerald_discord::model::Snowflake;
 
 impl Emerald {
-    pub(super) fn render_chat(&self, wide: bool, cx: &mut Context<Self>) -> AnyElement {
+    /// The chat column and, when the `width` of the window leaves room, the
+    /// profile or member list beside it.
+    pub(super) fn render_chat(&self, width: f32, cx: &mut Context<Self>) -> AnyElement {
+        let wide = width >= PROFILE_MIN_WINDOW;
+        let members_fit = width >= MEMBERS_MIN_WINDOW;
         if self.friends_open && self.spaces.current().is_dms() {
             return self.render_friends(cx).into_any_element();
         }
@@ -315,10 +319,10 @@ impl Emerald {
                             .when_some(user.filter(|_| wide && self.settings.show_profile), |row, user| {
                                 row.child(self.render_profile_panel(user, cx))
                             })
-                            .when(wide && self.members.current().is_some(), |row| {
+                            .when(members_fit && self.members.current().is_some(), |row| {
                                 row.child(self.render_member_list(cx))
                             })
-                            .when_some(group.filter(|_| wide && self.settings.show_members), |row, group| {
+                            .when_some(group.filter(|_| members_fit && self.settings.show_members), |row, group| {
                                 row.child(self.render_group_members(group, cx))
                             }),
                     }),

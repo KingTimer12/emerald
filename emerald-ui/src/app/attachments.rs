@@ -9,7 +9,6 @@ mod picking;
 use picking::*;
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use gpui::{
     AnyElement, Context, ExternalPaths, Focusable, FontWeight, Image, ImageFormat, MouseButton, PathPromptOptions,
@@ -18,7 +17,7 @@ use gpui::{
 
 use super::super::icons::{self, icon};
 use super::super::theme;
-use super::{Emerald, Overlay, widgets};
+use super::{Emerald, Overlay, Still, widgets};
 use emerald_discord::Upload;
 
 /// Files one message may carry, as in Discord.
@@ -31,14 +30,14 @@ const CARD: f32 = 160.;
 /// A file waiting in the composer.
 pub(super) struct Attachment {
     pub upload: Upload,
-    /// Images show themselves on the card.
-    preview: Option<Arc<Image>>,
+    /// Images show themselves on the card; a photo's pixels are large, so
+    /// they leave memory with the card.
+    preview: Option<Still>,
 }
 
 impl Attachment {
     pub fn new(upload: Upload) -> Self {
-        let preview = preview_format(&upload.name)
-            .map(|format| Arc::new(Image::from_bytes(format, upload.bytes.to_vec())));
+        let preview = preview_format(&upload.name).map(|format| Still::new(format, upload.bytes.to_vec()));
         Self { upload, preview }
     }
 }
@@ -59,7 +58,7 @@ impl Emerald {
         }
         let cards = self.composer.attachments.iter().enumerate().map(|(ix, file)| {
             let shown = match &file.preview {
-                Some(image) => img(image.clone()).size_full().rounded_md().into_any_element(),
+                Some(image) => img(image.image()).size_full().rounded_md().into_any_element(),
                 None => div().text_size(zoomed(48.)).child("📄").into_any_element(),
             };
             let spoiler = file.upload.spoiler;

@@ -8,10 +8,8 @@ impl Render for Emerald {
         // Read here, not only on change: the window may start out focused.
         self.window_active = window.is_window_active();
         self.apply_appearance(window);
-        for image in self.images.take_retired() {
-            cx.drop_image(image, Some(window));
-        }
-        let wide = f32::from(window.viewport_size().width) >= PROFILE_MIN_WINDOW;
+        self.images.release(window, cx);
+        let width = f32::from(window.viewport_size().width);
         // Visual-refresh frame: server list on the app background, then one
         // bordered panel with a rounded top-left corner holding sidebar and
         // chat, and the user panel floating over the bottom-left corner.
@@ -78,7 +76,7 @@ impl Render for Emerald {
                     .border_t_1()
                     .border_color(theme::border())
                     .child(self.render_channels(cx))
-                    .child(self.render_chat(wide, cx)),
+                    .child(self.render_chat(width, cx)),
             )
             .children(self.render_call_panel(cx))
             .child(self.render_user_panel(cx))

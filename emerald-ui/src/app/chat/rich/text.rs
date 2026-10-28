@@ -117,9 +117,16 @@ impl Emerald {
             .into_iter()
             .filter(|emoji| !covered(&emoji.range))
             .filter_map(|emoji| {
-                let animated = emoji.animated && animate;
-                let url = if animated { animated_custom_url(emoji.id) } else { custom_url(emoji.id) };
-                let image = self.avatar_image(&url)?;
+                // gpui draws only a WebP's first frame: moving ones are
+                // decoded apart, and show still until they are.
+                let moving = (emoji.animated && animate)
+                    .then(|| self.images.animated(&animated_custom_url(emoji.id), EMOJI_PIXELS, EMOJI_PIXELS, &*self.net))
+                    .flatten();
+                let animated = moving.is_some();
+                let image = match moving {
+                    Some(frames) => ImageSource::Render(frames),
+                    None => ImageSource::Image(self.avatar_image(&custom_url(emoji.id))?),
+                };
                 Some((emoji.range, image, animated))
             })
             .collect();
@@ -142,7 +149,11 @@ impl Emerald {
                             .into_iter()
                             .filter_map(|(range, image, animated)| {
                                 let bounds = emoji_bounds(&layout, range, jumbo)?;
-                                let image = image.use_render_image(window, cx)?;
+                                let image = match image {
+                                    ImageSource::Render(frames) => frames,
+                                    ImageSource::Image(image) => image.use_render_image(window, cx)?,
+                                    _ => return None,
+                                };
                                 let frame = if animated { frame_at(&image, elapsed) } else { 0 };
                                 Some((bounds, image, frame))
                             })

@@ -55,6 +55,9 @@ pub fn spawn(
                 .ok();
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
+                // Disk cache reads and frame decoding: a screenful of moving
+                // emoji would otherwise start a thread each (tokio allows 512).
+                .max_blocking_threads(8)
                 .build()
                 .expect("tokio runtime");
             runtime.block_on(async move {

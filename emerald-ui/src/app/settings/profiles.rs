@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
-use gpui::{Image, ImageFormat, PathPromptOptions, img};
+use gpui::{ImageFormat, PathPromptOptions, img};
+
+use super::super::Still;
 
 use super::*;
 use emerald_discord::model::{banner_url, guild_banner_url};
@@ -35,9 +37,9 @@ pub(in super::super) struct ProfileForm {
     /// when it does.
     filled: bool,
     avatar: Option<Option<Picture>>,
-    avatar_preview: Option<Arc<Image>>,
+    avatar_preview: Option<Still>,
     banner: Option<Option<Picture>>,
-    banner_preview: Option<Arc<Image>>,
+    banner_preview: Option<Still>,
     accent_color: Option<Option<u32>>,
     servers_open: bool,
 }
@@ -150,7 +152,7 @@ impl Emerald {
                     return;
                 }
                 let Some(form) = view.profile.as_mut() else { return };
-                let preview = Some(Arc::new(Image::from_bytes(format, bytes.clone())));
+                let preview = Some(Still::new(format, bytes.clone()));
                 let picture = Some(Some((mime, Arc::<[u8]>::from(bytes))));
                 match slot {
                     Slot::Avatar => (form.avatar, form.avatar_preview) = (picture, preview),
@@ -473,7 +475,7 @@ impl Emerald {
             None => global.and_then(|p| p.user.banner.as_deref()).map(|hash| banner_url(id, hash)),
         };
         let banner_image = match &form.banner {
-            Some(Some(_)) => form.banner_preview.clone(),
+            Some(Some(_)) => form.banner_preview.as_ref().map(Still::image),
             Some(None) => None,
             None => banner_hash.and_then(|url| self.avatar_image(&url)),
         };
@@ -482,7 +484,7 @@ impl Emerald {
             .unwrap_or_else(|| global.and_then(|p| p.user.accent_color))
             .unwrap_or(theme::brand());
         let avatar = match &form.avatar {
-            Some(Some(_)) => form.avatar_preview.clone(),
+            Some(Some(_)) => form.avatar_preview.as_ref().map(Still::image),
             Some(None) => self.avatar_image(&emerald_discord::model::avatar_url(id, None)),
             None => me.and_then(|me| self.avatar_image(&me.avatar_url())),
         };

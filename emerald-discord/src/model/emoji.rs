@@ -46,16 +46,17 @@ impl Emoji {
     }
 }
 
-/// CDN image of a custom emoji, sized for 2x displays. Animated emoji come
-/// as their first frame.
+/// CDN image of a custom emoji, sized for 2x displays, as the web client
+/// asks for it: WebP, lighter than PNG. Animated emoji come as their first
+/// frame.
 pub fn custom_url(id: Snowflake) -> String {
-    CDN.join(format_args!("/emojis/{id}.png?size=48"))
+    CDN.join(format_args!("/emojis/{id}.webp?size=48"))
 }
 
-/// An animated custom emoji with all its frames. The web client asks for
-/// WebP; GIF is the animated format gpui decodes frame by frame.
+/// An animated custom emoji with all its frames, as an animated WebP (the
+/// web client's `animated=true`), lighter than the GIF.
 pub fn animated_custom_url(id: Snowflake) -> String {
-    CDN.join(format_args!("/emojis/{id}.gif?size=48"))
+    CDN.join(format_args!("/emojis/{id}.webp?size=48&animated=true"))
 }
 
 /// An emoji uploaded to a guild.

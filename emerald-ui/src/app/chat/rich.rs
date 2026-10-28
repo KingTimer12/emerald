@@ -13,7 +13,7 @@ use std::ops::Range;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Bounds, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, SharedString,
+    AnyElement, Bounds, ElementId, FontStyle, FontWeight, HighlightStyle, ImageSource, InteractiveText, SharedString,
     StrikethroughStyle, StyledText, TextLayout, UnderlineStyle, canvas, div, point, prelude::*, rgb, rgba, size,
 };
 
@@ -25,6 +25,8 @@ use emerald_discord::model::{Snowflake, animated_custom_url, custom_url};
 
 /// Emoji-only messages, as large as Discord draws them.
 const JUMBO: f32 = 48.;
+/// Custom emoji are fetched this many pixels square (`?size=48`).
+const EMOJI_PIXELS: u32 = 48;
 /// Spoilers opened by the reader are remembered up to this many, then the
 /// oldest close again.
 const MAX_REVEALED: usize = 500;

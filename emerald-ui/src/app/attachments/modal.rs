@@ -28,7 +28,7 @@ impl Emerald {
     /// "Modify Attachment": the alt text and the spoiler switch.
     pub(in super::super) fn render_attachment_modal(&self, ix: usize, spoiler: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
         let file = self.composer.attachments.get(ix)?;
-        let preview = file.preview.clone().map(|image| {
+        let preview = file.preview.as_ref().map(Still::image).map(|image| {
             div()
                 .relative()
                 .h(zoomed(160.))

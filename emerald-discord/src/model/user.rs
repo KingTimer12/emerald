@@ -33,19 +33,21 @@ impl User {
     }
 
     /// The moving avatar of a Nitro user whose hash marks it animated
-    /// (`a_…`), as a GIF gpui plays frame by frame.
+    /// (`a_…`), as an animated WebP like the web client asks for: lighter
+    /// than the GIF.
     pub fn animated_avatar_url(&self) -> Option<String> {
         let hash = self.avatar.as_deref().filter(|hash| hash.starts_with("a_"))?;
-        Some(CDN.join(format_args!("/avatars/{}/{hash}.gif?size=128", self.id)))
+        Some(CDN.join(format_args!("/avatars/{}/{hash}.webp?size=128&animated=true", self.id)))
     }
 }
 
-/// CDN URL of a user's avatar, as a PNG sized for 2x displays. Without a
-/// hash Discord shows one of six default avatars, picked by `(id >> 22) % 6`
-/// for accounts on the current username system.
+/// CDN URL of a user's avatar, as a WebP (as the web client asks for it)
+/// sized for 2x displays. Without a hash Discord shows one of six default
+/// avatars, picked by `(id >> 22) % 6` for accounts on the current username
+/// system.
 pub fn avatar_url(id: Snowflake, hash: Option<&str>) -> String {
     match hash {
-        Some(hash) => CDN.join(format_args!("/avatars/{id}/{hash}.png?size=128")),
+        Some(hash) => CDN.join(format_args!("/avatars/{id}/{hash}.webp?size=128")),
         None => CDN.join(format_args!("/embed/avatars/{}.png", (id.0 >> 22) % 6)),
     }
 }
@@ -165,7 +167,7 @@ mod tests {
         };
         assert_eq!(
             user("a_abc").animated_avatar_url().as_deref(),
-            Some("https://cdn.discordapp.com/avatars/5/a_abc.gif?size=128")
+            Some("https://cdn.discordapp.com/avatars/5/a_abc.webp?size=128&animated=true")
         );
         assert_eq!(user("abc").animated_avatar_url(), None);
     }
@@ -175,7 +177,7 @@ mod tests {
         let id = Snowflake(80351110224678912);
         assert_eq!(
             avatar_url(id, Some("abc")),
-            "https://cdn.discordapp.com/avatars/80351110224678912/abc.png?size=128"
+            "https://cdn.discordapp.com/avatars/80351110224678912/abc.webp?size=128"
         );
         assert_eq!(
             avatar_url(id, None),

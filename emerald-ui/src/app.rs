@@ -52,7 +52,7 @@ pub use window::initial_bounds;
 use connection::*;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, Image, KeyBinding, KeyDownEvent, ListAlignment, ListState,
+    App, Context, Entity, FocusHandle, Focusable, Image, ImageSource, KeyBinding, KeyDownEvent, ListAlignment, ListState,
     SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, relative, rgb,
 };
 
@@ -66,7 +66,7 @@ use crate::settings::Settings;
 use add_server::AddServer;
 use composer::Composer;
 use friends::Friends;
-use images::Images;
+use images::{Images, Still};
 pub use alerts::Alerts;
 pub use desktop::{Desktop, Update};
 pub use outbox::Outbox;
@@ -95,6 +95,11 @@ pub(crate) fn bind_fixed_keys(cx: &mut App) {
 const PROFILE_TTL: Duration = Duration::from_secs(10 * 60);
 /// The profile panel only fits beside the chat in wide windows.
 const PROFILE_MIN_WINDOW: f32 = 1100.;
+/// The member list is narrower: server list, sidebar and the list (72 +
+/// 240 + 240) still leave the chat about 400px.
+const MEMBERS_MIN_WINDOW: f32 = 960.;
+/// Avatars are fetched this many pixels square (`?size=128`).
+const AVATAR_PIXELS: u32 = 128;
 
 /// Something drawn above the main layout; Escape dismisses it.
 enum Overlay {
@@ -477,15 +482,18 @@ impl Emerald {
 
     /// A user's avatar on their profile: moving when it is animated and
     /// the window has focus, as the web client plays them, else still.
-    fn profile_avatar(&self, id: Snowflake) -> Option<Arc<Image>> {
+    /// gpui draws only a WebP's first frame, so the moving one is decoded
+    /// apart, at the size it is fetched.
+    fn profile_avatar(&self, id: Snowflake) -> Option<ImageSource> {
         let animated = self
             .people
             .user(id)
             .filter(|_| self.animates())
             .and_then(|user| user.animated_avatar_url());
         animated
-            .and_then(|url| self.avatar_image(&url))
-            .or_else(|| self.user_avatar(id))
+            .and_then(|url| self.images.animated(&url, AVATAR_PIXELS, AVATAR_PIXELS, &*self.net))
+            .map(ImageSource::Render)
+            .or_else(|| self.user_avatar(id).map(ImageSource::Image))
     }
 
     /// Sends a REST action unless the same kind is already in flight.

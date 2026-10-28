@@ -1,9 +1,7 @@
 //! Small Discord-styled building blocks shared by the views.
 
-use std::sync::Arc;
-
 use gpui::{
-    AnyView, App, Context, Div, ElementId, FontWeight, Image, SharedString, Stateful, Window, div,
+    AnyView, App, Context, Div, ElementId, FontWeight, ImageSource, SharedString, Stateful, Window, div,
     img, prelude::*, rgb,
 };
 
@@ -41,7 +39,7 @@ pub fn status_label(status: Option<&str>) -> &'static str {
 pub fn avatar(
     name: &str,
     id: Snowflake,
-    image: Option<Arc<Image>>,
+    image: Option<impl Into<ImageSource>>,
     size: f32,
     status: Option<(&str, u32)>,
 ) -> Div {

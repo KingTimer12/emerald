@@ -102,7 +102,8 @@ CPU near zero when idle.
 - **Moving through history**: a "new messages" divider and bar (jump to the first unread,
   or mark as read), clicking a reply or a message link loads the page around the original
   and flashes it, and a bar leads back to the present when reading older messages.
-- **Animated avatars** on profiles and the user panel, while the window has focus.
+- **Animated avatars** on profiles and the user panel, while the window has focus. Avatars
+  and custom emoji come as WebP, as the web client asks for them, lighter than PNG and GIF.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
 - **Unread state** synced with other devices, with read receipts batched; mention counts
@@ -421,5 +422,8 @@ A few design choices:
   follow what the web client does, so the client neither stands out nor abuses the API.
   REST requests respect rate-limit buckets, a global cap below Discord's, and a guard
   against too many invalid requests.
-- **Bounded memory.** History for up to 8 channels with 300 messages each, up to 1500
-  decoded images, and only the visible pages of the member list.
+- **Bounded memory.** History for up to 8 channels with 300 messages each, images up to
+  48 MB of decoded pixels, animated ones up to 64 MB and small animated ones (emoji,
+  avatars) up to 32 MB (what is on screen always stays),
+  and only the visible pages of the member list. Evicted images leave gpui's caches and
+  the GPU too.
