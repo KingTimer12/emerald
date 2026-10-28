@@ -1,15 +1,28 @@
-//! Release signatures: ed25519 over the SHA-512 of the whole file
-//! (Ed25519ph), so a download is hashed as it arrives instead of being
-//! held in memory to be checked.
+//! Release signatures: ed25519 over a SHA-512 (Ed25519ph), so a download
+//! is hashed as it arrives instead of being held in memory to be checked.
+//! The hash starts with the release's version and platform, then the
+//! file: a signature only vouches for that file as that version for that
+//! platform, so an older build cannot be offered again as a newer one.
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ed25519_dalek::{Signature, SigningKey, VerifyingKey};
-use sha2::Sha512;
+use sha2::{Digest, Sha512};
 
 /// Binds signatures to this use, so no other ed25519 signature made with
 /// the same key passes for a release.
 const CONTEXT: &[u8] = b"emerald-desktop release";
+
+/// The hash a release's file is fed into, already bound to `version`
+/// (a leading `v` ignored) and `platform`.
+pub fn begin(version: &str, platform: &str) -> Sha512 {
+    let mut digest = Sha512::new();
+    for part in [b"emerald release".as_slice(), version.trim().trim_start_matches('v').as_bytes(), platform.as_bytes()] {
+        digest.update((part.len() as u64).to_le_bytes());
+        digest.update(part);
+    }
+    digest
+}
 
 /// A release key's public half, from its base64 form.
 pub fn public_key(base64: &str) -> Option<VerifyingKey> {
@@ -32,12 +45,10 @@ pub fn sign(key: &SigningKey, digest: Sha512) -> String {
 
 #[cfg(test)]
 mod tests {
-    use sha2::Digest;
-
     use super::*;
 
     fn digest(data: &[u8]) -> Sha512 {
-        let mut hasher = Sha512::new();
+        let mut hasher = begin("1.0.0", "macos-aarch64");
         hasher.update(data);
         hasher
     }
@@ -52,5 +63,17 @@ mod tests {
         assert!(!verify(&public, digest(b"release"), "not base64!"));
         let other = SigningKey::from_bytes(&[8; 32]).verifying_key();
         assert!(!verify(&other, digest(b"release"), &signature));
+    }
+
+    #[test]
+    fn a_signature_holds_for_one_version_and_platform() {
+        let secret = SigningKey::from_bytes(&[7; 32]);
+        let signature = sign(&secret, digest(b"release"));
+        let mut newer = begin("2.0.0", "macos-aarch64");
+        newer.update(b"release");
+        assert!(!verify(&secret.verifying_key(), newer, &signature));
+        let mut elsewhere = begin("1.0.0", "windows-x86_64");
+        elsewhere.update(b"release");
+        assert!(!verify(&secret.verifying_key(), elsewhere, &signature));
     }
 }

@@ -15,11 +15,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use sha2::{Digest, Sha512};
+use sha2::Digest;
 use tokio::io::AsyncWriteExt;
 
 pub use feed::{Artifact, Feed, platform, version};
-pub use signature::{public_key, sign};
+pub use signature::{begin, public_key, sign};
 
 use crate::Packaging;
 
@@ -155,12 +155,16 @@ impl Worker {
 
     /// One check: the feed, then the download when there is something new.
     async fn round(&self, http: &reqwest::Client) -> Result<Status> {
-        let response = http.get(&self.config.feed).timeout(Duration::from_secs(30)).send().await?;
-        let response = response.error_for_status()?;
-        if response.content_length().is_some_and(|length| length > MAX_FEED as u64) {
-            bail!("the feed is too large");
+        let mut response = http.get(&self.config.feed).timeout(Duration::from_secs(30)).send().await?;
+        response = response.error_for_status()?;
+        let mut body = Vec::new();
+        while let Some(chunk) = response.chunk().await? {
+            if body.len() + chunk.len() > MAX_FEED {
+                bail!("the feed is too large");
+            }
+            body.extend_from_slice(&chunk);
         }
-        let feed: Feed = serde_json::from_slice(&response.bytes().await?).context("reading the feed")?;
+        let feed: Feed = serde_json::from_slice(&body).context("reading the feed")?;
         let Some(artifact) = feed.newer(&self.config.version, &platform()) else {
             return Ok(Status::UpToDate);
         };
@@ -170,7 +174,7 @@ impl Worker {
         tracing::info!(version = feed.version, "updates: downloading");
         self.send(Status::Downloading(feed.version.clone())).await;
         let download = self.config.dir.join(file_name(&artifact.url)?);
-        self.download(http, artifact, &download).await?;
+        self.download(http, artifact, &feed.version, &download).await?;
         let path = install::stage(&download, &self.config.packaging).context("unpacking the update")?;
         tracing::info!(version = feed.version, "updates: ready");
         if let Ok(mut staged) = self.staged.lock() {
@@ -180,15 +184,16 @@ impl Worker {
     }
 
     /// Downloads `artifact` to `path`, hashing as it goes; the file is
-    /// removed unless its signature checks out.
-    async fn download(&self, http: &reqwest::Client, artifact: &Artifact, path: &Path) -> Result<()> {
+    /// removed unless its signature checks out for `version` on this
+    /// platform.
+    async fn download(&self, http: &reqwest::Client, artifact: &Artifact, version: &str, path: &Path) -> Result<()> {
         tokio::fs::create_dir_all(&self.config.dir).await?;
         let mut response = http.get(&artifact.url).send().await?.error_for_status()?;
         if !response.url().as_str().starts_with("https://") {
             bail!("the download left https");
         }
         let mut file = tokio::fs::File::create(path).await?;
-        let mut digest = Sha512::new();
+        let mut digest = signature::begin(version, &platform());
         let mut size = 0u64;
         let written: Result<()> = async {
             while let Some(chunk) = response.chunk().await? {

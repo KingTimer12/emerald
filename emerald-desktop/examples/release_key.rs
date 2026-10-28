@@ -18,8 +18,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ed25519_dalek::SigningKey;
-use emerald_desktop::update::{Artifact, Feed, sign};
-use sha2::{Digest, Sha512};
+use emerald_desktop::update::{Artifact, Feed, begin, sign};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -68,7 +67,7 @@ fn feed(version: &str, base_url: &str, files: &[String]) -> Result<()> {
     let mut platforms = BTreeMap::new();
     for entry in files {
         let (platform, path) = entry.split_once('=').ok_or_else(|| anyhow!("{entry}: expected PLATFORM=FILE"))?;
-        let mut digest = Sha512::new();
+        let mut digest = begin(version, platform);
         std::io::copy(&mut std::fs::File::open(path).with_context(|| path.to_owned())?, &mut digest)?;
         let name = std::path::Path::new(path).file_name().ok_or_else(|| anyhow!("{path}: no file name"))?;
         platforms.insert(

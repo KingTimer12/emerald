@@ -1,6 +1,7 @@
-//! One instance at a time. On Windows a second launch, as when a link
-//! opens the app, finds the first through a named pipe, hands it its
-//! arguments and exits. macOS needs nothing: Launch Services keeps a
+//! One instance at a time. On Windows a mutex in the session's own
+//! namespace decides which launch is first; a second launch, as when a link
+//! opens the app, hands its arguments to the first through a named pipe
+//! (after checking the pipe's server runs in the same session) and exits. macOS needs nothing: Launch Services keeps a
 //! bundle to one instance and gives the running one its links.
 
 /// Arguments longer than this are not forwarded.
@@ -42,21 +43,50 @@ mod platform {
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
     use std::time::Duration;
 
-    use windows::Win32::Foundation::{ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE};
+    use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_PIPE_CONNECTED, GetLastError, HANDLE, INVALID_HANDLE_VALUE};
     use windows::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND};
     use windows::Win32::System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
+        ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeServerProcessId, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
         PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
     };
+    use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+    use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcessId};
     use windows_core::HSTRING;
 
     use super::{Instance, MAX_FORWARDED, decode, encode};
 
-    /// The user's own pipe: other users' sessions run their own instance.
-    fn pipe_name(id: &str) -> String {
-        let user = std::env::var("USERNAME").unwrap_or_default();
-        let user: String = user.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
-        format!(r"\\.\pipe\{id}-{user}")
+    fn session_of(process: u32) -> Option<u32> {
+        let mut session = 0;
+        // SAFETY: writes one u32.
+        unsafe { ProcessIdToSessionId(process, &mut session) }.ok().map(|()| session)
+    }
+
+    /// The session's own pipe: other sessions run their own instance.
+    fn pipe_name(id: &str, session: u32) -> String {
+        format!(r"\\.\pipe\{id}-{session}")
+    }
+
+    /// Takes the session-local mutex that marks the first instance; false
+    /// when another instance holds it. Other sessions cannot create objects
+    /// in this namespace, so they cannot pose as the first instance.
+    fn first(id: &str) -> bool {
+        // SAFETY: a valid wide string; the handle is kept open for the life
+        // of the process, which is what holds the claim.
+        match unsafe { CreateMutexW(None, false, &HSTRING::from(format!(r"Local\{id}"))) } {
+            Ok(mutex) => {
+                let taken = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+                // SAFETY: owned from here; leaked on purpose while first.
+                let mutex = unsafe { OwnedHandle::from_raw_handle(mutex.0) };
+                if !taken {
+                    std::mem::forget(mutex);
+                }
+                !taken
+            }
+            Err(e) => {
+                tracing::warn!("instance: {e}");
+                true
+            }
+        }
     }
 
     fn listen(name: &str, first: bool) -> Option<OwnedHandle> {
@@ -83,12 +113,19 @@ mod platform {
     }
 
     pub fn claim(id: &str, arguments: &[String]) -> Instance {
-        let name = pipe_name(id);
-        let Some(mut pipe) = listen(&name, true) else {
-            forward(&name, arguments);
+        // SAFETY: no arguments.
+        let session = session_of(unsafe { GetCurrentProcessId() }).unwrap_or_default();
+        let name = pipe_name(id, session);
+        if !first(id) {
+            forward(&name, session, arguments);
             return Instance::Second;
-        };
+        }
         let (sender, launches) = async_channel::bounded(8);
+        let Some(mut pipe) = listen(&name, true) else {
+            // Someone else holds the name: run, without later launches' links.
+            tracing::warn!("instance: the pipe is taken; links from later launches will not arrive");
+            return Instance::First(launches);
+        };
         let spawned = std::thread::Builder::new().name("instance".into()).spawn(move || {
             loop {
                 // SAFETY: `pipe` is an open pipe handle this thread owns.
@@ -115,11 +152,18 @@ mod platform {
     }
 
     /// Hands `arguments` to the running instance, waiting a little while
-    /// it is between two launches.
-    fn forward(name: &str, arguments: &[String]) {
+    /// it is between two launches. Nothing is written to a pipe served from
+    /// another session.
+    fn forward(name: &str, session: u32, arguments: &[String]) {
         let Some(text) = encode(arguments) else { return };
         for _ in 0..10 {
             if let Ok(mut pipe) = OpenOptions::new().write(true).open(name) {
+                let mut server = 0;
+                // SAFETY: an open pipe handle; writes one u32.
+                let served = unsafe { GetNamedPipeServerProcessId(HANDLE(pipe.as_raw_handle()), &mut server) };
+                if served.is_err() || session_of(server) != Some(session) {
+                    return tracing::warn!("instance: the pipe is not the running instance's");
+                }
                 if let Err(e) = pipe.write_all(text.as_bytes()) {
                     tracing::warn!("instance: could not forward the launch: {e}");
                 }
