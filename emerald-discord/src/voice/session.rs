@@ -233,13 +233,20 @@ impl Session {
     pub fn report(&mut self) {
         let status = if !self.media_connected() {
             CallStatus::Connecting
-        } else if !self.dave.ready() {
+        } else if self.dave.securing() {
             CallStatus::Securing
         } else {
-            CallStatus::Connected { privacy_code: self.dave.encrypted().then(|| self.dave.privacy_code()).flatten() }
+            let secured = self.dave.encrypted() && self.dave.ready();
+            CallStatus::Connected { privacy_code: secured.then(|| self.dave.privacy_code()).flatten() }
         };
         if self.status.as_ref() != Some(&status) {
-            tracing::info!(status = ?std::mem::discriminant(&status), "voice: status");
+            // The privacy code stays out of the log.
+            let name = match status {
+                CallStatus::Connecting => "connecting",
+                CallStatus::Securing => "securing",
+                CallStatus::Connected { .. } => "connected",
+            };
+            tracing::info!(status = name, "voice: status");
             self.status = Some(status.clone());
             self.emit(VoiceEvent::Status { channel: self.call.channel, status });
         }
@@ -319,7 +326,9 @@ impl Session {
 
     /// Sends what the microphone caught, while it is loud enough.
     async fn send_sound(&mut self, socket: &mut Socket) -> Result<()> {
-        let live = self.media_connected() && self.dave.ready() && !self.controls.muted && !self.controls.deafened;
+        // Speaking is detected even before the DAVE group exists (alone in a
+        // call it never does); frames only leave sealed, so nothing is sent then.
+        let live = self.media_connected() && !self.controls.muted && !self.controls.deafened;
         let mut frames: Vec<Frame> = Vec::new();
         if let Some(sound) = &mut self.sound {
             while let Ok(frame) = sound.microphone.pop() {

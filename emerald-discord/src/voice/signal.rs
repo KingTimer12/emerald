@@ -20,6 +20,10 @@ impl Session {
         }
         let Some(opcode) = frame["op"].as_u64().and_then(|o| u8::try_from(o).ok()) else { return Ok(()) };
         let data = &frame["d"];
+        if opcode >= op::DAVE_PREPARE_TRANSITION || opcode == op::CLIENTS_CONNECT || opcode == op::CLIENT_DISCONNECT {
+            // Only the opcode: enough to see where a handshake stopped.
+            tracing::info!(opcode, "voice: gateway frame");
+        }
         match opcode {
             op::HELLO => {
                 let interval = data["heartbeat_interval"].as_f64().filter(|ms| (100.0..=120_000.0).contains(ms));
@@ -84,6 +88,7 @@ impl Session {
     pub async fn binary(&mut self, frame: &[u8], socket: &mut Socket) -> Result<()> {
         let Some((seq, opcode, body)) = packets::binary(frame) else { return Ok(()) };
         self.seq_ack = i64::from(seq);
+        tracing::info!(opcode, "voice: DAVE frame");
         match opcode {
             op::DAVE_EXTERNAL_SENDER => self.dave.external_sender(body)?,
             op::DAVE_PROPOSALS => match self.dave.proposals(body) {

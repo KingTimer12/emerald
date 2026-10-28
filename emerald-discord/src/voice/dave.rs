@@ -44,6 +44,14 @@ impl Dave {
         !self.encrypted() || self.session.is_ready()
     }
 
+    /// Someone is in the call but the group that would let us hear each
+    /// other is not there yet. Alone, the group never completes (it only
+    /// does on a commit or welcome, which need a second member), and the
+    /// call is up all the same, as the web client shows it.
+    pub fn securing(&self) -> bool {
+        !self.ready() && self.members.len() > 1
+    }
+
     /// The code people compare to check nobody listens in.
     pub fn privacy_code(&self) -> Option<String> {
         self.session.voice_privacy_code().map(str::to_owned)
@@ -120,6 +128,10 @@ impl Dave {
         if !self.encrypted() {
             return Some(Cow::Borrowed(opus));
         }
+        // Never a clear frame in an encrypted call, whatever davey would do.
+        if !self.session.is_ready() {
+            return None;
+        }
         self.session.encrypt_opus(opus).ok()
     }
 
@@ -132,9 +144,18 @@ impl Dave {
         if frame == davey::OPUS_SILENCE_PACKET {
             return Some(frame);
         }
+        // Too short for DAVE's trailer, so not sealed: let through only while
+        // a transition allows clear frames. davey would warn on each one.
+        if frame.len() < MIN_SEALED {
+            return self.session.can_passthrough(user).then_some(frame);
+        }
         self.session.decrypt(user, MediaType::AUDIO, &frame).ok()
     }
 }
+
+/// A sealed frame ends with an 8-byte tag, at least one byte of nonce and
+/// the 2-byte marker.
+const MIN_SEALED: usize = 8 + 1 + 2;
 
 fn version() -> NonZeroU16 {
     NonZeroU16::new(u16::from(packets::DAVE_VERSION)).expect("DAVE version is not zero")
@@ -162,5 +183,30 @@ mod tests {
         // Proposals before the external sender are ignored.
         assert!(dave.proposals(&[0]).unwrap().is_none());
         assert!(dave.transition(packets::op::DAVE_ANNOUNCE_COMMIT, &[0]).1.is_err());
+    }
+
+    #[test]
+    fn short_clear_frames_are_dropped_quietly() {
+        let mut dave = Dave::new(1, 2).unwrap();
+        dave.set_version(1);
+        assert_eq!(dave.decrypt(3, vec![0xfc, 0xff]), None);
+        assert_eq!(dave.decrypt(3, Vec::new()), None);
+        assert_eq!(dave.decrypt(3, davey::OPUS_SILENCE_PACKET.to_vec()), Some(davey::OPUS_SILENCE_PACKET.to_vec()));
+    }
+
+    #[test]
+    fn only_a_shared_call_waits_for_the_group() {
+        let mut dave = Dave::new(1, 2).unwrap();
+        dave.set_version(1);
+        // Alone, there is nobody to agree keys with.
+        assert!(!dave.securing());
+        dave.connect([3]);
+        assert!(dave.securing());
+        dave.disconnect(3);
+        assert!(!dave.securing());
+        // Our own id never leaves the members.
+        dave.disconnect(1);
+        dave.connect([3]);
+        assert!(dave.securing());
     }
 }

@@ -203,7 +203,8 @@ impl Transport {
                 self.connected = true;
             }
             Event::IceConnectionStateChange(IceConnectionState::Disconnected) => self.failed = true,
-            Event::RtpPacket(packet) if self.received.len() < MAX_RECEIVED => self.received.push(Received {
+            // Padding-only packets (the server probing bandwidth) carry no sound.
+            Event::RtpPacket(packet) if !packet.payload.is_empty() && self.received.len() < MAX_RECEIVED => self.received.push(Received {
                 ssrc: *packet.header.ssrc,
                 sequence: packet.header.sequence_number,
                 payload: packet.payload.to_vec(),

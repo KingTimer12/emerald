@@ -192,8 +192,9 @@ Done but never checked in the real app, or known to be partial:
     device choice, mute/deafen, speaking rings. Discord requires DAVE end-to-end
     encryption for voice now; plan for it from the start. Done over WebRTC as the web
     client does (str0m, pure-Rust crypto, Chrome's offer lines) with davey for DAVE.
-    Not yet checked in a real call. Missing: echo cancellation, push-to-talk,
-    per-user volume.
+    Checked in a real DM call: both sides heard, DAVE group joined through a
+    welcome, shield shown. Server voice channels not yet checked with someone else.
+    Missing: echo cancellation, push-to-talk, per-user volume.
 47. [x] DM and group DM calls (ringing included). Rings through `POST call/ring` once
     CALL_CREATE arrives, as the web client does; no ringtone sound yet.
 48. [x] Stage channels as a listener. Asking to speak is not there.
