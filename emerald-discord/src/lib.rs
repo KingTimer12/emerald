@@ -1,6 +1,7 @@
 //! Discord as its web client speaks it: the REST endpoints ([`rest`]),
-//! the gateway ([`gateway`]), the payload shapes ([`model`]) and the
-//! frames and bodies sent on the wire ([`packets`]). The interface talks to
+//! the gateway ([`gateway`]), the payload shapes ([`model`]), the frames
+//! and bodies sent on the wire ([`packets`]) and the sound of calls
+//! ([`voice`]). The interface talks to
 //! the network thread [`spawn`] starts only through [`Command`] and
 //! [`NetEvent`].
 
@@ -18,14 +19,15 @@ mod protocol;
 pub mod rest;
 pub mod token;
 pub mod urls;
+mod voice;
 
 use std::sync::Arc;
 
 use model::Status;
 pub use protocol::{
     Action, Command, IndexTarget, Link, MUTE_WINDOWS, NetEvent, NewPoll, OwnPresence, Page, Picture, PinPage, ProfileEdit,
-    ChannelEdit, ReactionEvent, ReactionSource, ReplyTo, SearchPage, SearchQuery, SearchScope, SettingsChange, SettingsEdit, Snapshot,
-    TagEdit, ThreadPage, ThreadQuery, Upload,
+    CallStatus, ChannelEdit, ReactionEvent, ReactionSource, ReplyTo, SearchPage, SearchQuery, SearchScope, SettingsChange, SettingsEdit,
+    Snapshot, TagEdit, ThreadPage, ThreadQuery, Upload, VoiceCall, VoiceControls, VoiceEvent,
 };
 use tokio::sync::{mpsc, watch};
 
@@ -42,6 +44,8 @@ pub fn spawn(
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<Command>();
     let (presence_tx, presence_rx) = watch::channel(status.map(|status| OwnPresence { status, custom: None }));
     let (ops_tx, ops_rx) = mpsc::unbounded_channel::<serde_json::Value>();
+    // Kept between calls, so the next one starts muted when this one was.
+    let (controls_tx, _) = watch::channel(VoiceControls::default());
 
     std::thread::Builder::new()
         .name("emerald-net".into())
@@ -74,6 +78,8 @@ pub fn spawn(
                     }
                 };
                 tokio::spawn(gateway::run(identity.clone(), event_tx.clone(), presence_rx, ops_rx));
+                // Dropping it hangs up.
+                let mut _call: Option<voice::Running> = None;
                 while let Some(cmd) = cmd_rx.recv().await {
                     match cmd {
                         Command::SetPresence(presence) => {
@@ -88,6 +94,18 @@ pub fn spawn(
                         }
                         Command::QueryMembers { guild, query } => {
                             ops_tx.send(packets::gateway::query_members(guild, &query)).ok();
+                        }
+                        Command::VoiceState { guild, channel, self_mute, self_deaf } => {
+                            ops_tx.send(packets::gateway::voice_state(guild, channel, self_mute, self_deaf)).ok();
+                        }
+                        Command::VoiceConnect(details) => {
+                            // The old call hangs up first.
+                            _call = None;
+                            _call = Some(voice::start(details, controls_tx.subscribe(), event_tx.clone()));
+                        }
+                        Command::VoiceDisconnect => _call = None,
+                        Command::VoiceControls(controls) => {
+                            controls_tx.send_replace(controls);
                         }
                         Command::SubscribeGuild { guild, members } => {
                             let members = members.as_ref().map(|(c, r)| (*c, r.as_slice()));

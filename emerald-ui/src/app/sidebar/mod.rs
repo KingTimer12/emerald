@@ -17,9 +17,6 @@ use super::activity::activity_text;
 use super::{Emerald, widgets};
 use crate::zoom::zoomed;
 
-/// Height of the floating user panel plus its margins; lists pad by this.
-pub(super) const PANEL_CLEARANCE: f32 = 72.;
-
 mod dms;
 mod servers;
 
@@ -47,6 +44,7 @@ impl Emerald {
                 .child(icon(icons::CHEVRON, 18., theme::interactive()))
         };
         let visible = self.visible_rows(cx);
+        let clearance = self.panel_clearance();
         let searching = dms && visible.is_empty() && !self.dm_search.read(cx).text().trim().is_empty();
 
         div()
@@ -77,7 +75,7 @@ impl Emerald {
                 )
                 .flex_1()
                 .pt_2()
-                .pb(zoomed(PANEL_CLEARANCE)),
+                .pb(zoomed(clearance)),
             )
     }
 
@@ -133,6 +131,7 @@ impl Emerald {
                     .into_any_element()
             }
             Row::Requests => self.render_requests_row(row, cx),
+            Row::Voice(voice) => self.render_voice_row(row, voice, cx),
             Row::Category { id, title } => {
                 let category = *id;
                 let guild = self.spaces.current().id;
@@ -310,8 +309,10 @@ impl Emerald {
                             r.on_click(cx.listener(move |this, _, window, cx| {
                                 this.select_channel(id, window, cx)
                             }))
+                        } else if kind.is_voice() && let Some(guild) = guild {
+                            r.on_click(cx.listener(move |this, _, _, cx| this.join_voice(guild, id, cx)))
                         } else {
-                            // Voice, stage and forum channels are listed only.
+                            // Forums and the like are listed only.
                             r.cursor_default()
                                 .tooltip(widgets::tooltip(t!("common.unsupported")))
                         }

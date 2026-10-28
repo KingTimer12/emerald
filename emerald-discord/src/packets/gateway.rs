@@ -15,6 +15,7 @@ pub mod op {
     pub const HEARTBEAT: u8 = 1;
     pub const IDENTIFY: u8 = 2;
     pub const PRESENCE_UPDATE: u8 = 3;
+    pub const VOICE_STATE_UPDATE: u8 = 4;
     pub const RESUME: u8 = 6;
     pub const RECONNECT: u8 = 7;
     pub const REQUEST_MEMBERS: u8 = 8;
@@ -80,6 +81,24 @@ pub fn presence_update(presence: &OwnPresence) -> Value {
     })
 }
 
+/// Op 4: joins `channel` in `guild` (`None` for a DM call), moves there,
+/// or leaves voice when `channel` is `None`. Fields in the web client's
+/// order; `flags` is 0 since nothing here records voice or clips (a guess:
+/// the web client sets bit 2 when the user allows voice recording).
+pub fn voice_state(guild: Option<Snowflake>, channel: Option<Snowflake>, self_mute: bool, self_deaf: bool) -> Value {
+    json!({
+        "op": op::VOICE_STATE_UPDATE,
+        "d": {
+            "guild_id": guild.map(|g| g.to_string()),
+            "channel_id": channel.map(|c| c.to_string()),
+            "self_mute": self_mute,
+            "self_deaf": self_deaf,
+            "self_video": false,
+            "flags": 0,
+        },
+    })
+}
+
 /// Op 8 for specific users, the shape the web client uses for message authors.
 pub fn request_members(guild: Snowflake, users: &[Snowflake]) -> Value {
     let users: Vec<String> = users.iter().map(Snowflake::to_string).collect();
@@ -130,6 +149,17 @@ mod tests {
             sent,
             r#"{"op":2,"d":{"token":"t","capabilities":1734653,"properties":{"os":"Mac OS X"},"presence":{"status":"unknown","since":0,"activities":[],"afk":false},"compress":false,"client_state":{"guild_versions":{}}}}"#
         );
+    }
+
+    #[test]
+    fn voice_state_joins_and_leaves() {
+        let join = voice_state(Some(Snowflake(1)), Some(Snowflake(2)), true, false).to_string();
+        assert_eq!(
+            join,
+            r#"{"op":4,"d":{"guild_id":"1","channel_id":"2","self_mute":true,"self_deaf":false,"self_video":false,"flags":0}}"#
+        );
+        let leave = voice_state(Some(Snowflake(1)), None, false, false);
+        assert!(leave["d"]["channel_id"].is_null());
     }
 
     #[test]

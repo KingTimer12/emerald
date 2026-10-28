@@ -1,12 +1,12 @@
 //! Events from the network thread to the UI.
 
-use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Upload};
+use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Upload, VoiceEvent};
 use crate::model::{
     AuthSession, FriendPresence, UserProfileDetails, UserSettings,
     Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
     MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageDeleteBulk, MessageUpdate, PollVote, Profile, ReactionAddMany,
     ReactionClear, ReactionUpdate, Relationship, Invite, RoleDelete, RoleUpdate, Snowflake, StickerPack, ThreadListSync,
-    ThreadMemberEntry, ThreadMembersUpdate, TypingStart, User,
+    ThreadMemberEntry, ThreadMembersUpdate, TypingStart, User, VoiceServer, VoiceState, CallUpdate,
 };
 
 /// Events flowing from the network thread to the UI.
@@ -149,6 +149,15 @@ pub enum NetEvent {
         gifs: Result<Vec<Gif>, String>,
     },
     TypingStart(TypingStart),
+    /// Someone joined, left or changed their voice state; us included.
+    VoiceState(VoiceState),
+    /// Where our call connects, after we asked to join one.
+    VoiceServer(VoiceServer),
+    Voice(VoiceEvent),
+    /// A DM call started or changed: who is in it, whose phone rings.
+    Call(CallUpdate),
+    /// The DM call in this channel ended.
+    CallDelete(Snowflake),
     Profile {
         /// The guild whose member profile was asked for, if any.
         guild: Option<Snowflake>,

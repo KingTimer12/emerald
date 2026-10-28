@@ -28,6 +28,8 @@ pub enum Action {
     LeaveGuild,
     /// Deleting in bulk, kicking, banning or timing out a member.
     Moderation,
+    /// Ringing people for a DM call, or declining one.
+    Call,
     /// Saving a channel or thread's settings.
     ChannelSettings,
     /// Saving the synced settings: status, custom status, privacy.

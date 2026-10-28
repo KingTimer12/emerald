@@ -91,6 +91,7 @@ impl Emerald {
                         this.open_settings(Page::Status, window, cx)
                     })),
             )
+            .child(self.render_voice_buttons(cx))
             .child(
                 widgets::svg_button("open-settings", icons::SETTINGS)
                     .on_click(cx.listener(|this, _, window, cx| {

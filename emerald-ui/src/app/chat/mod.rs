@@ -156,6 +156,7 @@ impl Emerald {
             // Right-aligned toggle: the DM profile or the guild member list.
             .when(!has_topic, |d| d.child(div().flex_1()))
             .children(self.render_membership_button(cx))
+            .children(dm.and_then(|dm| self.render_call_button(dm, cx)))
             .when_some(dm, |d, dm| {
                 d.child(
                     widgets::svg_button("add-to-dm", icons::USER_ADD)
@@ -224,6 +225,7 @@ impl Emerald {
                 .child(messages)
                 .children(self.render_unread_bar(cx))
                 .children(self.render_present_bar(cx))
+                .children(self.render_dm_call_bar(cx))
                 .into_any_element()
         };
 

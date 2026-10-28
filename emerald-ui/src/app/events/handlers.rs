@@ -4,6 +4,7 @@ use super::*;
 
 impl Emerald {
     pub(super) fn on_ready(&mut self, snapshot: Snapshot, window: &mut Window, cx: &mut Context<Self>) {
+        self.end_call_for_new_session();
         let Snapshot {
             me,
             guilds,
@@ -247,7 +248,7 @@ impl Emerald {
                     _ => self.composer.error = Some(error.into()),
                 },
             },
-            Action::Settings | Action::Channel | Action::Note | Action::LeaveGuild | Action::Moderation => {
+            Action::Settings | Action::Channel | Action::Note | Action::LeaveGuild | Action::Moderation | Action::Call => {
                 if let Err(error) = result {
                     self.connection.set_message(t!("common.error", error = error));
                 }

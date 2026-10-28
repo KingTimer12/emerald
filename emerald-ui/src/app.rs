@@ -42,6 +42,7 @@ mod suggestions;
 mod switcher;
 mod user_menu;
 mod user_panel;
+mod voice;
 mod widgets;
 mod window;
 pub use window::initial_bounds;
@@ -222,6 +223,12 @@ pub struct Emerald {
     window_save: Option<gpui::Task<()>>,
     /// Messages picked for a bulk delete, see `chat::actions::bulk`.
     bulk: Option<chat::Selection>,
+    /// The voice call we are in or joining.
+    call: Option<state::Call>,
+    /// Why the last call failed, shown where the call panel was.
+    call_notice: Option<SharedString>,
+    /// Calls going on in DMs, ours or not.
+    dm_calls: state::DmCalls,
     /// This view, for handlers drawn deep in the text to call back.
     weak: gpui::WeakEntity<Emerald>,
     /// The reaction picker's search box, and its grid's scroll position.
@@ -267,6 +274,8 @@ impl Emerald {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        // The network thread keeps them for the first call.
+        net.post(Command::VoiceControls(settings.voice.controls()));
         let composer = Composer::new(cx);
         let friends = Friends::new(cx);
         let dm_search = cx.new(|cx| {
@@ -396,6 +405,9 @@ impl Emerald {
             window_active: window.is_window_active(),
             window_save: None,
             bulk: None,
+            call: None,
+            call_notice: None,
+            dm_calls: Default::default(),
             weak: cx.entity().downgrade(),
             forums: HashMap::new(),
             panel: None,

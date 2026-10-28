@@ -80,6 +80,7 @@ impl Render for Emerald {
                     .child(self.render_channels(cx))
                     .child(self.render_chat(wide, cx)),
             )
+            .children(self.render_call_panel(cx))
             .child(self.render_user_panel(cx))
             .children(overlay)
             .children(menu)

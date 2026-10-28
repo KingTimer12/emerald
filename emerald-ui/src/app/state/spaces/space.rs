@@ -16,6 +16,8 @@ pub struct Space {
     pub(super) shown_thread: Option<Snowflake>,
     /// DMs: what each is called, from its people's names.
     pub(super) labels: HashMap<Snowflake, SharedString>,
+    /// Who is in a voice channel here, in the order they joined.
+    pub(super) voice: Vec<VoiceState>,
 }
 
 impl Space {
@@ -32,6 +34,7 @@ impl Space {
             guild: None,
             shown_thread: None,
             labels: HashMap::new(),
+            voice: Vec::new(),
         };
         space.rebuild();
         space
@@ -61,6 +64,7 @@ impl Space {
             rows: Vec::new(),
             shown_thread: None,
             labels: HashMap::new(),
+            voice: guild.voice_states.into_iter().filter(|v| v.channel_id.is_some()).collect(),
         };
         for mut thread in guild.threads {
             thread.guild_id = Some(space.id);
@@ -181,6 +185,11 @@ impl Space {
                 parent: Some(parent),
                 ..
             }) => !collapsed(*parent) || keep(*id),
+            Row::Voice(VoiceRow {
+                channel,
+                parent: Some(parent),
+                ..
+            }) => !collapsed(*parent) || keep(*channel),
             _ => true,
         })
     }
@@ -281,6 +290,43 @@ impl Space {
     pub fn remove_channel(&mut self, id: Snowflake) {
         self.channels.retain(|c| c.id != id);
         self.rebuild();
+    }
+
+    /// VOICE_STATE_UPDATE: someone joined, left, moved or changed their
+    /// mute. False when nothing shown changed.
+    pub fn set_voice_state(&mut self, state: VoiceState) -> bool {
+        let before = self.voice.iter().position(|v| v.user_id == state.user_id);
+        let shown = |v: &VoiceState| (v.channel_id, v.mute || v.self_mute, v.deaf || v.self_deaf, v.self_stream);
+        match (before, state.channel_id) {
+            // Same channel: updated in place, keeping their place in the list.
+            (Some(ix), Some(channel)) if self.voice[ix].channel_id == Some(channel) => {
+                let changed = shown(&self.voice[ix]) != shown(&state);
+                self.voice[ix] = state;
+                if !changed {
+                    return false;
+                }
+            }
+            (Some(ix), channel) => {
+                self.voice.remove(ix);
+                if channel.is_some() {
+                    self.voice.push(state);
+                }
+            }
+            (None, Some(_)) => self.voice.push(state),
+            (None, None) => return false,
+        }
+        self.rebuild();
+        true
+    }
+
+    /// Who is in voice `channel`.
+    pub fn voice_in(&self, channel: Snowflake) -> impl Iterator<Item = &VoiceState> {
+        self.voice.iter().filter(move |v| v.channel_id == Some(channel))
+    }
+
+    /// Everyone in voice here.
+    pub fn voice_users(&self) -> impl Iterator<Item = Snowflake> + '_ {
+        self.voice.iter().map(|v| v.user_id)
     }
 
     /// Records `message` as the newest in `channel`; false when the channel

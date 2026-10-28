@@ -5,6 +5,7 @@
 
 mod account;
 mod apps;
+mod calls;
 mod channels;
 pub(crate) mod encoding;
 mod expressions;

@@ -13,6 +13,33 @@ pub enum Row {
         title: SharedString,
     },
     Channel(ChannelRow),
+    /// Someone in the voice channel above.
+    Voice(VoiceRow),
+}
+
+pub struct VoiceRow {
+    pub channel: Snowflake,
+    /// The voice channel's category, so the row folds away with it.
+    pub parent: Option<Snowflake>,
+    pub user: Snowflake,
+    /// Muted, by themselves or a moderator.
+    pub muted: bool,
+    pub deafened: bool,
+    /// Sharing their screen.
+    pub streaming: bool,
+}
+
+impl VoiceRow {
+    fn new(state: &VoiceState, parent: Option<Snowflake>) -> Self {
+        Self {
+            channel: state.channel_id.unwrap_or_default(),
+            parent,
+            user: state.user_id,
+            muted: state.mute || state.self_mute,
+            deafened: state.deaf || state.self_deaf,
+            streaming: state.self_stream,
+        }
+    }
 }
 
 pub struct ChannelRow {
@@ -119,16 +146,23 @@ impl Space {
             });
             threads
         };
+        // Under a voice channel: who is in it, in the order they joined.
+        let voice = &self.voice;
         let with_threads = |channels: Vec<&Channel>| {
             channels
                 .into_iter()
                 .flat_map(|c| {
-                    let nested = if c.kind.is_forum() { Vec::new() } else { threads(c.id) };
-                    // Threads fold away with their parent's category.
-                    let nested = nested.into_iter().map(|t| ChannelRow { parent: c.parent_id, ..ChannelRow::new(t) });
-                    std::iter::once(ChannelRow::new(c)).chain(nested).collect::<Vec<_>>()
+                    let mut rows = vec![Row::Channel(ChannelRow::new(c))];
+                    if c.kind.is_voice() {
+                        let inside = voice.iter().filter(|v| v.channel_id == Some(c.id));
+                        rows.extend(inside.map(|v| Row::Voice(VoiceRow::new(v, c.parent_id))));
+                    } else if !c.kind.is_forum() {
+                        // Threads fold away with their parent's category.
+                        let nested = threads(c.id).into_iter();
+                        rows.extend(nested.map(|t| Row::Channel(ChannelRow { parent: c.parent_id, ..ChannelRow::new(t) })));
+                    }
+                    rows
                 })
-                .map(Row::Channel)
                 .collect::<Vec<_>>()
         };
         let visible = |c: &&Channel| {

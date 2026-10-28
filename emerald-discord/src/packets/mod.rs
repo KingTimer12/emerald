@@ -5,6 +5,7 @@
 //! client's order (`serde_json` preserves insertion order here).
 
 pub mod account;
+pub mod call;
 pub mod context;
 pub mod gateway;
 pub mod guild;
@@ -16,3 +17,4 @@ pub mod settings;
 pub mod thread;
 pub mod upload;
 pub mod user;
+pub mod voice;

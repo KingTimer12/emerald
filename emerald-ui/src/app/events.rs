@@ -22,6 +22,11 @@ impl Emerald {
             NetEvent::AuthExpired | NetEvent::LoggedOut { .. } => {}
             NetEvent::Ready(snapshot) => self.on_ready(*snapshot, window, cx),
             NetEvent::Presences(presences) => self.people.set_presences(presences),
+            NetEvent::VoiceState(state) => self.on_voice_state(state, cx),
+            NetEvent::VoiceServer(server) => self.on_voice_server(server),
+            NetEvent::Voice(event) => self.on_voice_event(event, cx),
+            NetEvent::Call(update) => self.on_call(update, cx),
+            NetEvent::CallDelete(channel) => self.on_call_delete(channel, cx),
             NetEvent::RelationshipAdd(relationship) => {
                 let user = relationship.id;
                 // A new friend (either side accepted) gets a DM in the list

@@ -151,6 +151,9 @@ pub struct Guild {
     /// message, 1 mentions only.
     #[serde(default)]
     pub default_message_notifications: Option<u8>,
+    /// Who is in the guild's voice channels.
+    #[serde(default)]
+    pub voice_states: Vec<super::VoiceState>,
 }
 
 impl Guild {

@@ -38,8 +38,16 @@ pub const CHECK: &str = "icons/check.svg";
 pub const CHEVRON_RIGHT: &str = "icons/chevron_right.svg";
 pub const USER_ADD: &str = "icons/user_add.svg";
 pub const PLUS: &str = "icons/plus.svg";
+pub const MICROPHONE: &str = "icons/microphone.svg";
+pub const MICROPHONE_OFF: &str = "icons/microphone_off.svg";
+pub const HEADPHONES: &str = "icons/headphones.svg";
+pub const HEADPHONES_OFF: &str = "icons/headphones_off.svg";
+pub const HANG_UP: &str = "icons/hang_up.svg";
+pub const PHONE: &str = "icons/phone.svg";
+/// End-to-end encrypted call.
+pub const SHIELD: &str = "icons/shield.svg";
 
-const ALL: [(&str, &[u8]); 31] = [
+const ALL: [(&str, &[u8]); 38] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -71,6 +79,13 @@ const ALL: [(&str, &[u8]); 31] = [
     (CHEVRON_RIGHT, include_bytes!("../assets/icons/chevron_right.svg")),
     (USER_ADD, include_bytes!("../assets/icons/user_add.svg")),
     (PLUS, include_bytes!("../assets/icons/plus.svg")),
+    (MICROPHONE, include_bytes!("../assets/icons/microphone.svg")),
+    (MICROPHONE_OFF, include_bytes!("../assets/icons/microphone_off.svg")),
+    (HEADPHONES, include_bytes!("../assets/icons/headphones.svg")),
+    (HEADPHONES_OFF, include_bytes!("../assets/icons/headphones_off.svg")),
+    (HANG_UP, include_bytes!("../assets/icons/hang_up.svg")),
+    (PHONE, include_bytes!("../assets/icons/phone.svg")),
+    (SHIELD, include_bytes!("../assets/icons/shield.svg")),
 ];
 
 pub struct Icons;

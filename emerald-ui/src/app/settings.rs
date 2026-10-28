@@ -24,6 +24,7 @@ mod language;
 mod privacy;
 mod profiles;
 mod shortcuts;
+mod voice;
 
 pub(super) use profiles::ProfileForm;
 
@@ -36,6 +37,7 @@ pub enum Page {
     Accounts,
     Status,
     Appearance,
+    Voice,
     Shortcuts,
     Language,
 }
@@ -58,6 +60,8 @@ pub struct SettingsView {
     accounts: emerald_discord::token::Accounts,
     /// The shortcut waiting for its new keys, if any.
     recording: Option<crate::shortcuts::Shortcut>,
+    /// Microphones and speakers, listed when Voice opens.
+    audio_devices: Option<emerald_audio::Devices>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -81,6 +85,7 @@ impl Emerald {
                 }
             }
             Page::Status => self.fill_custom_status(cx),
+            Page::Voice => self.list_audio_devices(cx),
             _ => {}
         }
         cx.notify();
@@ -117,6 +122,7 @@ impl Emerald {
             privacy_ask: None,
             accounts: Default::default(),
             recording: None,
+            audio_devices: None,
             _subscriptions: subscriptions,
         })));
         window.focus(&self.focus_handle);
@@ -171,6 +177,7 @@ impl Emerald {
             .child(separator())
             .child(widgets::label(t!("settings.app_settings")).px_2p5().pb_1())
             .child(item("page-appearance", t!("settings.appearance"), Page::Appearance, cx))
+            .child(item("page-voice", t!("settings.voice"), Page::Voice, cx))
             .child(item("page-shortcuts", t!("settings.shortcuts"), Page::Shortcuts, cx))
             .child(item("page-language", t!("settings.language_time"), Page::Language, cx))
             .child(separator())
@@ -196,6 +203,7 @@ impl Emerald {
             Page::Accounts => self.render_accounts(view, cx),
             Page::Status => self.render_status(view, cx),
             Page::Appearance => self.render_appearance(cx),
+            Page::Voice => self.render_voice(view, cx),
             Page::Shortcuts => self.render_shortcuts(view, cx),
             Page::Language => self.render_language(view, cx),
         };

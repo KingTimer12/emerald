@@ -61,6 +61,56 @@ impl TimeFormat {
     pub const ALL: [TimeFormat; 3] = [TimeFormat::Auto, TimeFormat::Hours12, TimeFormat::Hours24];
 }
 
+/// "Voice" in the settings, and the mute and deafen switches, which stay
+/// set between calls and launches as in the web client.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceSettings {
+    pub muted: bool,
+    pub deafened: bool,
+    /// Device ids; `None` follows the system default.
+    pub input: Option<String>,
+    pub output: Option<String>,
+    /// Percent, up to 200.
+    pub input_volume: u16,
+    pub output_volume: u16,
+    pub noise_suppression: bool,
+    /// Sound under this many decibels is not sent.
+    pub sensitivity: i16,
+}
+
+impl Default for VoiceSettings {
+    fn default() -> Self {
+        let defaults = emerald_discord::VoiceControls::default();
+        Self {
+            muted: false,
+            deafened: false,
+            input: None,
+            output: None,
+            input_volume: defaults.input_volume,
+            output_volume: defaults.output_volume,
+            noise_suppression: defaults.noise_suppression,
+            sensitivity: defaults.sensitivity,
+        }
+    }
+}
+
+impl VoiceSettings {
+    /// What the voice engine is told.
+    pub fn controls(&self) -> emerald_discord::VoiceControls {
+        emerald_discord::VoiceControls {
+            muted: self.muted,
+            deafened: self.deafened,
+            input: self.input.clone(),
+            output: self.output.clone(),
+            input_volume: self.input_volume,
+            output_volume: self.output_volume,
+            noise_suppression: self.noise_suppression,
+            sensitivity: self.sensitivity,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -90,6 +140,7 @@ pub struct Settings {
     pub window: Option<WindowFrame>,
     /// The channel open when Emerald last ran, reopened on the next launch.
     pub last_channel: Option<Snowflake>,
+    pub voice: VoiceSettings,
 }
 
 impl Default for Settings {
@@ -109,6 +160,7 @@ impl Default for Settings {
             shortcuts: BTreeMap::new(),
             window: None,
             last_channel: None,
+            voice: VoiceSettings::default(),
         }
     }
 }

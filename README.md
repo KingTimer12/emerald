@@ -151,8 +151,22 @@ CPU near zero when idle.
   the channel read.
 - **Window and launch**: the window opens where it closed, and on the channel last open.
 - **Menu bar item** (macOS): the unread count beside an icon, with Show and Quit.
+- **Voice channels and calls**: click a voice channel to join; the people in it are listed
+  under it, ringed green while they speak. A stage joins you to the audience, listening. In a
+  DM or group DM the phone in the header starts a call and rings the others; a bar over the
+  messages shows a call going on, to join, or to decline when it rings for you (with a
+  desktop notification). A panel over your name shows the call's state, the channel, a shield with
+  the privacy code when the call is end-to-end encrypted, and hang up. Mute and deafen sit
+  beside your name and stay set between calls. Settings > Voice picks the microphone and
+  speakers, their volumes, the input sensitivity and noise suppression (RNNoise). Calls use
+  Discord's DAVE end-to-end encryption and Opus over WebRTC (ICE, DTLS and SRTP through
+  str0m, in pure Rust), offered to the voice server the way the web client offers Chrome's.
+  What still differs from a browser: the DTLS and STUN handshakes come from str0m, not
+  Chrome's WebRTC, and Chrome's video payload types in the offer are a guess.
 
-Not there yet: voice; playing video and audio inside the app; animated avatars in the
+Not there yet: video and screen sharing; speaking on a stage (asking to speak); a ringtone
+for incoming calls; echo cancellation (use headphones), push-to-talk and per-person volume; playing video and audio
+inside the app; animated avatars in the
 chat list (still there, as Discord shows them until hovered). On macOS, notifications go
 through `osascript` (Notification Center only takes bundled apps), so clicking one does
 not open its channel; search dates are taken in UTC. No menu bar item on Windows yet, and
@@ -224,8 +238,8 @@ instead of going out again, an expired copy is served while it refreshes, and wh
 fails (network error, 5xx, rate limited) a recent copy stands in. Writing to a channel
 drops what was cached for it. On a burst, Discord sees one request instead of several.
 
-The code is a Cargo workspace of seven crates at the root. Each depends only on the
-ones above it, and `emerald-webview` and `emerald-notify` on nothing of Emerald's. Large areas are folders
+The code is a Cargo workspace of eight crates at the root. Each depends only on the
+ones above it, and `emerald-audio`, `emerald-webview` and `emerald-notify` on nothing of Emerald's. Large areas are folders
 of small modules, one concern each:
 
 ```
@@ -246,6 +260,12 @@ emerald-http/            HTTP transport, nothing Discord-specific in its API
     ├── microcache.rs    one-second GET cache with request coalescing and stale copies
     ├── cache.rs         SQLite disk cache
     └── error.rs         typed failures and the captcha round trip
+emerald-audio/           microphone and speakers in 20 ms frames of 48 kHz mono, generic
+└── src/
+    ├── streams.rs       `Audio`: the cpal streams, mute, deafen and volume switches
+    ├── resample.rs      device rate to 48 kHz frames and back
+    ├── devices.rs       the system's microphones and speakers
+    └── denoise.rs       noise suppression (nnnoiseless, RNNoise)
 emerald-discord/         everything that talks to Discord, no UI
 └── src/
     ├── lib.rs           `spawn`: the network thread; `sign_out`
@@ -257,6 +277,8 @@ emerald-discord/         everything that talks to Discord, no UI
     ├── gateway/         the reconnect loop, one connection, dispatch and zlib inflate
     ├── packets/         what goes on the wire: gateway frames, REST bodies, context headers
     ├── model/           Discord payloads, only the fields in use (message/ by part)
+    ├── voice/           a call's sound on its own thread: the voice gateway, WebRTC
+    │                    (str0m), DAVE (davey), Opus, jitter buffer and mixer
     ├── token/           `Token`, the `Store` trait (file, Keychain, Credential
     │                    Manager) and the `Vault` that picks one
     ├── urls.rs          Discord's hosts (web, API, CDN, media, gateway) as BaseUrls
@@ -285,6 +307,7 @@ emerald-ui/              the gpui interface
         ├── requests.rs  message requests and the spam inbox
         ├── invites.rs   "Invite People" and invite cards in messages
         ├── switcher.rs  the quick switcher (Ctrl/Cmd+K)
+        ├── voice/       joining and leaving, mute and deafen, the call panel, people in voice
         └── sidebar/, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
 emerald-webview/         a blocking native webview window, generic: `WebView` builder,
 └── src/                 a `Backend` per platform, posts back one string

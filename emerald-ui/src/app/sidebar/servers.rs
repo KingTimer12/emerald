@@ -31,7 +31,7 @@ impl Emerald {
             .items_center()
             .gap_2()
             .pt_1()
-            .pb(zoomed(PANEL_CLEARANCE))
+            .pb(zoomed(self.panel_clearance()))
             .w(zoomed(72.))
             .h_full()
             .flex_none()

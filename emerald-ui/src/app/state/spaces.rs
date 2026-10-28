@@ -16,7 +16,7 @@ use gpui::SharedString;
 
 use super::super::super::icons;
 use emerald_discord::model::{
-    Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake, StickerItem, ThreadListSync, ThreadMember,
+    Channel, ChannelKind, Guild, GuildEmoji, Member, Role, Snowflake, StickerItem, ThreadListSync, ThreadMember, VoiceState,
 };
 use emerald_discord::permissions::{self, GuildAccess};
 
@@ -265,6 +265,7 @@ mod tests {
                 Row::Category { title, .. } => title.to_string(),
                 Row::Friends => "friends".into(),
                 Row::Requests => "requests".into(),
+                Row::Voice(v) => format!("@{}", v.user.0),
             })
             .collect()
     }
@@ -290,6 +291,29 @@ mod tests {
         assert_eq!(names(&space, &all), ["c6", "C1", "c4", "c3"]);
         assert_eq!(space.initials.as_ref(), "RB");
         assert_eq!(space.first_openable(), Some(Snowflake(6)));
+    }
+
+    #[test]
+    fn voice_members_sit_under_their_channel() {
+        let mut space = guild(vec![channel(1, ChannelKind::CATEGORY, None, 0), channel(3, ChannelKind::VOICE, Some(1), 0)]);
+        let state = |user: u64, channel: Option<u64>, mute: bool| -> VoiceState {
+            serde_json::from_value(serde_json::json!({
+                "channel_id": channel.map(|c| c.to_string()), "user_id": user.to_string(), "self_mute": mute,
+            }))
+            .unwrap()
+        };
+        assert!(space.set_voice_state(state(7, Some(3), false)));
+        assert!(space.set_voice_state(state(8, Some(3), false)));
+        let all: Vec<usize> = (0..space.rows().len()).collect();
+        assert_eq!(names(&space, &all), ["C1", "c3", "@7", "@8"]);
+        // A mute changes the row in place; a repeat changes nothing.
+        assert!(space.set_voice_state(state(7, Some(3), true)));
+        assert!(!space.set_voice_state(state(7, Some(3), true)));
+        // Collapsing the category folds them away with the channel.
+        assert_eq!(space.expanded(|_| true, |_| false), vec![0]);
+        assert!(space.set_voice_state(state(7, None, false)));
+        assert_eq!(space.voice_in(Snowflake(3)).count(), 1);
+        assert!(!space.set_voice_state(state(9, None, false)));
     }
 
     #[test]

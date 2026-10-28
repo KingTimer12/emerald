@@ -70,6 +70,9 @@ pub struct Channel {
     pub parent_id: Option<Snowflake>,
     #[serde(default)]
     pub guild_id: Option<Snowflake>,
+    /// Voice channels: how many may be in it at once; 0 or `None` for no limit.
+    #[serde(default)]
+    pub user_limit: Option<u32>,
     #[serde(default)]
     pub last_message_id: Option<Snowflake>,
     #[serde(default)]

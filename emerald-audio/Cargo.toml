@@ -1,0 +1,12 @@
+[package]
+name = "emerald-audio"
+description = "Microphone and speaker streams in 20 ms frames of 48 kHz mono, device lists and noise suppression."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cpal.workspace = true
+nnnoiseless.workspace = true
+rtrb.workspace = true
+tracing.workspace = true

@@ -115,6 +115,10 @@ fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Opti
         "MESSAGE_POLL_VOTE_REMOVE" => decode(kind, data, |vote| NetEvent::PollVote { vote, add: false }),
         "TYPING_START" => decode(kind, data, NetEvent::TypingStart),
         "USER_GUILD_SETTINGS_UPDATE" => decode(kind, data, NetEvent::GuildSettings),
+        "VOICE_STATE_UPDATE" => decode(kind, data, NetEvent::VoiceState),
+        "VOICE_SERVER_UPDATE" => decode(kind, data, NetEvent::VoiceServer),
+        "CALL_CREATE" | "CALL_UPDATE" => decode(kind, data, NetEvent::Call),
+        "CALL_DELETE" => decode(kind, data, |c: crate::model::CallDelete| NetEvent::CallDelete(c.channel_id)),
         _ => None,
     }
 }

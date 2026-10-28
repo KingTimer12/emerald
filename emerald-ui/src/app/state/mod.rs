@@ -4,6 +4,7 @@
 
 pub mod account;
 pub mod autocomplete;
+pub mod call;
 pub mod commands;
 pub mod drafts;
 pub mod expiry;
@@ -23,6 +24,7 @@ pub mod typing;
 
 pub use account::Account;
 pub use autocomplete::Autocomplete;
+pub use call::{Call, DmCalls};
 pub use drafts::Drafts;
 pub use expiry::TtlCache;
 pub use folders::ServerList;

@@ -15,7 +15,7 @@ use emerald_discord::permissions;
 /// Read receipts wait this long so a burst of messages sends one.
 const ACK_DELAY: Duration = Duration::from_millis(1500);
 /// The web client asks for at most this many users per op 8.
-const MEMBERS_PER_REQUEST: usize = 100;
+pub(super) const MEMBERS_PER_REQUEST: usize = 100;
 
 impl Emerald {
     /// Opens a space: DMs show the friends list; a guild reopens its last
@@ -33,6 +33,7 @@ impl Emerald {
         if self.spaces.subscribe(guild) {
             self.net.post(Command::SubscribeGuild { guild, members: None });
         }
+        self.request_voice_members(guild);
         match self.spaces.landing_channel() {
             Some(channel) => self.select_channel(channel, window, cx),
             None => {

@@ -48,9 +48,10 @@ account must survive the whole project, so treat it as fragile.
 
 ## How to work here
 
-- **Crates.** The workspace is seven crates at the root (see the README's Architecture):
+- **Crates.** The workspace is eight crates at the root (see the README's Architecture):
   `emerald-core` (paths, i18n, frames, processes), `emerald-http` (transport, caches,
-  rate limits), `emerald-discord` (endpoints, gateway, models), `emerald-ui` (interface),
+  rate limits), `emerald-audio` (microphone, speakers, noise suppression; generic),
+  `emerald-discord` (endpoints, gateway, models, the voice engine), `emerald-ui` (interface),
   `emerald-webview` (generic native webview, no Emerald code), `emerald-notify`
   (generic notifications and icon badge) and `emerald-bin` (the executable, the
   login/captcha flows, and what joins the UI to the platform). A crate depends only on the ones before it in
@@ -169,7 +170,7 @@ Done but never checked in the real app, or known to be partial:
 ### Phase 6 — appearance and comfort
 
 39. [x] Light theme and following the system theme.
-40. [ ] Zoom / UI scale, reduced motion, keyboard navigation and screen-reader labels.
+40. [x] Zoom / UI scale, reduced motion, keyboard navigation and screen-reader labels.
     Partial: zoom (90% to 150%, Cmd/Ctrl with + and -) and reduced motion are done. Tab
     focus and screen-reader labels wait for gpui to have focusable controls and an
     accessibility tree.
@@ -187,11 +188,15 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 8 — voice and video (largest, last)
 
-46. [ ] Join a voice channel: voice gateway, UDP, Opus encode/decode, input and output
+46. [x] Join a voice channel: voice gateway, WebRTC, Opus encode/decode, input and output
     device choice, mute/deafen, speaking rings. Discord requires DAVE end-to-end
-    encryption for voice now; plan for it from the start.
-47. [ ] DM and group DM calls (ringing included).
-48. [ ] Stage channels as a listener.
+    encryption for voice now; plan for it from the start. Done over WebRTC as the web
+    client does (str0m, pure-Rust crypto, Chrome's offer lines) with davey for DAVE.
+    Not yet checked in a real call. Missing: echo cancellation, push-to-talk,
+    per-user volume.
+47. [x] DM and group DM calls (ringing included). Rings through `POST call/ring` once
+    CALL_CREATE arrives, as the web client does; no ringtone sound yet.
+48. [x] Stage channels as a listener. Asking to speak is not there.
 49. [ ] Video and screen share, viewing first, then sending.
 
 ### Phase 9 — shipping

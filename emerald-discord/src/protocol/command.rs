@@ -2,7 +2,9 @@
 
 use std::sync::Arc;
 
-use super::{ChannelEdit, OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery};
+use super::{
+    ChannelEdit, OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery, VoiceCall, VoiceControls,
+};
 use crate::model::{ChannelKind, Emoji, Gif, Snowflake, UserSettings};
 
 /// Requests flowing from the UI to the network thread.
@@ -303,6 +305,29 @@ pub enum Command {
     LogOutSessions(Vec<String>),
     /// The interface language changed; Discord's answers follow it.
     SetLocale(String),
+    /// Op 4: joins `channel` (`None` leaves voice) in `guild`, or says we
+    /// muted or deafened ourselves there.
+    VoiceState {
+        guild: Option<Snowflake>,
+        channel: Option<Snowflake>,
+        self_mute: bool,
+        self_deaf: bool,
+    },
+    /// Starts the call's sound, replacing any running one.
+    VoiceConnect(VoiceCall),
+    /// Stops the call's sound.
+    VoiceDisconnect,
+    /// Mute, deafen, devices and volumes, for this call and the next.
+    VoiceControls(VoiceControls),
+    /// Rings the others in a DM whose call we just started.
+    RingCall {
+        channel: Snowflake,
+    },
+    /// Declines a call: our own phone (or these people's) stops ringing.
+    StopRinging {
+        channel: Snowflake,
+        recipients: Vec<Snowflake>,
+    },
     /// Gateway op 8: fetch these members' nicknames and roles.
     RequestMembers {
         guild: Snowflake,

@@ -4,6 +4,7 @@
 
 mod account;
 mod app;
+mod call;
 mod captcha;
 mod channel;
 mod guild;
@@ -140,6 +141,8 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::LeaveGuild { guild } => Some(guild::leave(rest, guild).await),
 
         Command::BulkDelete { channel, messages } => Some(moderation::bulk_delete(rest, channel, messages).await),
+        Command::RingCall { channel } => Some(call::ring(rest, channel).await),
+        Command::StopRinging { channel, recipients } => Some(call::stop_ringing(rest, channel, recipients).await),
         Command::Kick { guild, user } => Some(moderation::kick(rest, guild, user).await),
         Command::Ban { guild, user, delete_seconds } => Some(moderation::ban(rest, guild, user, delete_seconds).await),
         Command::Timeout { guild, user, until } => Some(moderation::timeout(rest, guild, user, until).await),
@@ -151,7 +154,11 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         | Command::RequestMembers { .. }
         | Command::SearchMembers { .. }
         | Command::QueryMembers { .. }
-        | Command::SubscribeGuild { .. } => None,
+        | Command::SubscribeGuild { .. }
+        | Command::VoiceState { .. }
+        | Command::VoiceConnect(_)
+        | Command::VoiceDisconnect
+        | Command::VoiceControls(_) => None,
     };
     if let Some(event) = event {
         events.try_send(event).ok();

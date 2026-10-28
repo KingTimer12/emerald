@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 emerald-core.workspace = true
+emerald-audio.workspace = true
 emerald-discord.workspace = true
 anyhow.workspace = true
 emojis.workspace = true

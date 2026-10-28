@@ -17,6 +17,7 @@ mod session;
 mod snowflake;
 mod user;
 pub(crate) mod user_settings;
+mod voice;
 
 pub use channel::*;
 pub use command::*;
@@ -32,3 +33,4 @@ pub use session::*;
 pub use snowflake::{DISCORD_EPOCH_MS, Snowflake};
 pub use user::*;
 pub use user_settings::{CustomStatus, Privacy, UserSettings, friend_source};
+pub use voice::*;

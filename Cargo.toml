@@ -3,6 +3,8 @@
 # - emerald-core: paths, interface text (i18n), frame decoding, processes
 # - emerald-http: HTTP transport with base URLs, rate limits, microcache and
 #   disk cache
+# - emerald-audio: microphone and speaker streams in 48 kHz frames, device
+#   lists and noise suppression
 # - emerald-discord: Discord's REST API, gateway, models and wire packets
 # - emerald-ui: the gpui interface, its components and the settings
 # - emerald-webview: a blocking native webview window (macOS and Windows)
@@ -11,7 +13,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "emerald-core", "emerald-http", "emerald-discord", "emerald-ui", "emerald-webview", "emerald-notify", "emerald-bin",
+    "emerald-core", "emerald-http", "emerald-audio", "emerald-discord", "emerald-ui", "emerald-webview", "emerald-notify", "emerald-bin",
 ]
 
 [workspace.package]
@@ -21,6 +23,7 @@ edition = "2024"
 [workspace.dependencies]
 emerald-core = { path = "emerald-core" }
 emerald-http = { path = "emerald-http" }
+emerald-audio = { path = "emerald-audio" }
 emerald-discord = { path = "emerald-discord" }
 emerald-ui = { path = "emerald-ui" }
 emerald-webview = { path = "emerald-webview" }
@@ -58,6 +61,15 @@ bytes = "1"
 # Wipes the token from memory when it is dropped.
 zeroize = "1"
 emojis = "0.9.1"
+# Voice: devices, codec, noise suppression, DAVE end-to-end encryption and
+# the WebRTC transport (ICE, DTLS, SRTP) with pure-Rust crypto. libopus is
+# built from source, so nothing has to be installed.
+cpal = { version = "0.18", default-features = false }
+rtrb = "0.4"
+nnnoiseless = { version = "0.5", default-features = false }
+opus2 = { version = "0.4", default-features = false, features = ["backend-libopus", "static", "bundled"] }
+davey = "0.1.5"
+str0m = { version = "0.24.1", default-features = false, features = ["rust-crypto"] }
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
