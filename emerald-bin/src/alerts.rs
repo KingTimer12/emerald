@@ -5,8 +5,9 @@ use std::rc::Rc;
 use emerald_discord::model::Snowflake;
 use emerald_notify::{App, Notice, Notifier, Tray, TrayAction};
 
-/// The app id notifications and the taskbar button go under.
-const APP_ID: &str = "Emerald.Desktop";
+/// The app id notifications and the taskbar button go under; also names
+/// the pipe a second launch finds the first through.
+pub const APP_ID: &str = "Emerald.Desktop";
 
 /// emerald-notify behind the interface's `Alerts`. Cloned handles share
 /// one notifier and one menu bar item.
@@ -24,13 +25,18 @@ impl DesktopAlerts {
                 name: "Emerald",
                 icon: None,
             })),
-            tray: Rc::new(Tray::new(t!("tray.show"), t!("tray.quit"))),
+            tray: Rc::new(Tray::new("Emerald", t!("tray.show"), t!("tray.quit"))),
         }
     }
 
     /// Channel ids of the notifications the user clicked, as text.
     pub fn clicks(&self) -> async_channel::Receiver<String> {
         self.notifier.clicks().clone()
+    }
+
+    /// Takes the tray icon away, as the app quits.
+    pub fn remove_tray(&self) {
+        self.tray.remove();
     }
 
     /// What the user picked in the menu bar item.

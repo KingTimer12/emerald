@@ -49,7 +49,7 @@ pub struct Notice<'a> {
     pub tag: &'a str,
 }
 
-/// What the user picked in the menu bar item.
+/// What the user picked in the menu bar item or the tray icon's menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayAction {
     /// Bring the window up.
@@ -58,39 +58,57 @@ pub enum TrayAction {
     Quit,
 }
 
-/// The app's item in the menu bar, with the unread count beside its icon.
-/// Only macOS has one so far; elsewhere it does nothing and `actions` stays
-/// quiet.
+/// The app's item in the macOS menu bar, with the unread count beside its
+/// icon, or its icon in the Windows notification area, with the count in
+/// the tooltip. Elsewhere it does nothing and `actions` stays quiet.
 pub struct Tray {
     #[cfg(target_os = "macos")]
     item: Option<menu_bar::Item>,
+    #[cfg(windows)]
+    item: Option<windows::tray::Icon>,
     actions: async_channel::Receiver<TrayAction>,
 }
 
 impl Tray {
-    /// Puts the item in the menu bar. Call it on the thread that runs the
-    /// app's windows; `show` and `quit` are the menu's titles.
-    pub fn new(show: &str, quit: &str) -> Self {
+    /// Puts the item in place. Call it on the thread that runs the app's
+    /// windows; `name` is the app's, `show` and `quit` are the menu's
+    /// titles.
+    pub fn new(name: &str, show: &str, quit: &str) -> Self {
         let (sender, actions) = async_channel::unbounded();
         #[cfg(target_os = "macos")]
-        let item = menu_bar::Item::new(sender, show, quit);
-        #[cfg(not(target_os = "macos"))]
-        drop((sender, show, quit));
+        let item = {
+            let _ = name;
+            menu_bar::Item::new(sender, show, quit)
+        };
+        #[cfg(windows)]
+        let item = windows::tray::Icon::new(sender, name, show, quit);
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = (sender, name, show, quit);
         Self {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", windows))]
             item,
             actions,
         }
     }
 
-    /// Shows `count` beside the icon; zero leaves it bare.
+    /// Shows `count` beside the icon, or in its tooltip; zero leaves it
+    /// bare.
     pub fn set_count(&self, count: u32) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", windows))]
         if let Some(item) = &self.item {
             item.set_count(count);
         }
-        #[cfg(not(target_os = "macos"))]
-        drop(count);
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = count;
+    }
+
+    /// Takes the Windows icon away before the app quits; the macOS item
+    /// goes with the process.
+    pub fn remove(&self) {
+        #[cfg(windows)]
+        if let Some(item) = &self.item {
+            item.remove();
+        }
     }
 
     /// What the user picked in the menu.
@@ -138,7 +156,7 @@ impl Notifier {
         #[cfg(any(windows, target_os = "macos"))]
         self.platform.set_badge(count);
         #[cfg(not(any(windows, target_os = "macos")))]
-        drop(count);
+        let _ = count;
     }
 
     /// Tags of the notifications the user clicked.

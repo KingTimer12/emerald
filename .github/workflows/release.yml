@@ -1,0 +1,139 @@
+# A tag like v0.2.0 builds the macOS bundles and the Windows installer,
+# signs them for the updater, and publishes them with latest.json, the feed
+# the app reads from releases/latest.
+#
+# Third-party actions are pinned to commits, and release builds start
+# without a cache, so nothing restored from another run ends up shipped.
+# Secrets:
+#   EMERALD_UPDATE_KEY   the release key's secret (base64), required, in the
+#                        `release` environment; see
+#                        emerald-desktop/examples/release_key.rs
+#   Optional, for a Developer ID signature and notarization on macOS:
+#   APPLE_CERTIFICATE (a .p12 in base64), APPLE_CERTIFICATE_PASSWORD,
+#   APPLE_SIGN_IDENTITY, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
+#   Optional, for Authenticode on Windows:
+#   WINDOWS_CERTIFICATE (a .pfx in base64), WINDOWS_CERTIFICATE_PASSWORD
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    strategy:
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, with toolchain: stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Import the signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+        if: env.APPLE_CERTIFICATE != ''
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "EMERALD_SIGN_IDENTITY=$APPLE_SIGN_IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$APPLE_ID" ]; then
+            xcrun notarytool store-credentials emerald --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --keychain "$keychain"
+            echo "EMERALD_NOTARY_PROFILE=emerald" >> "$GITHUB_ENV"
+          fi
+      - run: packaging/macos/build.sh ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.target }}
+          path: dist/*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, with toolchain: stable
+        with:
+          toolchain: stable
+      - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b # v1.5.2
+      - run: cargo build --release --locked -p emerald-bin
+      - name: Sign the executable
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $pfx = "$env:RUNNER_TEMP\certificate.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          & $signtool.FullName sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD target\release\emerald.exe
+          "SIGN_COMMAND=$($signtool.FullName) sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD `$f" | Out-File -Append $env:GITHUB_ENV
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+          $exe = "$PWD\target\release\emerald.exe"
+          if ($env:SIGN_COMMAND) {
+            & $iscc "/DVersion=$version" "/DExe=$exe" /DSign "/Semerald=$env:SIGN_COMMAND" packaging\windows\emerald.iss
+          } else {
+            & $iscc "/DVersion=$version" "/DExe=$exe" packaging\windows\emerald.iss
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist/*
+
+  # Holds the release key: only GitHub's own actions and the runner's
+  # preinstalled rustup here, no cache, and the `release` environment, which
+  # can be set to need an approval before the key is handed over.
+  publish:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Sign the builds into latest.json
+        env:
+          EMERALD_UPDATE_KEY: ${{ secrets.EMERALD_UPDATE_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cargo run --locked --release -p emerald-desktop --example release_key -- feed "$version" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
+            "macos-aarch64=dist/Emerald-$version-macos-aarch64.app.tar.gz" \
+            "macos-x86_64=dist/Emerald-$version-macos-x86_64.app.tar.gz" \
+            "windows-x86_64=dist/Emerald-$version-setup-x86_64.exe" > dist/latest.json
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "Emerald ${GITHUB_REF_NAME#v}" --generate-notes

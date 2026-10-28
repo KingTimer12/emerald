@@ -18,7 +18,7 @@ mod theme;
 mod time;
 mod zoom;
 
-pub use app::{Alerts, Emerald, initial_bounds};
+pub use app::{Alerts, Desktop, Emerald, Update, initial_bounds};
 pub use icons::Icons;
 pub use time::set_time_format;
 

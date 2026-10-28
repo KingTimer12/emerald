@@ -5,10 +5,12 @@
 extern crate emerald_core;
 
 mod alerts;
+mod desktop;
 mod logging;
 mod login;
 
 use emerald_core::{i18n, paths};
+use emerald_desktop::instance::{self, Instance};
 use emerald_discord as discord;
 use emerald_notify::TrayAction;
 use emerald_ui::settings;
@@ -51,6 +53,20 @@ fn main() {
     let logging = logging::init();
     log_startup(&logging, &settings);
 
+    // Links the app was opened with (`discord://…`). On Windows a second
+    // launch hands them to the running instance and ends here.
+    let links: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|arg| arg.starts_with("discord:") || arg.starts_with("https://"))
+        .collect();
+    let launches = match instance::claim(alerts::APP_ID, &links) {
+        Instance::First(launches) => launches,
+        Instance::Second => {
+            tracing::info!("handed the launch to the running instance");
+            return;
+        }
+    };
+
     let token = match env_token.inspect(|_| tracing::info!("token taken from DISCORD_TOKEN")) {
         Some(token) => token,
         None => match discord::token::load() {
@@ -76,12 +92,14 @@ fn main() {
     };
     let (events, commands) = discord::spawn(token, settings.status);
 
-    Application::new().with_assets(emerald_ui::Icons).run(move |cx: &mut App| {
+    // macOS hands links to the running app through Launch Services.
+    let (opened, opened_links) = async_channel::unbounded();
+    let app = Application::new().with_assets(emerald_ui::Icons);
+    app.on_open_urls(move |urls| {
+        let _ = opened.try_send(urls);
+    });
+    app.run(move |cx: &mut App| {
         emerald_ui::bind_keys(cx, &settings.shortcuts);
-        cx.on_action(|_: &emerald_ui::Quit, cx| {
-            tracing::info!("quitting");
-            cx.quit()
-        });
 
         // Before the window opens, so the taskbar groups it under the
         // notifications' app id.
@@ -89,6 +107,10 @@ fn main() {
         let alerts = alerts::DesktopAlerts::new();
         let clicks = alerts.clicks();
         let tray_actions = alerts.tray_actions();
+        let tray = alerts.clone();
+        cx.on_action(move |_: &emerald_ui::Quit, cx| quit(&tray, cx));
+        let desktop = desktop::DesktopIntegration::new();
+        let updates = desktop.updates();
         let window = cx
             .open_window(
                 WindowOptions {
@@ -99,7 +121,7 @@ fn main() {
                     }),
                     ..Default::default()
                 },
-                |window, cx| cx.new(|cx| emerald_ui::Emerald::new(commands, alerts, settings, window, cx)),
+                |window, cx| cx.new(|cx| emerald_ui::Emerald::new(commands, alerts.clone(), desktop, settings, window, cx)),
             )
             .expect("open window");
 
@@ -107,8 +129,45 @@ fn main() {
             .update(cx, |view, window, cx| {
                 window.focus(&view.input_focus(cx));
                 cx.activate(true);
+                for link in &links {
+                    view.open_deep_link(link, window, cx);
+                }
             })
             .ok();
+
+        // Later links: forwarded by a second launch (Windows) or handed
+        // over by the system (macOS). A launch with none just shows the
+        // window.
+        for launches in [launches, opened_links] {
+            cx.spawn(async move |cx| {
+                while let Ok(links) = launches.recv().await {
+                    let alive = window.update(cx, |view, window, cx| {
+                        cx.activate(true);
+                        window.activate_window();
+                        for link in &links {
+                            view.open_deep_link(link, window, cx);
+                        }
+                    });
+                    if alive.is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
+
+        // Where updating stands, for the settings and the server list.
+        if let Some(updates) = updates {
+            cx.spawn(async move |cx| {
+                while let Ok(status) = updates.recv().await {
+                    let update = desktop::interface(status);
+                    if window.update(cx, |view, _, cx| view.on_update(update, cx)).is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
 
         // A click on a notification brings the window up on its channel.
         cx.spawn(async move |cx| {
@@ -130,13 +189,7 @@ fn main() {
             while let Ok(action) = tray_actions.recv().await {
                 let alive = match action {
                     TrayAction::Show => window.update(cx, |_, window, _| window.activate_window()).is_ok(),
-                    TrayAction::Quit => {
-                        cx.update(|cx| {
-                            tracing::info!("quitting");
-                            cx.quit()
-                        })
-                        .is_ok()
-                    }
+                    TrayAction::Quit => cx.update(|cx| quit(&alerts, cx)).is_ok(),
                 };
                 if !alive {
                     break;
@@ -174,6 +227,13 @@ fn main() {
         })
         .detach();
     });
+}
+
+/// Quits, taking the tray icon along so none is left behind.
+fn quit(alerts: &alerts::DesktopAlerts, cx: &mut App) {
+    tracing::info!("quitting");
+    alerts.remove_tray();
+    cx.quit();
 }
 
 /// What a bug report needs to know about this run, without anything

@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 emerald-core.workspace = true
+emerald-desktop.workspace = true
 emerald-discord.workspace = true
 emerald-notify.workspace = true
 async-channel.workspace = true

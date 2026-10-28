@@ -16,6 +16,8 @@ mod attachments;
 mod chat;
 mod composer;
 mod connection;
+mod deep_links;
+mod desktop;
 mod dialogs;
 mod events;
 mod friends;
@@ -66,6 +68,7 @@ use composer::Composer;
 use friends::Friends;
 use images::Images;
 pub use alerts::Alerts;
+pub use desktop::{Desktop, Update};
 pub use outbox::Outbox;
 use settings::SettingsView;
 use state::{
@@ -127,6 +130,13 @@ pub struct Emerald {
     alerts: Box<dyn Alerts>,
     /// The count last put on the app icon.
     badge_shown: Option<u32>,
+    /// Opening on login and updates.
+    desktop: Box<dyn Desktop>,
+    update: Update,
+    /// Read when the Desktop App settings open.
+    opens_on_login: Option<bool>,
+    /// A link the app was opened with before the first READY.
+    pending_link: Option<deep_links::DeepLink>,
     /// Mutes, notification levels and folded categories, synced with Discord.
     notify: NotifySettings,
     /// The server list's folders and order.
@@ -270,6 +280,7 @@ impl Emerald {
     pub fn new(
         net: impl Outbox + 'static,
         alerts: impl Alerts + 'static,
+        desktop: impl Desktop + 'static,
         settings: Settings,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -359,6 +370,10 @@ impl Emerald {
             net: Box::new(net),
             alerts: Box::new(alerts),
             badge_shown: None,
+            desktop: Box::new(desktop),
+            update: Update::Idle,
+            opens_on_login: None,
+            pending_link: None,
             notify: NotifySettings::default(),
             server_list: ServerList::default(),
             settings,

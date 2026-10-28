@@ -61,6 +61,7 @@ impl Emerald {
             // The first READY of a launch: reopen where the last session ended.
             self.restore_channel(channel, window, cx);
         }
+        self.follow_pending_link(window, cx);
     }
 
     pub(super) fn on_members(&mut self, chunk: MembersChunk, cx: &mut Context<Self>) {

@@ -46,8 +46,9 @@ pub const HANG_UP: &str = "icons/hang_up.svg";
 pub const PHONE: &str = "icons/phone.svg";
 /// End-to-end encrypted call.
 pub const SHIELD: &str = "icons/shield.svg";
+pub const DOWNLOAD: &str = "icons/download.svg";
 
-const ALL: [(&str, &[u8]); 38] = [
+const ALL: [(&str, &[u8]); 39] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -86,6 +87,7 @@ const ALL: [(&str, &[u8]); 38] = [
     (HANG_UP, include_bytes!("../assets/icons/hang_up.svg")),
     (PHONE, include_bytes!("../assets/icons/phone.svg")),
     (SHIELD, include_bytes!("../assets/icons/shield.svg")),
+    (DOWNLOAD, include_bytes!("../assets/icons/download.svg")),
 ];
 
 pub struct Icons;

@@ -1,0 +1,35 @@
+# Build, test and lint on the two platforms Emerald ships for. Nothing here
+# signs in to Discord: the tests run with fakes and no network.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master, with toolchain: stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # aws-lc (pulled in by str0m's certificate code) assembles with NASM.
+      - if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b # v1.5.2
+      - run: cargo build --locked
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets

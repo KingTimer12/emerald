@@ -1975,6 +1975,7 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "sha2 0.10.9",
+ "signature",
  "subtle",
  "zeroize",
 ]
@@ -2038,6 +2039,7 @@ dependencies = [
  "async-channel 2.5.0",
  "embed-resource",
  "emerald-core",
+ "emerald-desktop",
  "emerald-discord",
  "emerald-notify",
  "emerald-ui",
@@ -2056,6 +2058,25 @@ dependencies = [
  "image",
  "sys-locale",
  "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "emerald-desktop"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel 2.5.0",
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tracing",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

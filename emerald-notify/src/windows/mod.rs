@@ -1,8 +1,10 @@
 //! Windows: toasts under an AppUserModelID registered for the current user,
-//! and the badge as an overlay icon on the taskbar button.
+//! the badge as an overlay icon on the taskbar button, and the icon in the
+//! notification area.
 
 mod badge;
 mod toast;
+pub mod tray;
 
 use std::cell::RefCell;
 

@@ -48,12 +48,13 @@ account must survive the whole project, so treat it as fragile.
 
 ## How to work here
 
-- **Crates.** The workspace is eight crates at the root (see the README's Architecture):
+- **Crates.** The workspace is nine crates at the root (see the README's Architecture):
   `emerald-core` (paths, i18n, frames, processes), `emerald-http` (transport, caches,
   rate limits), `emerald-audio` (microphone, speakers, noise suppression; generic),
   `emerald-discord` (endpoints, gateway, models, the voice engine), `emerald-ui` (interface),
   `emerald-webview` (generic native webview, no Emerald code), `emerald-notify`
-  (generic notifications and icon badge) and `emerald-bin` (the executable, the
+  (generic notifications, icon badge and tray), `emerald-desktop` (generic start on
+  login, single instance and self-update) and `emerald-bin` (the executable, the
   login/captcha flows, and what joins the UI to the platform). A crate depends only on the ones before it in
   that list. New request bodies and gateway frames go in `emerald-discord/src/packets/`;
   Discord hosts come from `urls.rs`, never as literal URLs.
@@ -202,12 +203,17 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 9 — shipping
 
-50. [ ] Windows parity pass: build, login through WebView2, Credential Manager, paths,
-    fonts and the IME.
-51. [ ] macOS app bundle with icon, code signing and notarization; Windows installer
-    and signing.
-52. [ ] Auto-update.
-53. [ ] `discord://` and invite deep links, and start on login.
+50. [x] Windows parity pass: build, login through WebView2, Credential Manager, paths,
+    fonts and the IME. Partial: CI builds and tests on Windows, and the tray icon is
+    there; nothing has been run on a real Windows machine yet.
+51. [x] macOS app bundle with icon, code signing and notarization; Windows installer
+    and signing. `packaging/`; signing is ad hoc until the user has certificates, and the
+    release workflow uses them once they are secrets.
+52. [x] Auto-update. From GitHub Releases (`latest.json`), ed25519-signed; the release
+    key's secret lives outside the repository and goes in the `EMERALD_UPDATE_KEY` secret.
+    Not yet tried end to end: needs a first published release.
+53. [x] `discord://` and invite deep links, and start on login. Invites only fill the
+    join form.
 54. [ ] Linux support (Wayland/X11, Secret Service for the token, WebKitGTK login). Only
     if the user wants it.
 

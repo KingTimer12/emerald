@@ -19,6 +19,7 @@ mod account;
 mod accounts;
 mod appearance;
 mod custom_status;
+mod desktop;
 mod devices;
 mod language;
 mod privacy;
@@ -40,6 +41,7 @@ pub enum Page {
     Voice,
     Shortcuts,
     Language,
+    Desktop,
 }
 
 pub struct SettingsView {
@@ -86,6 +88,7 @@ impl Emerald {
             }
             Page::Status => self.fill_custom_status(cx),
             Page::Voice => self.list_audio_devices(cx),
+            Page::Desktop => self.opens_on_login = self.desktop.opens_on_login(),
             _ => {}
         }
         cx.notify();
@@ -180,6 +183,7 @@ impl Emerald {
             .child(item("page-voice", t!("settings.voice"), Page::Voice, cx))
             .child(item("page-shortcuts", t!("settings.shortcuts"), Page::Shortcuts, cx))
             .child(item("page-language", t!("settings.language_time"), Page::Language, cx))
+            .child(item("page-desktop", t!("settings.desktop"), Page::Desktop, cx))
             .child(separator())
             .child(
                 div()
@@ -206,6 +210,7 @@ impl Emerald {
             Page::Voice => self.render_voice(view, cx),
             Page::Shortcuts => self.render_shortcuts(view, cx),
             Page::Language => self.render_language(view, cx),
+            Page::Desktop => self.render_desktop(cx),
         };
 
         let close = div()

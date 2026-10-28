@@ -150,7 +150,21 @@ CPU near zero when idle.
   Alt+Down move between channels, Alt+Shift+Down jumps to the next unread one, Shift+Escape marks
   the channel read.
 - **Window and launch**: the window opens where it closed, and on the channel last open.
-- **Menu bar item** (macOS): the unread count beside an icon, with Show and Quit.
+  Settings > Desktop App turns on opening Emerald when you log in (a LaunchAgent on macOS,
+  the `Run` key on Windows). Only one Emerald runs at a time.
+- **Menu bar item and tray icon**: on macOS the unread count beside an icon in the menu bar;
+  on Windows an icon in the notification area with the count in its tooltip. Both offer Show
+  and Quit.
+- **`discord://` links**: `discord://discord.com/channels/…` (and `discord://-/…`) opens the
+  channel or message; an invite link fills in "Join a Server" and waits for your click. The
+  macOS bundle registers the scheme; the Windows installer does when its box is ticked.
+- **Installing and updating**: a macOS app bundle (in a disk image) and a Windows installer
+  that needs no administrator, both built by `.github/workflows/release.yml` from a tag. An
+  installed copy checks the release feed (`latest.json` on GitHub Releases) 30 seconds after
+  start and every 6 hours, downloads a newer build in the background, checks its ed25519
+  signature against the release key built into the app, and shows a green arrow atop the
+  server list: a click installs it and restarts. Settings > Desktop App shows the version
+  and checks on demand. A build run from source never updates itself.
 - **Voice channels and calls**: click a voice channel to join; the people in it are listed
   under it, ringed green while they speak. A stage joins you to the audience, listening. In a
   DM or group DM the phone in the header starts a call and rings the others; a bar over the
@@ -169,8 +183,12 @@ for incoming calls; echo cancellation (use headphones), push-to-talk and per-per
 inside the app; animated avatars in the
 chat list (still there, as Discord shows them until hovered). On macOS, notifications go
 through `osascript` (Notification Center only takes bundled apps), so clicking one does
-not open its channel; search dates are taken in UTC. No menu bar item on Windows yet, and
-screen readers get no labels, since gpui has no
+not open its channel; search dates are taken in UTC. Releases are signed ad hoc until there
+is an Apple Developer ID and a Windows certificate: macOS asks to allow the app in Privacy &
+Security the first time, and may ask again for the Keychain after an update; Windows
+SmartScreen warns about the installer. Windows builds and tests run in CI, but the app has
+not been tried on a Windows machine yet (login, tray icon, links, installer, updates). Screen
+readers get no labels, since gpui has no
 accessibility tree yet; keyboard focus does not move between controls with Tab. No roles
 editor: permissions are read for the moderation checks, not edited. Forum tags cannot be
 renamed. Moderation does not compare role order, so Discord's refusal shows as the error.
@@ -212,6 +230,25 @@ Tests:
 cargo test
 ```
 
+## Packaging and releases
+
+```sh
+packaging/macos/build.sh aarch64-apple-darwin   # dist/Emerald-VERSION-macos-aarch64.{dmg,app.tar.gz}
+iscc /DVersion=0.1.0 packaging\windows\emerald.iss  # dist\Emerald-VERSION-setup-x86_64.exe
+```
+
+`build.sh` signs ad hoc, or with a Developer ID when `EMERALD_SIGN_IDENTITY` names one, and
+notarizes when `EMERALD_NOTARY_PROFILE` names a `notarytool` profile. Pushing a tag such as
+`v0.2.0` (matching the version in `Cargo.toml`) runs the release workflow: both macOS
+architectures and the Windows installer are built, signed into `latest.json` with the
+release key and published as a GitHub release. The workflow needs the key's secret as
+`EMERALD_UPDATE_KEY` in the repository's `release` environment (which can require an
+approval before the signing job runs); the other secrets it reads (Apple and Windows
+certificates) are optional. The repository must be public for installed copies to read
+the feed. A new release key is made with
+`cargo run -p emerald-desktop --example release_key -- keygen FILE`, and its public half
+goes in `emerald-bin/src/desktop.rs`; copies with the old key then stop taking updates.
+
 ## Files
 
 | macOS | Windows | Contents |
@@ -225,6 +262,9 @@ cargo test
 | | `HKCU\Software\Classes\AppUserModelId\Emerald.Desktop` | Registry key naming the app on its notifications. |
 | `~/Library/Logs/Emerald/emerald.YYYY-MM-DD.log` | `%LOCALAPPDATA%\emerald\logs\…` | One log per day, the last 7 kept, in a folder only you can read. They start with the version, platform and folders in use; they never hold the token, and name people and channels only by id. |
 | | `%LOCALAPPDATA%\emerald\WebView2` | WebView2 browser profile; the login session itself is InPrivate. |
+| `~/Library/Caches/emerald/updates/` | `%LOCALAPPDATA%\emerald\updates\` | A downloaded update waiting for a restart; emptied at each start. |
+| `~/Library/LaunchAgents/io.github.kingtimer12.emerald.plist` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `Emerald` | Opening on login, when turned on. |
+| | `%LOCALAPPDATA%\Programs\Emerald\` | The installed app; the installer also adds a Start menu entry and, when asked, `HKCU\Software\Classes\discord` for links. |
 
 ## Architecture
 
@@ -238,8 +278,9 @@ instead of going out again, an expired copy is served while it refreshes, and wh
 fails (network error, 5xx, rate limited) a recent copy stands in. Writing to a channel
 drops what was cached for it. On a burst, Discord sees one request instead of several.
 
-The code is a Cargo workspace of eight crates at the root. Each depends only on the
-ones above it, and `emerald-audio`, `emerald-webview` and `emerald-notify` on nothing of Emerald's. Large areas are folders
+The code is a Cargo workspace of nine crates at the root. Each depends only on the
+ones above it, and `emerald-audio`, `emerald-webview`, `emerald-notify` and
+`emerald-desktop` on nothing of Emerald's. Large areas are folders
 of small modules, one concern each:
 
 ```
@@ -307,6 +348,8 @@ emerald-ui/              the gpui interface
         ├── requests.rs  message requests and the spam inbox
         ├── invites.rs   "Invite People" and invite cards in messages
         ├── switcher.rs  the quick switcher (Ctrl/Cmd+K)
+        ├── desktop.rs   the `Desktop` trait: open on login, updates, the update arrow
+        ├── deep_links.rs  `discord://` links the app is opened with
         ├── voice/       joining and leaving, mute and deafen, the call panel, people in voice
         └── sidebar/, chat/, members.rs, friends.rs, profile.rs, settings.rs, …
 emerald-webview/         a blocking native webview window, generic: `WebView` builder,
@@ -319,16 +362,28 @@ emerald-notify/          desktop notifications and a count on the app icon, gene
 └── src/
     ├── lib.rs           `Notifier`, `Notice`, clicked notifications as a channel
     ├── macos.rs         Dock badge, notifications through osascript
-    └── windows/         toasts under a registered app id, taskbar overlay badge
+    ├── menu_bar.rs      the macOS menu bar item
+    └── windows/         toasts under a registered app id, taskbar overlay badge, tray icon
+emerald-desktop/         start on login, one instance, self-update, generic
+├── examples/release_key.rs  makes the release key and signs a release into latest.json
+└── src/
+    ├── autostart.rs     LaunchAgent (macOS), `Run` key (Windows)
+    ├── instance.rs      one instance; a second launch hands its links over a named pipe
+    ├── packaging.rs     whether this copy is a bundle, installed, or run from target/
+    └── update/          the feed, ed25519 signatures, download, staging and install
 emerald-bin/             the `emerald` executable
-├── assets/              app icon, the Windows resource file, the login capture
+├── assets/              app icons (.svg, .ico, .icns), the Windows resource file, the login capture
 │                        script and the captcha page
 ├── build.rs             embeds the icon into the Windows .exe
 └── src/
     ├── main.rs          entry point, webview child modes, login cycle
     ├── login.rs         the login and captcha flows, on emerald-webview
     ├── alerts.rs        emerald-notify behind the interface's `Alerts`
+    ├── desktop.rs       emerald-desktop behind the interface's `Desktop`; the feed and key
     └── logging.rs       tracing to stderr and a daily log file, panics included
+packaging/               the macOS bundle (Info.plist, entitlements, build.sh) and the
+                         Windows installer (Inno Setup)
+.github/workflows/       CI on macOS and Windows; releases from tags
 ```
 
 ## Translations

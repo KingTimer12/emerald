@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The bundle's Info.plist; build.sh fills in @VERSION@. -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>Emerald</string>
+	<key>CFBundleDisplayName</key>
+	<string>Emerald</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.kingtimer12.emerald</string>
+	<key>CFBundleExecutable</key>
+	<string>emerald</string>
+	<key>CFBundleIconFile</key>
+	<string>emerald</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.social-networking</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Emerald uses the microphone in voice channels and calls.</string>
+	<!-- discord:// links. macOS keeps whichever app the user made the
+	     default; with the official app installed it may stay with it. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Discord link</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>discord</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

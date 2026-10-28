@@ -60,6 +60,16 @@ impl Emerald {
         cx.notify();
     }
 
+    /// "Join a Server" with an invite already filled in, for an invite
+    /// link the app was opened with.
+    pub(super) fn open_join_server(&mut self, code: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_add_server(window, cx);
+        if let Some(Overlay::AddServer(modal)) = &self.overlay {
+            modal.invite.update(cx, |input, cx| input.set_text(format!("https://discord.gg/{code}"), cx));
+        }
+        self.add_server_step(Step::Join, window, cx);
+    }
+
     fn add_server_step(&mut self, step: Step, window: &mut Window, cx: &mut Context<Self>) {
         let Some(Overlay::AddServer(modal)) = &mut self.overlay else { return };
         modal.step = step;
