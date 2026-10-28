@@ -1,6 +1,7 @@
 //! The hover toolbar, the context menu and the delete confirmation.
 
 use super::*;
+use super::bulk;
 use crate::zoom::zoomed;
 
 impl Emerald {
@@ -174,6 +175,7 @@ impl Emerald {
         let pin_label = if msg.pinned { t!("message.unpin") } else { t!("message.pin") };
         let react = self.may_react(channel, msg, true);
         let thread = self.may_start_thread(channel, msg);
+        let this_picked = self.is_bulk_picked(channel, id);
         let position = menu.position;
         let list = div()
             .id("message-menu")
@@ -219,6 +221,12 @@ impl Emerald {
             .when(!msg.content.is_empty(), |menu| {
                 menu.child(item("menu-copy", t!("message.copy_text"), icons::COPY, false).on_click(cx.listener(
                     move |this, _, _, cx| this.copy_message(channel, id, false, cx),
+                )))
+            })
+            .when(rights.delete && bulk::deletable(id), |menu| {
+                let label = if this_picked { t!("bulk.unselect") } else { t!("bulk.select") };
+                menu.child(item("menu-bulk", label, icons::CHECK, false).on_click(cx.listener(
+                    move |this, _, _, cx| this.toggle_bulk(channel, id, cx),
                 )))
             })
             .when(rights.delete, |menu| {

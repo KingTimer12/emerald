@@ -263,3 +263,22 @@ pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) 
     let text = text.into();
     move |_, cx| cx.new(|_| Tooltip(text.clone())).into()
 }
+
+/// A choice on a settings page or dialog: filled in the brand color when picked.
+pub fn chip(id: (&'static str, usize), label: impl gpui::IntoElement, selected: bool) -> gpui::Stateful<gpui::Div> {
+    use gpui::prelude::*;
+    gpui::div()
+        .id(id)
+        .h(zoomed(32.))
+        .px_3()
+        .flex()
+        .items_center()
+        .rounded_md()
+        .text_size(zoomed(14.))
+        .font_weight(gpui::FontWeight::MEDIUM)
+        .cursor_pointer()
+        .text_color(gpui::rgb(theme::text_strong()))
+        .when(selected, |chip| chip.bg(gpui::rgb(theme::brand())))
+        .when(!selected, |chip| chip.bg(theme::hover()).hover(|s| s.bg(theme::active())))
+        .child(label)
+}

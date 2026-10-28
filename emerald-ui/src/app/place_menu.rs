@@ -207,6 +207,7 @@ impl Emerald {
             ),
             Target::Channel { .. } => {}
         }
+        self.manage_place_items(target, items, cx);
         if matches!(target, Target::Channel { thread: true, .. }) {
             return;
         }

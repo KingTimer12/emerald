@@ -5,10 +5,12 @@ mod account;
 mod action;
 mod command;
 mod event;
+mod moderation;
 mod query;
 
 pub use account::{OwnPresence, Picture, ProfileEdit, SettingsEdit};
 pub use action::Action;
 pub use command::{Command, IndexTarget, NewPoll, Page, ReactionSource, ReplyTo, Upload};
+pub use moderation::{ChannelEdit, TagEdit};
 pub use event::{Link, NetEvent, PinPage, ReactionEvent, SearchPage, Snapshot, ThreadPage};
 pub use query::{MUTE_WINDOWS, SearchQuery, SearchScope, SettingsChange, ThreadQuery};

@@ -18,6 +18,11 @@ pub(super) enum Ask {
     LeaveGroup(Snowflake),
     Block(Snowflake),
     RemoveRecipient { channel: Snowflake, user: Snowflake },
+    /// Kick, and ban, a member of `guild`.
+    Kick { guild: Snowflake, user: Snowflake },
+    Ban { guild: Snowflake, user: Snowflake },
+    /// Deleting the messages picked in `channel`; the picks wait in `Emerald::bulk`.
+    BulkDelete { channel: Snowflake, count: usize },
 }
 
 /// What a text dialog sets.
@@ -56,6 +61,12 @@ impl Emerald {
             Ask::LeaveGroup(channel) => Command::CloseChannel { channel },
             Ask::Block(user) => Command::Block { user, block: true },
             Ask::RemoveRecipient { channel, user } => Command::RemoveRecipient { channel, user },
+            Ask::Kick { guild, user } => Command::Kick { guild, user },
+            Ask::Ban { guild, user } => Command::Ban { guild, user, delete_seconds: 0 },
+            Ask::BulkDelete { channel, .. } => match self.take_bulk(channel) {
+                Some(messages) => Command::BulkDelete { channel, messages },
+                None => return,
+            },
         };
         self.net.post(command);
     }
@@ -76,6 +87,7 @@ impl Emerald {
     pub(super) fn render_confirm(&self, ask: Ask, cx: &mut Context<Self>) -> AnyElement {
         let guild_name = |id| self.spaces.iter().find(|s| s.id == id).map(|s| s.name.to_string()).unwrap_or_default();
         let user_name = |id| self.people.friend_name(id).unwrap_or("?").to_owned();
+        let member_name = |id| self.people.display_name(id).unwrap_or("?").to_owned();
         let group_name = |id: Snowflake| self.spaces.dms().label(id).map(|l| l.to_string()).unwrap_or_default();
         let (title, body, button): (String, String, &'static str) = match ask {
             Ask::LeaveGuild(guild) => (
@@ -97,6 +109,21 @@ impl Emerald {
                 t!("group.remove_title", name = user_name(user)),
                 t!("group.remove_body", name = user_name(user)),
                 t!("group.remove"),
+            ),
+            Ask::Kick { user, .. } => (
+                t!("moderation.kick_title", name = member_name(user)),
+                t!("moderation.kick_body", name = member_name(user)),
+                t!("moderation.kick"),
+            ),
+            Ask::Ban { user, .. } => (
+                t!("moderation.ban_title", name = member_name(user)),
+                t!("moderation.ban_body", name = member_name(user)),
+                t!("moderation.ban"),
+            ),
+            Ask::BulkDelete { count, .. } => (
+                t!("bulk.delete_title", count = count),
+                t!("bulk.delete_body").to_owned(),
+                t!("bulk.delete"),
             ),
         };
         let content = div().text_color(rgb(theme::text_default())).child(body).into_any_element();
@@ -128,7 +155,7 @@ impl Emerald {
 
 /// A centered card over a scrim with a title, `content`, and Cancel beside
 /// `action` at the bottom; clicking outside cancels.
-fn dialog(title: SharedString, content: AnyElement, action: gpui::Stateful<gpui::Div>, cx: &mut Context<Emerald>) -> AnyElement {
+pub(super) fn dialog(title: SharedString, content: AnyElement, action: gpui::Stateful<gpui::Div>, cx: &mut Context<Emerald>) -> AnyElement {
     div()
         .id("dialog-scrim")
         .absolute()

@@ -53,6 +53,9 @@ impl Emerald {
     }
 
     pub(super) fn select_channel(&mut self, id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
+        if self.bulk.as_ref().is_some_and(|picks| picks.channel != id) {
+            self.bulk = None;
+        }
         if self.selected_channel != Some(id) {
             // The divider marks what was unread when the channel opened,
             // and stays while it is open, as on Discord.

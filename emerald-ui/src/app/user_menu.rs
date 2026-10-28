@@ -105,6 +105,15 @@ impl Emerald {
                     .into_any_element(),
             );
         }
+        // Moderation acts on the server the member was clicked in, and never on oneself.
+        let moderation = match guild.filter(|guild| !me && self.spaces.current().id == *guild) {
+            Some(guild) => self.moderation_items(guild, user, cx),
+            None => Vec::new(),
+        };
+        if !moderation.is_empty() {
+            items.push(separator());
+            items.extend(moderation);
+        }
         if !me {
             items.push(separator());
             let blocked = self.people.is_blocked(user);

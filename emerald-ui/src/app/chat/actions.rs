@@ -1,6 +1,7 @@
 //! What can be done to a message: reply, edit, pin, copy and delete. The
 //! toolbar shown on hover and the context menu offer the same actions.
 
+pub(super) mod bulk;
 mod editing;
 mod menu;
 
@@ -70,6 +71,7 @@ impl Emerald {
 
     /// A message went away: nothing may keep pointing at it.
     pub(in super::super) fn message_gone(&mut self, channel: Snowflake, message: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
+        self.forget_bulk(channel, message);
         let target = |c: Snowflake, m: Snowflake| c == channel && m == message;
         if self.edit.as_ref().is_some_and(|e| target(e.channel, e.message)) {
             self.cancel_edit(window, cx);

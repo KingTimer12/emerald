@@ -10,7 +10,7 @@ use gpui::{Context, Window};
 use super::state::{DMS, Space, typing};
 use super::{Emerald, Feedback, Overlay, shown};
 use super::state::autocomplete::Trigger;
-use emerald_discord::model::{Channel, ChannelKind, MembersChunk, Message, TypingStart};
+use emerald_discord::model::{Channel, ChannelKind, MembersChunk, Message, MessageDelete, TypingStart};
 use emerald_discord::{Action, Command, Link, NetEvent, Snapshot};
 
 impl Emerald {
@@ -222,6 +222,13 @@ impl Emerald {
                 self.message_gone(delete.channel_id, delete.id, window, cx);
                 let view = shown(&self.messages, self.selected_channel, delete.channel_id);
                 self.history.delete(delete, view);
+            }
+            NetEvent::MessageDeleteBulk(delete) => {
+                for id in delete.ids {
+                    self.message_gone(delete.channel_id, id, window, cx);
+                    let view = shown(&self.messages, self.selected_channel, delete.channel_id);
+                    self.history.delete(MessageDelete { id, channel_id: delete.channel_id }, view);
+                }
             }
             NetEvent::History { channel, page, messages } => {
                 let view = shown(&self.messages, self.selected_channel, channel);

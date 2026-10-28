@@ -9,6 +9,7 @@ mod channel;
 mod guild;
 mod media;
 mod message;
+mod moderation;
 mod outcome;
 mod search;
 mod settings;
@@ -137,6 +138,12 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::CreateInvite { channel, location } => Some(guild::create_invite(rest, channel, location).await),
         Command::ResolveInvite { code } => Some(guild::resolve_invite(rest, code).await),
         Command::LeaveGuild { guild } => Some(guild::leave(rest, guild).await),
+
+        Command::BulkDelete { channel, messages } => Some(moderation::bulk_delete(rest, channel, messages).await),
+        Command::Kick { guild, user } => Some(moderation::kick(rest, guild, user).await),
+        Command::Ban { guild, user, delete_seconds } => Some(moderation::ban(rest, guild, user, delete_seconds).await),
+        Command::Timeout { guild, user, until } => Some(moderation::timeout(rest, guild, user, until).await),
+        Command::EditChannel { channel, edit } => Some(moderation::edit_channel(rest, channel, edit).await),
 
         // Routed to the gateway before spawning.
         Command::SetPresence(_)

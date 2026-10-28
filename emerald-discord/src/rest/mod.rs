@@ -11,6 +11,7 @@ mod expressions;
 mod guilds;
 mod ids;
 mod messages;
+mod moderation;
 mod search;
 mod settings;
 mod threads;

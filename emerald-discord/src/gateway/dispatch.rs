@@ -96,6 +96,7 @@ fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Opti
         "MESSAGE_CREATE" => decode(kind, data, |m| NetEvent::MessageCreate(Box::new(m))),
         "MESSAGE_UPDATE" => decode(kind, data, NetEvent::MessageUpdate),
         "MESSAGE_DELETE" => decode(kind, data, NetEvent::MessageDelete),
+        "MESSAGE_DELETE_BULK" => decode(kind, data, NetEvent::MessageDeleteBulk),
         "MESSAGE_ACK" => decode(kind, data, NetEvent::MessageAck),
         "GUILD_MEMBERS_CHUNK" => decode(kind, data, NetEvent::MembersChunk),
         "GUILD_MEMBER_LIST_UPDATE" => decode(kind, data, NetEvent::MemberList),

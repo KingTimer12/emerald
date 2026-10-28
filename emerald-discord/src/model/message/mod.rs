@@ -131,6 +131,13 @@ pub struct MessageDelete {
     pub channel_id: Snowflake,
 }
 
+/// MESSAGE_DELETE_BULK: several messages of one channel removed at once.
+#[derive(Debug, Deserialize)]
+pub struct MessageDeleteBulk {
+    pub channel_id: Snowflake,
+    pub ids: Vec<Snowflake>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct MessageAck {
     pub channel_id: Snowflake,

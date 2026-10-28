@@ -1,7 +1,5 @@
 //! Appearance: message size, zoom, theme, density and motion.
 
-use gpui::{Div, Stateful};
-
 use super::*;
 use crate::zoom::{self, zoomed};
 
@@ -64,7 +62,7 @@ impl Emerald {
             .child(section_title(t!("settings.font_size")).mt_6())
             .child(
                 div().flex().gap_2().children(FONT_SIZES.into_iter().enumerate().map(|(ix, option)| {
-                    chip(("font-size", ix), format!("{option}px"), option == size).on_click(cx.listener(
+                    widgets::chip(("font-size", ix), format!("{option}px"), option == size).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.settings.font_size = option;
                             this.save_settings(cx);
@@ -76,7 +74,7 @@ impl Emerald {
             .child(hint(t!("settings.zoom_hint")))
             .child(
                 div().flex().gap_2().children(zoom::LEVELS.into_iter().enumerate().map(|(ix, option)| {
-                    chip(("zoom-level", ix), format!("{option}%"), option == self.settings.zoom).on_click(
+                    widgets::chip(("zoom-level", ix), format!("{option}%"), option == self.settings.zoom).on_click(
                         cx.listener(move |this, _, _, cx| this.set_zoom(option, cx)),
                     )
                 })),
@@ -116,7 +114,7 @@ impl Emerald {
                         ThemeChoice::Light => t!("settings.theme_light"),
                         ThemeChoice::System => t!("settings.theme_system"),
                     };
-                    chip(("theme-choice", ix), label, option == self.settings.theme).on_click(cx.listener(
+                    widgets::chip(("theme-choice", ix), label, option == self.settings.theme).on_click(cx.listener(
                         move |this, _, _, cx| {
                             this.settings.theme = option;
                             this.save_settings(cx);
@@ -144,20 +142,3 @@ impl Emerald {
     }
 }
 
-/// A choice on the appearance page: filled in the brand color when picked.
-fn chip(id: (&'static str, usize), label: impl IntoElement, selected: bool) -> Stateful<Div> {
-    div()
-        .id(id)
-        .h(zoomed(32.))
-        .px_3()
-        .flex()
-        .items_center()
-        .rounded_md()
-        .text_size(zoomed(14.))
-        .font_weight(FontWeight::MEDIUM)
-        .cursor_pointer()
-        .text_color(rgb(theme::text_strong()))
-        .when(selected, |chip| chip.bg(rgb(theme::brand())))
-        .when(!selected, |chip| chip.bg(theme::hover()).hover(|s| s.bg(theme::active())))
-        .child(label)
-}

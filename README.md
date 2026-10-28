@@ -128,6 +128,12 @@ CPU near zero when idle.
   unread channels. A result jumps to its message.
 - **Threads browser**: a channel's active and older threads, and a search by name.
   Forums sort by activity or by date, filter by tags and search posts by name.
+- **Moderation** (for those whose permissions allow it): select messages in a channel (up to
+  100, all under two weeks old) and delete them at once; time a member out for 10 minutes,
+  an hour or a day, or lift it; kick or ban with a confirmation. Channel settings: name,
+  topic, slow mode, and forum tags (add and remove). Threads can be locked and archived from
+  their menu. Bulk delete uses the public API route, since the web client's was not found in
+  its bundle.
 - **Profile**: display name, avatar, pronouns, about me and banner color, everywhere or per
   server (nickname; server avatar, banner and bio with Nitro), with a live preview of the card.
 - **Status**: online, idle, do not disturb or invisible, and a custom status with an emoji and
@@ -151,7 +157,9 @@ chat list (still there, as Discord shows them until hovered). On macOS, notifica
 through `osascript` (Notification Center only takes bundled apps), so clicking one does
 not open its channel; search dates are taken in UTC. No menu bar item on Windows yet, and
 screen readers get no labels, since gpui has no
-accessibility tree yet; keyboard focus does not move between controls with Tab.
+accessibility tree yet; keyboard focus does not move between controls with Tab. No roles
+editor: permissions are read for the moderation checks, not edited. Forum tags cannot be
+renamed. Moderation does not compare role order, so Discord's refusal shows as the error.
 
 ## Requirements
 

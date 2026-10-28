@@ -179,10 +179,11 @@ Done but never checked in the real app, or known to be partial:
 
 ### Phase 7 — moderation (only what the user's roles allow)
 
-43. [ ] Delete others' messages in bulk, kick, ban and timeout from the member list.
-44. [ ] Channel and thread settings: name, topic, slow mode, lock/archive threads, forum
-    tags.
-45. [ ] Roles and permissions editor. Low priority.
+43. [x] Delete others' messages in bulk, kick, ban and timeout from the member list.
+44. [x] Channel and thread settings: name, topic, slow mode, lock/archive threads, forum
+    tags. Partial: forum tags can be added and removed, not renamed.
+45. [ ] Roles and permissions editor. Low priority; not started. Permissions are read for
+    the checks above, not edited.
 
 ### Phase 8 — voice and video (largest, last)
 

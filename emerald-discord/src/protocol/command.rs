@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::{OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery};
+use super::{ChannelEdit, OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery};
 use crate::model::{ChannelKind, Emoji, Gif, Snowflake, UserSettings};
 
 /// Requests flowing from the UI to the network thread.
@@ -236,6 +236,34 @@ pub enum Command {
     /// "Leave Server".
     LeaveGuild {
         guild: Snowflake,
+    },
+    /// Deletes several messages of `channel` at once; the gateway brings
+    /// MESSAGE_DELETE_BULK.
+    BulkDelete {
+        channel: Snowflake,
+        messages: Vec<Snowflake>,
+    },
+    /// Removes a member from `guild`; they may rejoin.
+    Kick {
+        guild: Snowflake,
+        user: Snowflake,
+    },
+    /// Bans a member, deleting their messages from the last `delete_seconds`.
+    Ban {
+        guild: Snowflake,
+        user: Snowflake,
+        delete_seconds: u32,
+    },
+    /// Times a member out until `until` (an ISO timestamp), or lifts it for `None`.
+    Timeout {
+        guild: Snowflake,
+        user: Snowflake,
+        until: Option<String>,
+    },
+    /// Saves a channel or thread's settings.
+    EditChannel {
+        channel: Snowflake,
+        edit: ChannelEdit,
     },
     /// Opens (or reopens) the DM with `user`. Unselected opens run in the
     /// background, so they never show a captcha and fail silently.

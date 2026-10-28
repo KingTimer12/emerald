@@ -28,6 +28,7 @@ impl Render for Emerald {
             Some(Overlay::CreateThread(modal)) => Some(self.render_thread_modal(modal, cx)),
             Some(Overlay::CreatePost(modal)) => Some(self.render_post_modal(modal, cx)),
             Some(Overlay::CreatePoll(modal)) => Some(self.render_poll_modal(modal, cx)),
+            Some(Overlay::ChannelSettings(modal)) => Some(self.render_channel_settings(modal, cx)),
             Some(Overlay::Switcher(switcher)) => Some(self.render_switcher(switcher, cx)),
             Some(Overlay::Confirm(ask)) => Some(self.render_confirm(*ask, cx)),
             Some(Overlay::Prompt(prompt)) => Some(self.render_prompt(*prompt, cx)),

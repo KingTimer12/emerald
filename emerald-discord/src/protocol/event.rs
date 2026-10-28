@@ -4,7 +4,7 @@ use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Up
 use crate::model::{
     AuthSession, FriendPresence, UserProfileDetails, UserSettings,
     Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
-    MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageUpdate, PollVote, Profile, ReactionAddMany,
+    MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageDeleteBulk, MessageUpdate, PollVote, Profile, ReactionAddMany,
     ReactionClear, ReactionUpdate, Relationship, Invite, RoleDelete, RoleUpdate, Snowflake, StickerPack, ThreadListSync,
     ThreadMemberEntry, ThreadMembersUpdate, TypingStart, User,
 };
@@ -119,6 +119,7 @@ pub enum NetEvent {
     MessageCreate(Box<Message>),
     MessageUpdate(MessageUpdate),
     MessageDelete(MessageDelete),
+    MessageDeleteBulk(MessageDeleteBulk),
     Reaction(ReactionEvent),
     /// Someone voted on a poll (`add`) or took a vote back.
     PollVote {

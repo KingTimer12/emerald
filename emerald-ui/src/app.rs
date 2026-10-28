@@ -24,6 +24,8 @@ mod group_picker;
 mod images;
 mod invites;
 mod members;
+mod channel_settings;
+mod moderation;
 mod navigation;
 mod outbox;
 mod place_actions;
@@ -105,6 +107,7 @@ enum Overlay {
     CreateThread(chat::NewThread),
     CreatePost(chat::NewPost),
     CreatePoll(chat::NewPoll),
+    ChannelSettings(Box<channel_settings::ChannelSettingsModal>),
     /// The quick switcher (Ctrl/Cmd+K).
     Switcher(switcher::Switcher),
     /// A question before leaving, blocking or removing someone.
@@ -217,6 +220,8 @@ pub struct Emerald {
     window_active: bool,
     /// The window place written to the settings after it settles.
     window_save: Option<gpui::Task<()>>,
+    /// Messages picked for a bulk delete, see `chat::actions::bulk`.
+    bulk: Option<chat::Selection>,
     /// This view, for handlers drawn deep in the text to call back.
     weak: gpui::WeakEntity<Emerald>,
     /// The reaction picker's search box, and its grid's scroll position.
@@ -390,6 +395,7 @@ impl Emerald {
             poll_results: HashSet::new(),
             window_active: window.is_window_active(),
             window_save: None,
+            bulk: None,
             weak: cx.entity().downgrade(),
             forums: HashMap::new(),
             panel: None,

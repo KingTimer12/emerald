@@ -122,6 +122,16 @@ impl Space {
         }
     }
 
+    /// Server-wide permissions: a channel overwrite can deny a bit there, so
+    /// this ors every channel and keeps what any one of them grants. Kick,
+    /// ban and timeout are only ever granted server-wide.
+    pub fn guild_permissions(&self) -> u64 {
+        match &self.guild {
+            Some(guild) => guild.permissions.values().fold(0, |granted, bits| granted | bits),
+            None => u64::MAX,
+        }
+    }
+
     /// Channels the current user can open and see.
     pub fn readable(&self) -> impl Iterator<Item = &Channel> {
         self.channels.iter().filter(|c| {

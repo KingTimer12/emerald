@@ -247,11 +247,22 @@ impl Emerald {
                     _ => self.composer.error = Some(error.into()),
                 },
             },
-            Action::Settings | Action::Channel | Action::Note | Action::LeaveGuild => {
+            Action::Settings | Action::Channel | Action::Note | Action::LeaveGuild | Action::Moderation => {
                 if let Err(error) = result {
                     self.connection.set_message(t!("common.error", error = error));
                 }
             }
+            Action::ChannelSettings => match result {
+                Ok(()) => {
+                    if matches!(self.overlay, Some(Overlay::ChannelSettings(_))) {
+                        self.close_overlay(window, cx);
+                    }
+                }
+                Err(error) => match &mut self.overlay {
+                    Some(Overlay::ChannelSettings(modal)) => modal.error = Some(error.into()),
+                    _ => self.connection.set_message(t!("common.error", error = error)),
+                },
+            },
             Action::ThreadMembership | Action::RunCommand => {
                 if let Err(error) = result {
                     self.composer.error = Some(error.into());

@@ -26,6 +26,10 @@ pub enum Action {
     Note,
     /// Leaving a server.
     LeaveGuild,
+    /// Deleting in bulk, kicking, banning or timing out a member.
+    Moderation,
+    /// Saving a channel or thread's settings.
+    ChannelSettings,
     /// Saving the synced settings: status, custom status, privacy.
     AccountSettings,
     /// Logging other devices out.

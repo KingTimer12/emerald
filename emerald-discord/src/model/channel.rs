@@ -98,6 +98,9 @@ pub struct Channel {
     /// Minutes of quiet before a new thread here archives itself.
     #[serde(default)]
     pub default_auto_archive_duration: Option<u32>,
+    /// Seconds between a member's messages here; 0 when slow mode is off.
+    #[serde(default)]
+    pub rate_limit_per_user: Option<u32>,
     #[serde(default)]
     pub flags: u64,
     /// Group DMs: the icon hash, and who may remove people.
@@ -151,6 +154,9 @@ pub struct ForumTag {
     pub id: Snowflake,
     #[serde(default)]
     pub name: String,
+    /// Custom emoji; kept so an edit of the tag leaves it as it was.
+    #[serde(default)]
+    pub emoji_id: Option<Snowflake>,
     /// Unicode emoji only; custom ones are not drawn on tags.
     #[serde(default)]
     pub emoji_name: Option<String>,

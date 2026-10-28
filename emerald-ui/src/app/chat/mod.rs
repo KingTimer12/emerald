@@ -4,6 +4,7 @@
 use crate::zoom::zoomed;
 
 mod actions;
+pub(super) use actions::bulk::Selection;
 mod forum;
 mod jump;
 mod expressions;
@@ -247,6 +248,7 @@ impl Emerald {
                     .children(self.render_suggestions(cx))
                     .children(self.render_command_hint(cx))
                     .children(self.render_reply_bar(cx))
+                    .children(self.render_bulk_bar(cx))
                     .children(self.render_attachments(true, cx))
                     .child(
                         // The + stays by the first row as the box grows.
