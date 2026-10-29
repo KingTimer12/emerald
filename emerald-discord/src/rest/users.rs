@@ -4,7 +4,7 @@
 use anyhow::Result;
 
 use super::{DiscordCall, PROFILE_CACHE, Rest};
-use crate::model::{Channel, NoteUpdate, Profile, Snowflake, User};
+use crate::model::{Channel, CollectiblesProduct, NoteUpdate, Profile, Snowflake, User};
 use crate::packets::{context, user};
 use emerald_http::{Call, Refused, Solution};
 
@@ -26,6 +26,15 @@ impl Rest {
             path.push_str(&format!("&guild_id={guild}"));
         }
         self.api.fetch(Call::get("/users/{id}/profile", path).cached(PROFILE_CACHE)).await
+    }
+
+    /// A shop product by SKU, as the web client asks for the profile
+    /// effect a profile shows right after fetching it.
+    pub async fn collectibles_product(&self, sku: &str) -> Result<CollectiblesProduct> {
+        let path = format!("/collectibles-products/{sku}?locale={}", self.identity.locale());
+        self.api
+            .fetch(Call::get("/collectibles-products/{sku}", path).cached(PROFILE_CACHE))
+            .await
     }
 
     /// The friends the user shares with `user`.

@@ -10,6 +10,7 @@ use gpui::SharedString;
 
 use super::super::super::time;
 use emerald_discord::model::{
+    AvatarDecoration,
     Attachment, Channel, Embed, Emoji, Message, Poll, PollAnswerCount, PollResults, REFERENCE_FORWARD, Reaction,
     Snowflake, StickerItem, User, iso_secs, message_flags, message_kind,
 };
@@ -22,6 +23,8 @@ pub struct Msg {
     pub author_id: Snowflake,
     pub author: SharedString,
     pub avatar_url: SharedString,
+    /// The author's Nitro avatar decoration, if any.
+    pub decoration: Option<AvatarDecoration>,
     pub secs: i64,
     pub time: SharedString,
     pub short_time: SharedString,
@@ -123,6 +126,7 @@ impl Msg {
             author_id: author.id,
             author: author.display_name().to_owned().into(),
             avatar_url: author.avatar_url().into(),
+            decoration: author.avatar_decoration_data.clone(),
             secs,
             time: time::header(secs).into(),
             short_time: time::short(secs).into(),
@@ -264,6 +268,19 @@ mod tests {
         assert_eq!(picture.url.as_ref(), "https://media/a.png?ex=1&width=800&height=300");
         assert_eq!(picture.alt.as_ref().map(|a| a.as_ref()), Some("a cat"));
         assert!(!picture.spoiler);
+    }
+
+    #[test]
+    fn proxied_gifs_come_as_webp() {
+        let gif = "https://images-ext-1.discordapp.net/external/x/https/media1.tenor.com/m/a/b.gif";
+        let picture = sized_picture(gif, 498, 350, None).unwrap();
+        assert_eq!(picture.url.as_ref(), format!("{gif}?format=webp&width=498&height=350"));
+        assert_eq!(picture.animated.as_ref().map(|a| a.as_ref()), Some(format!("{gif}?format=webp&width=498&height=350&animated=true").as_str()));
+        // Elsewhere, and not GIFs, nothing changes.
+        assert!(sized_picture("https://example.com/a.gif", 10, 10, None).unwrap().animated.is_none());
+        let png = sized_picture("https://media.discordapp.net/attachments/1/2/a.png?ex=1", 10, 10, None).unwrap();
+        assert_eq!(png.url.as_ref(), "https://media.discordapp.net/attachments/1/2/a.png?ex=1&width=10&height=10");
+        assert!(png.animated.is_none());
     }
 
     #[test]

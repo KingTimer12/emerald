@@ -63,8 +63,8 @@ toml = { version = "1", default-features = false, features = ["parse", "serde", 
 # the CPU; both pure Rust. `image` is the one gpui already uses for frames.
 velato = { version = "0.12", default-features = false }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
-# GIF and WebP for animated media, decoded off the UI thread (`frames.rs`).
-image = { version = "0.25", default-features = false, features = ["gif", "webp"] }
+# GIF, WebP and APNG (Nitro cosmetics) for animated media, decoded off the UI thread (`frames.rs`).
+image = { version = "0.25", default-features = false, features = ["gif", "webp", "png"] }
 # Scales those frames down with SIMD; RGBA only, which keeps it small.
 fast_image_resize = { version = "6.1", default-features = false, features = ["std", "only_u8x4"] }
 # Disk cache in one SQLite file; bundled, so no system library is needed.

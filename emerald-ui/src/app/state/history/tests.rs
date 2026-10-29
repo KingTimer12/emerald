@@ -43,6 +43,8 @@ fn me() -> User {
         email: None,
         bot: false,
         premium_type: None,
+        avatar_decoration_data: None,
+        collectibles: None,
     }
 }
 

@@ -108,14 +108,19 @@ pub(super) fn image_attachment(attachment: &Attachment) -> Option<Picture> {
     picture.spoiler = attachment.spoiler();
     picture.alt = attachment.description.clone().filter(|d| !d.trim().is_empty()).map(Into::into);
     picture.video = video.then(|| attachment.url.clone().into());
-    // The proxy's copy at full size keeps every frame.
-    picture.animated = (content_type == "image/gif").then(|| proxy.to_owned().into());
+    // A GIF the proxy cannot turn into WebP plays from its copy at full size.
+    if content_type == "image/gif" && picture.animated.is_none() {
+        picture.animated = Some(proxy.to_owned().into());
+    }
     Some(picture)
 }
 
 /// The image at `proxy`, a media proxy URL, fit into the frame Discord
 /// draws images in and fetched at twice that for Retina; `extra` goes in
-/// the query too.
+/// the query too. A GIF on Discord's proxy is fetched as WebP, as the web
+/// client asks for it: its first frame for the still, and every frame at
+/// the shown size for `animated`, far less to download and decode than
+/// the GIF.
 pub fn sized_picture(proxy: &str, width: u32, height: u32, extra: Option<&str>) -> Option<Picture> {
     if width == 0 || height == 0 {
         return None;
@@ -125,15 +130,31 @@ pub fn sized_picture(proxy: &str, width: u32, height: u32, extra: Option<&str>) 
     // 2x for Retina, capped by the original size.
     let (fetch_w, fetch_h) = ((w * 2.).min(width as f32) as u32, (h * 2.).min(height as f32) as u32);
     let separator = if proxy.contains('?') { '&' } else { '?' };
-    let extra = extra.map(|e| format!("{e}&")).unwrap_or_default();
+    let gif = proxied_gif(proxy);
+    let extra = match (extra, gif) {
+        (Some(extra), _) => format!("{extra}&"),
+        (None, true) => "format=webp&".to_owned(),
+        (None, false) => String::new(),
+    };
     let url = format!("{proxy}{separator}{extra}width={fetch_w}&height={fetch_h}");
     Some(Picture {
+        animated: gif.then(|| format!("{url}&animated=true").into()),
         url: url.into(),
         width: w,
         height: h,
         spoiler: false,
         alt: None,
         video: None,
-        animated: None,
     })
+}
+
+/// Whether `url` is a GIF on Discord's media proxy (`media.discordapp.net`
+/// or `images-ext-N.discordapp.net`), which turns GIFs into WebP.
+fn proxied_gif(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let proxy = host == "media.discordapp.net"
+        || host.strip_prefix("images-ext-").and_then(|h| h.split_once('.')).is_some_and(|(_, base)| base == "discordapp.net");
+    let path = path.split(['?', '#']).next().unwrap_or_default();
+    proxy && path.len() >= 4 && path.as_bytes()[path.len() - 4..].eq_ignore_ascii_case(b".gif")
 }

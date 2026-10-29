@@ -65,10 +65,8 @@ pub fn avatar(
         .text_size(zoomed((size * 0.45).round()))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(rgb(theme::text_strong()))
-        .map(|avatar| match image {
-            // The id keeps an animated avatar's frame between redraws;
-            // still ones cost nothing more.
-            Some(image) => avatar.child(img(image).id(("avatar", id.0)).size_full().rounded_full()),
+        .map(|avatar| match image.map(Into::into) {
+            Some(image) => avatar.child(img(image.clone()).id(frames_id("avatar", &image)).size_full().rounded_full()),
             None => avatar.child(initial),
         })
         .when_some(status, |avatar, (status, ring)| {
@@ -91,6 +89,39 @@ pub fn avatar(
                     }),
             )
         })
+}
+
+/// `avatar`, `size` pixels square, with a Nitro avatar decoration over it:
+/// 1.2 times its size and centered, as Discord draws them.
+pub fn decorated(avatar: Div, decoration: Option<ImageSource>, size: f32) -> Div {
+    let Some(decoration) = decoration else { return avatar };
+    let side = size * 1.2;
+    let offset = (size - side) / 2.;
+    div().relative().flex_none().size(zoomed(size)).child(avatar).child(
+        img(decoration.clone())
+            .id(frames_id("decoration", &decoration))
+            .absolute()
+            .top(zoomed(offset))
+            .left(zoomed(offset))
+            .size(zoomed(side)),
+    )
+}
+
+/// The id for an `img` of `source`, which keeps a moving image's frame
+/// between redraws. It follows the frames shown: gpui keeps the frame index
+/// under the id, and the same id over an image with fewer frames panics
+/// (`RenderImage::size` in gpui 0.2.2), as when a still replaces its
+/// animation or another animation takes its place.
+pub fn frames_id(name: &'static str, source: &ImageSource) -> ElementId {
+    match source {
+        ImageSource::Render(frames) => animation_id(name, frames),
+        _ => name.into(),
+    }
+}
+
+/// The same for frames at hand.
+pub fn animation_id(name: &'static str, frames: &gpui::RenderImage) -> ElementId {
+    ElementId::NamedInteger(name.into(), frames.id.0 as u64)
 }
 
 /// Red count pill, as on pending friend requests.
@@ -279,4 +310,25 @@ pub fn chip(id: (&'static str, usize), label: impl gpui::IntoElement, selected: 
         .when(selected, |chip| chip.bg(gpui::rgb(theme::brand())))
         .when(!selected, |chip| chip.bg(theme::hover()).hover(|s| s.bg(theme::active())))
         .child(label)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use gpui::RenderImage;
+    use image::{Frame, RgbaImage};
+
+    use super::*;
+
+    #[test]
+    fn image_ids_follow_the_frames() {
+        let frames = || ImageSource::Render(Arc::new(RenderImage::new(vec![Frame::new(RgbaImage::new(1, 1))])));
+        let (one, other) = (frames(), frames());
+        assert_eq!(frames_id("x", &one), frames_id("x", &one));
+        // Another animation, or a still, in the same place starts afresh.
+        assert_ne!(frames_id("x", &one), frames_id("x", &other));
+        let still = ImageSource::Image(Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Png, Vec::new())));
+        assert_ne!(frames_id("x", &one), frames_id("x", &still));
+    }
 }

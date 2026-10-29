@@ -2092,6 +2092,7 @@ dependencies = [
  "fast_image_resize",
  "hotpath",
  "image",
+ "png 0.18.1",
  "sys-locale",
  "toml 1.1.8+spec-1.1.0",
 ]

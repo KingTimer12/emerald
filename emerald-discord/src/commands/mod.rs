@@ -128,6 +128,7 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::OpenDm { user, select } => user::open_dm(rest, user, select).await,
         Command::SetGlobalName { name } => Some(user::set_global_name(rest, name, &events).await),
         Command::FetchProfile { user, guild, full } => user::profile(rest, user, guild, full).await,
+        Command::FetchProfileEffect { sku } => Some(user::profile_effect(rest, sku).await),
         Command::EditSettings { current, edit } => Some(account::edit_settings(rest, current, edit, &events).await),
         Command::EditProfile { guild, edit } => Some(account::edit_profile(rest, guild, edit, &events).await),
         Command::Sessions => Some(account::sessions(rest).await),

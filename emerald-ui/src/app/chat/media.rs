@@ -44,7 +44,7 @@ impl Emerald {
             .as_ref()
             .and_then(|url| self.animation(url, picture.width, picture.height));
         let shown = match (animated, self.avatar_image(&picture.url)) {
-            (Some(frames), _) => frame.child(img(frames).id("animated").size_full()),
+            (Some(frames), _) => frame.child(img(frames.clone()).id(widgets::animation_id("animated", &frames)).size_full()),
             (None, Some(image)) => frame.child(img(image).size_full()),
             (None, None) => frame.bg(theme::hover()),
         };

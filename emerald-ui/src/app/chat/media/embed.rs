@@ -178,9 +178,13 @@ impl Emerald {
         };
         let original = media.url.as_deref().and_then(markdown::web_url);
         let moving = gif || original.is_some_and(|url| url.split(['?', '#']).next().is_some_and(|p| p.ends_with(".gif")));
-        let animated = original
-            .filter(|_| moving)
-            .and_then(|url| self.animation(url, picture.width, picture.height));
+        // A GIF on the proxy plays from its WebP; otherwise the original.
+        let animated = match &picture.animated {
+            Some(url) => self.animation(url, picture.width, picture.height),
+            None => original
+                .filter(|_| moving)
+                .and_then(|url| self.animation(url, picture.width, picture.height)),
+        };
         let frame = div()
             .id(id.clone())
             .relative()
@@ -191,7 +195,7 @@ impl Emerald {
             .overflow_hidden();
         let frame = match animated {
             // An id lets gpui keep the animation's frame between redraws.
-            Some(frames) => frame.child(img(frames).id(ElementId::NamedChild(Box::new(id), "gif".into())).size_full()),
+            Some(frames) => frame.child(img(frames.clone()).id(widgets::animation_id("gif", &frames)).size_full()),
             None => match self.avatar_image(&picture.url) {
                 Some(image) => frame.child(img(image).size_full()),
                 None => frame.bg(theme::hover()),

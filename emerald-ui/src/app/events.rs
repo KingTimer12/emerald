@@ -256,8 +256,14 @@ impl Emerald {
                 self.connection.set_message(t!("common.error", error = error));
             }
             NetEvent::TypingStart(typing) => self.on_typing(typing, cx),
+            NetEvent::ProfileEffect { sku, effect } => {
+                self.profile_effects.insert(sku, effect.map(std::rc::Rc::new));
+            }
             NetEvent::Profile { guild, mut profile } => {
                 let key = (profile.user.id, guild);
+                if let Some(user) = profile.user.user() {
+                    self.people.remember_new(&user);
+                }
                 // The DM panel's copy leaves out what the full one had.
                 if profile.mutual_guilds.is_none()
                     && let Some(old) = self.profiles.get(&key)
@@ -265,7 +271,8 @@ impl Emerald {
                     profile.mutual_guilds = old.mutual_guilds.clone();
                     profile.mutual_friends_count = old.mutual_friends_count;
                 }
-                self.profiles.fill(key, profile, Instant::now());
+                self.ask_profile_effect(&profile);
+                self.profiles.fill(key, *profile, Instant::now());
                 if self.people.is_me(key.0) {
                     self.fill_profile_form(cx);
                 }

@@ -2,6 +2,9 @@
 
 use super::*;
 use crate::zoom::zoomed;
+use gpui::{ImageSource, ObjectFit, img, linear_color_stop, linear_gradient, relative, rgba};
+use emerald_discord::model::Nameplate;
+use super::super::super::time;
 
 impl Emerald {
     pub(super) fn render_search_row(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -72,26 +75,63 @@ impl Emerald {
             .info()
             .and_then(|guild| guild.role_color(roles))
             .unwrap_or(theme::channels_default());
+        let avatar = widgets::avatar(
+            &name,
+            user,
+            self.avatar_image(&who.avatar_url()),
+            32.,
+            status.map(|status| (status, theme::base_lowest())),
+        );
+        // Cosmetics play on the row under the pointer, as on Discord.
+        let moving = self.hovered_member == Some(user);
+        let nameplate = who.collectibles.as_ref().and_then(|c| c.nameplate.as_ref());
+        let plate_image = nameplate.and_then(|plate| self.nameplate_image(plate, moving));
+        let plate_color = nameplate.and_then(|plate| plate.color(!theme::is_light()));
 
         div()
             .id(id)
+            .relative()
             .size_full()
             .flex()
             .items_center()
             .gap_3()
             .px_2()
             .rounded_lg()
+            .overflow_hidden()
             .cursor_pointer()
+            // A Nitro nameplate: its palette fading in from the left, as
+            // the web client's gradient does, and its image toward the end.
+            .when_some(plate_color, |row, color| {
+                row.bg(linear_gradient(
+                    90.,
+                    linear_color_stop(rgba(color << 8), 0.),
+                    linear_color_stop(rgba((color << 8) | 0x33), 1.),
+                ))
+            })
+            .when_some(plate_image, |row, image| {
+                row.child(
+                    img(image.clone())
+                        .id(widgets::frames_id("nameplate", &image))
+                        .absolute()
+                        .top_0()
+                        .right_0()
+                        .h_full()
+                        .w(relative(0.6))
+                        .object_fit(ObjectFit::Cover),
+                )
+            })
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                if *hovered {
+                    this.hovered_member = Some(user);
+                } else if this.hovered_member == Some(user) {
+                    this.hovered_member = None;
+                }
+                cx.notify();
+            }))
             .hover(|s| s.bg(theme::hover()))
             // Offline members are drawn faded, as on Discord.
             .when(status == Some("offline"), |row| row.opacity(0.3))
-            .child(widgets::avatar(
-                &name,
-                user,
-                self.avatar_image(&who.avatar_url()),
-                32.,
-                status.map(|status| (status, theme::base_lowest())),
-            ))
+            .child(widgets::decorated(avatar, self.decoration(who, 32., moving), 32.))
             .child(
                 div()
                     .flex()
@@ -120,7 +160,15 @@ impl Emerald {
                             .child(text)
                     })),
             )
-            .on_click(cx.listener(move |this, _, window, cx| this.open_profile(user, Some(guild), window, cx)))
+            .on_click({
+                // The list keeps its own copy of the people in it; the
+                // profile looks them up among the known ones.
+                let who = who.clone();
+                cx.listener(move |this, _, window, cx| {
+                    this.people.remember_new(&who);
+                    this.open_profile(user, Some(guild), window, cx)
+                })
+            })
             .on_mouse_down(gpui::MouseButton::Right, self.on_user_right_click(user, Some(guild), None, cx))
             .into_any_element()
     }
@@ -169,6 +217,23 @@ pub(super) fn group_digits(n: u64, separator: &str) -> String {
     }
     out
 }
+
+impl Emerald {
+    /// A Nitro nameplate's image, moving when `moving` and the window
+    /// animates, at the row's size; `None` until downloaded.
+    fn nameplate_image(&self, plate: &Nameplate, moving: bool) -> Option<ImageSource> {
+        let now = time::now_secs();
+        let frames = (moving && self.animates())
+            .then(|| plate.url(now, true))
+            .flatten()
+            .and_then(|url| self.images.animated(&url, WIDTH as u32 * 2, ROW_HEIGHT as u32 * 2, &*self.net));
+        match frames {
+            Some(frames) => Some(ImageSource::Render(frames)),
+            None => self.avatar_image(&plate.url(now, false)?).map(ImageSource::Image),
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

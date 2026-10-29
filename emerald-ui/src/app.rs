@@ -3,6 +3,7 @@
 //! window lives in its own module.
 
 use std::cell::Cell;
+use std::rc::Rc;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -59,8 +60,8 @@ use gpui::{
 use crate::shortcuts::{EditLast, MarkRead, NextChannel, NextUnread, PreviousChannel, QuickSwitch};
 
 use super::text_input::{MenuKey, PastedImage, Submitted, TextInput};
-use super::theme;
-use emerald_discord::model::{Profile, Snowflake};
+use super::{theme, time};
+use emerald_discord::model::{AvatarDecoration, Profile, ProfileEffect, Snowflake};
 use emerald_discord::{Action, Command, Link};
 use rustc_hash::{FxHashMap, FxHashSet};
 use crate::settings::Settings;
@@ -94,6 +95,8 @@ pub(crate) fn bind_fixed_keys(cx: &mut App) {
 
 /// A cached profile is refetched when opened after this long.
 const PROFILE_TTL: Duration = Duration::from_secs(10 * 60);
+/// Profile effects remembered; past this the map starts over.
+const MAX_PROFILE_EFFECTS: usize = 256;
 /// The profile panel only fits beside the chat in wide windows.
 const PROFILE_MIN_WINDOW: f32 = 1100.;
 /// The member list is narrower: server list, sidebar and the list (72 +
@@ -161,6 +164,13 @@ pub struct Emerald {
     frame_pending: bool,
     /// Profiles, global or per guild, refetched after `PROFILE_TTL`.
     profiles: TtlCache<(Snowflake, Option<Snowflake>), Profile>,
+    /// Profile effect stills by SKU; `None` while asked for or when there
+    /// is none. Cleared past [`MAX_PROFILE_EFFECTS`].
+    profile_effects: FxHashMap<String, Option<Rc<ProfileEffect>>>,
+    /// When the profile last opened: its effect plays from there.
+    profile_opened: Instant,
+    /// The member list row under the pointer, whose cosmetics play.
+    hovered_member: Option<Snowflake>,
     spaces: Spaces,
     history: History,
     reads: ReadStates,
@@ -397,6 +407,9 @@ impl Emerald {
             animating: Cell::new(false),
             frame_pending: false,
             profiles: TtlCache::new(PROFILE_TTL),
+            profile_effects: FxHashMap::default(),
+            profile_opened: Instant::now(),
+            hovered_member: None,
             spaces: Spaces::default(),
             history: History::default(),
             reads: ReadStates::default(),
@@ -474,6 +487,33 @@ impl Emerald {
     /// The image at `url` if downloaded; otherwise starts the download (once).
     fn avatar_image(&self, url: &str) -> Option<Arc<Image>> {
         self.images.get(url, &*self.net)
+    }
+
+    /// A Nitro avatar decoration for an avatar `size` pixels square: moving
+    /// when `moving` and the window animates, else still; `None` until
+    /// downloaded.
+    fn decoration_image(&self, decoration: &AvatarDecoration, size: f32, moving: bool) -> Option<ImageSource> {
+        let now = time::now_secs();
+        // 1.2 times the avatar, twice that for Retina.
+        let pixels = (size * 2.4) as u32;
+        let frames = (moving && self.animates())
+            .then(|| decoration.url(now, true))
+            .flatten()
+            .and_then(|url| self.images.animated(&url, pixels, pixels, &*self.net));
+        match frames {
+            Some(frames) => Some(ImageSource::Render(frames)),
+            None => self.avatar_image(&decoration.url(now, false)?).map(ImageSource::Image),
+        }
+    }
+
+    /// The decoration around `user`'s avatar.
+    fn decoration(&self, user: &emerald_discord::model::User, size: f32, moving: bool) -> Option<ImageSource> {
+        self.decoration_image(user.avatar_decoration_data.as_ref()?, size, moving)
+    }
+
+    /// The same for a user known by id.
+    fn decoration_of(&self, id: Snowflake, size: f32, moving: bool) -> Option<ImageSource> {
+        self.people.user(id).and_then(|user| self.decoration(user, size, moving))
     }
 
     /// Avatar of a known user, or the default one their id maps to.

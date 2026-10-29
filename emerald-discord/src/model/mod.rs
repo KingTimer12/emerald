@@ -3,6 +3,7 @@
 //! never materialize members or presences in memory.
 
 mod channel;
+mod collectibles;
 mod command;
 mod devices;
 mod emoji;
@@ -20,6 +21,7 @@ pub(crate) mod user_settings;
 mod voice;
 
 pub use channel::*;
+pub use collectibles::*;
 pub use command::*;
 pub use devices::*;
 pub use emoji::*;

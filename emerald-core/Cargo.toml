@@ -13,3 +13,7 @@ toml.workspace = true
 
 [features]
 hotpath = ["hotpath/hotpath"]
+
+[dev-dependencies]
+# Writes the animated PNG the frame tests decode; already in the tree.
+png = "0.18"

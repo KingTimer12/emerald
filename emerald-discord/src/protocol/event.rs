@@ -2,6 +2,7 @@
 
 use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Upload, VoiceEvent};
 use crate::model::{
+    ProfileEffect,
     AuthSession, FriendPresence, UserProfileDetails, UserSettings,
     Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
     MemberUpdate, MembersChunk, Message, MessageAck, MessageDelete, MessageDeleteBulk, MessageUpdate, PollVote, Profile, ReactionAddMany,
@@ -158,10 +159,15 @@ pub enum NetEvent {
     Call(CallUpdate),
     /// The DM call in this channel ended.
     CallDelete(Snowflake),
+    /// The profile effect sold as `sku`; `None` when there is none to draw.
+    ProfileEffect {
+        sku: String,
+        effect: Option<ProfileEffect>,
+    },
     Profile {
         /// The guild whose member profile was asked for, if any.
         guild: Option<Snowflake>,
-        profile: Profile,
+        profile: Box<Profile>,
     },
     History {
         channel: Snowflake,

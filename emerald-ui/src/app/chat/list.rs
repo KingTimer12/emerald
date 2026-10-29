@@ -297,12 +297,10 @@ impl Emerald {
                                         .id(("author-avatar", ix))
                                         .mt(zoomed(2.))
                                         .cursor_pointer()
-                                        .child(widgets::avatar(
-                                            &author,
-                                            msg.author_id,
-                                            self.avatar_image(&msg.avatar_url),
+                                        .child(widgets::decorated(
+                                            widgets::avatar(&author, msg.author_id, self.avatar_image(&msg.avatar_url), 40., None),
+                                            msg.decoration.as_ref().and_then(|d| self.decoration_image(d, 40., false)),
                                             40.,
-                                            None,
                                         ))
                                         .on_click(cx.listener(move |this, _, window, cx| {
                                             this.open_profile(author_id, guild, window, cx)

@@ -333,8 +333,9 @@ impl Emerald {
 
     /// Redraws when the next sticker frame is due, on the animation clock
     /// so frames keep an even pace, freeing the frames that were replaced.
-    /// Runs only while a row with an animation is drawn.
-    fn next_animation_frame(&mut self, cx: &mut Context<Self>) {
+    /// Runs only while a row with an animation, or a profile effect with
+    /// layers still to come, is drawn.
+    pub(super) fn next_animation_frame(&mut self, cx: &mut Context<Self>) {
         if std::mem::replace(&mut self.frame_pending, true) {
             return;
         }

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::Snowflake;
+use super::{AvatarDecoration, Collectibles, ProfileCollectible, Snowflake, User};
 use crate::urls::CDN;
 
 /// The profile's own fields, global (`user_profile`) or for one server
@@ -16,6 +16,9 @@ pub struct UserProfileDetails {
     pub banner: Option<String>,
     #[serde(default)]
     pub accent_color: Option<u32>,
+    /// The profile effect and frame shown, by SKU.
+    #[serde(default)]
+    pub collectibles: Vec<ProfileCollectible>,
 }
 
 /// `GET /users/{id}/profile`, as the DM profile panel uses it.
@@ -114,6 +117,16 @@ mod tests {
         assert_eq!(iso_secs("2021-05-01T12:30:15.123000+00:00"), Some(1_619_872_215));
         assert_eq!(iso_secs("nonsense"), None);
     }
+
+    #[test]
+    fn profile_user_names_who_it_is() {
+        let full: ProfileUser =
+            serde_json::from_str(r#"{"id":"7","username":"ana","global_name":"Ana","avatar":"abc"}"#).unwrap();
+        let user = full.user().unwrap();
+        assert_eq!((user.display_name(), user.avatar.as_deref()), ("Ana", Some("abc")));
+        let bare: ProfileUser = serde_json::from_str(r#"{"id":"7"}"#).unwrap();
+        assert!(bare.user().is_none());
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,6 +154,20 @@ pub struct ConnectedAccount {
 #[derive(Debug, Deserialize)]
 pub struct ProfileUser {
     pub id: Snowflake,
+    /// Who the profile is of; the people store may not know them yet, as
+    /// when it was opened from the member list.
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub global_name: Option<String>,
+    #[serde(default)]
+    pub avatar: Option<String>,
+    #[serde(default)]
+    pub bot: bool,
+    #[serde(default)]
+    pub avatar_decoration_data: Option<AvatarDecoration>,
+    #[serde(default)]
+    pub collectibles: Option<Collectibles>,
     /// Banner image hash; Nitro only.
     #[serde(default)]
     pub banner: Option<String>,
@@ -149,4 +176,22 @@ pub struct ProfileUser {
     pub banner_color: Option<String>,
     #[serde(default)]
     pub accent_color: Option<u32>,
+}
+
+impl ProfileUser {
+    /// The user as the rest of the app knows people; `None` when the
+    /// answer left out their name.
+    pub fn user(&self) -> Option<User> {
+        Some(User {
+            id: self.id,
+            username: self.username.clone()?,
+            global_name: self.global_name.clone(),
+            avatar: self.avatar.clone(),
+            email: None,
+            bot: self.bot,
+            premium_type: None,
+            avatar_decoration_data: self.avatar_decoration_data.clone(),
+            collectibles: self.collectibles.clone(),
+        })
+    }
 }

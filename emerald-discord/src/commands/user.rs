@@ -91,12 +91,23 @@ pub async fn set_global_name(rest: &Rest, name: Option<String>, events: &Events)
 
 pub async fn profile(rest: &Rest, user: Snowflake, guild: Option<Snowflake>, full: bool) -> Option<NetEvent> {
     match rest.profile(user, guild, full).await {
-        Ok(profile) => Some(NetEvent::Profile { guild, profile }),
+        Ok(profile) => Some(NetEvent::Profile { guild, profile: Box::new(profile) }),
         Err(e) => {
             tracing::warn!("profile of {user}: {e:#}");
             None
         }
     }
+}
+
+pub async fn profile_effect(rest: &Rest, sku: String) -> NetEvent {
+    let effect = match rest.collectibles_product(&sku).await {
+        Ok(product) => product.effect(),
+        Err(e) => {
+            tracing::warn!("profile effect {sku}: {e:#}");
+            None
+        }
+    };
+    NetEvent::ProfileEffect { sku, effect }
 }
 
 pub async fn log_out(rest: &Rest) -> NetEvent {

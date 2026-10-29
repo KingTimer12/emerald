@@ -8,12 +8,15 @@ mod social;
 
 pub(super) use social::ProfileTab;
 
-use gpui::{Context, Div, FontWeight, MouseButton, SharedString, Window, div, img, prelude::*, rgb};
+use std::rc::Rc;
+
+use gpui::{Context, Div, FontWeight, ImageSource, MouseButton, ObjectFit, SharedString, Window, div, img, prelude::*, rgb};
 
 use super::super::{theme, time};
 use super::widgets::{self, ButtonKind};
-use super::{Emerald, Overlay};
-use emerald_discord::model::{Snowflake, banner_url, guild_banner_url};
+use super::{Emerald, MAX_PROFILE_EFFECTS, Overlay};
+use emerald_discord::Command;
+use emerald_discord::model::{PROFILE_EFFECT, Profile, ProfileEffect, Snowflake, banner_url, guild_banner_url};
 
 const PANEL_WIDTH: f32 = 340.;
 
@@ -28,6 +31,8 @@ struct Card {
     bio: Option<String>,
     /// Badge descriptions with their icon URL.
     badges: Vec<(SharedString, String)>,
+    /// The Nitro profile effect, drawn over the whole card.
+    effect: Option<Rc<ProfileEffect>>,
     /// Connected accounts as (service, account name).
     accounts: Vec<(String, String)>,
     /// Their roles in the guild, highest first, as (name, color).
@@ -74,8 +79,13 @@ impl Emerald {
             .zip(local.and_then(|d| d.banner.as_deref()))
             .map(|(guild, hash)| guild_banner_url(guild, user, hash))
             .or_else(|| global_profile.or(profile)?.user.banner.as_deref().map(|hash| banner_url(user, hash)));
+        let effect = profile
+            .and_then(profile_effect)
+            .or_else(|| global_profile.and_then(profile_effect))
+            .and_then(|sku| self.profile_effects.get(sku).cloned().flatten());
         let profile = global_profile.or(profile);
         Card {
+            effect,
             banner_url,
             name: nick
                 .or_else(|| known.map(|u| u.display_name().to_owned()))
@@ -179,17 +189,52 @@ impl Emerald {
     }
 
     fn avatar_ring(&self, user: Snowflake, card: &Card, size: f32, ring: f32) -> Div {
+        let avatar = widgets::avatar(
+            &card.name,
+            user,
+            self.profile_avatar(user),
+            size,
+            Some((self.people.presence(user), theme::base_lowest())),
+        );
         div()
             .p(zoomed(ring))
             .rounded_full()
             .bg(rgb(theme::base_lowest()))
-            .child(widgets::avatar(
-                &card.name,
-                user,
-                self.profile_avatar(user),
-                size,
-                Some((self.people.presence(user), theme::base_lowest())),
-            ))
+            .child(widgets::decorated(avatar, self.decoration_of(user, size, true), size))
+    }
+
+    /// The profile effect over the whole card, `width` pixels wide: its
+    /// layers on their clock from when the profile opened while the window
+    /// animates, else its still.
+    fn effect(&self, card: &Card, width: f32) -> Option<Div> {
+        let effect = card.effect.as_ref()?;
+        let cover = |image: ImageSource| {
+            img(image.clone())
+                .id(widgets::frames_id("effect", &image))
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .object_fit(ObjectFit::Cover)
+        };
+        let layer = div().absolute().top_0().left_0().size_full();
+        if !self.animates() || effect.layers.is_empty() {
+            let still = self.avatar_image(effect.still.as_deref()?)?;
+            return Some(layer.child(cover(ImageSource::Image(still))));
+        }
+        let elapsed = self.profile_opened.elapsed().as_millis() as u64;
+        // Layers fill the card's width, twice that for Retina, and as tall
+        // as twice that again.
+        let (pixels_w, pixels_h) = ((width * 2.) as u32, (width * 4.) as u32);
+        let shown = effect.layers.iter().filter_map(|layer| {
+            if layer.changes_after(elapsed) {
+                // A layer still to come or go needs frames on its clock.
+                self.animating.set(true);
+            }
+            let frames = layer.shown(elapsed).then(|| self.images.animated(&layer.src, pixels_w, pixels_h, &*self.net))??;
+            Some(cover(ImageSource::Render(frames)))
+        });
+        Some(layer.children(shown))
     }
 
     pub(super) fn render_profile_panel(&self, user: Snowflake, cx: &mut Context<Self>) -> impl IntoElement {
@@ -280,8 +325,23 @@ impl Emerald {
                                 }))
                                 .on_mouse_down(MouseButton::Right, self.on_user_right_click(user, None, None, cx)),
                         ),
-                    ),
+                    )
+                    .children(self.effect(&card, PANEL_WIDTH)),
             )
+    }
+
+    /// Asks once for the still of the profile effect `profile` shows, as
+    /// the web client fetches its product right after the profile.
+    pub(super) fn ask_profile_effect(&mut self, profile: &Profile) {
+        let Some(sku) = profile_effect(profile) else { return };
+        if self.profile_effects.contains_key(sku) {
+            return;
+        }
+        if self.profile_effects.len() >= MAX_PROFILE_EFFECTS {
+            self.profile_effects.clear();
+        }
+        self.profile_effects.insert(sku.to_owned(), None);
+        self.net.post(Command::FetchProfileEffect { sku: sku.to_owned() });
     }
 
     pub(super) fn open_profile(
@@ -297,6 +357,7 @@ impl Emerald {
             self.profile(user, None, false);
         }
         self.profile_tab = ProfileTab::About;
+        self.profile_opened = std::time::Instant::now();
         if !self.people.is_me(user) {
             self.load_note(user, cx);
         }
@@ -304,6 +365,17 @@ impl Emerald {
         window.focus(&self.focus_handle);
         cx.notify();
     }
+}
+
+/// The SKU of the profile effect shown: the server one first.
+fn profile_effect(profile: &Profile) -> Option<&str> {
+    let now = time::now_secs();
+    let guild = profile.guild_member_profile.as_ref().map_or(&[][..], |p| p.collectibles.as_slice());
+    guild
+        .iter()
+        .chain(&profile.user_profile.collectibles)
+        .find(|item| item.kind == PROFILE_EFFECT && item.active(now))
+        .map(|item| item.sku_id.as_str())
 }
 
 /// Discord's join date, plus the guild's when the card is a member's.

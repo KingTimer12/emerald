@@ -368,6 +368,10 @@ pub enum Command {
         guild: Option<Snowflake>,
         full: bool,
     },
+    /// The profile effect sold as `sku`: its layers and still.
+    FetchProfileEffect {
+        sku: String,
+    },
     /// Downloads an avatar or sticker image.
     FetchAvatar {
         url: String,

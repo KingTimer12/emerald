@@ -104,6 +104,11 @@ CPU near zero when idle.
   and flashes it, and a bar leads back to the present when reading older messages.
 - **Animated avatars** on profiles and the user panel, while the window has focus. Avatars
   and custom emoji come as WebP, as the web client asks for them, lighter than PNG and GIF.
+- **Nitro cosmetics** of others: avatar decorations (chat, member list, profiles),
+  nameplates behind names in the member list, and profile effects over the whole profile,
+  their layers on the web client's clock. They move on profiles, and in the member list on
+  the row under the pointer, as on Discord; still otherwise. GIFs from the media proxy
+  come as WebP too.
 - **Member list** loaded on demand: even in servers with millions of members, only the
   visible pages are kept in memory.
 - **Unread state** synced with other devices, with read receipts batched; mention counts
@@ -181,7 +186,8 @@ CPU near zero when idle.
 
 Not there yet: video and screen sharing; speaking on a stage (asking to speak); a ringtone
 for incoming calls; echo cancellation (use headphones), push-to-talk and per-person volume; playing video and audio
-inside the app; animated avatars in the
+inside the app; profile frames, and the cosmetics members set for one server only;
+animated avatars in the
 chat list (still there, as Discord shows them until hovered). On macOS, notifications go
 through `osascript` (Notification Center only takes bundled apps), so clicking one does
 not open its channel; search dates are taken in UTC. Releases are signed ad hoc until there

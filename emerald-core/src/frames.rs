@@ -1,4 +1,4 @@
-//! Animated GIF and WebP decoded into frames for the interface, off its
+//! Animated GIF, WebP and APNG decoded into frames for the interface, off its
 //! thread. gpui decodes every GIF frame itself but only the first of a
 //! WebP, and GIFs and WebPs from Klipy are what the GIF picker sends now.
 //! Frames are scaled down to the size they are drawn at, and an animation
@@ -7,6 +7,7 @@
 use std::io::Cursor;
 
 use image::codecs::gif::GifDecoder;
+use image::codecs::png::PngDecoder;
 use image::codecs::webp::WebPDecoder;
 use fast_image_resize::images::{Image, ImageRef};
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
@@ -16,13 +17,22 @@ use image::{AnimationDecoder, DynamicImage, Frame, RgbaImage};
 /// long GIF loops over its start.
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 
-/// The frames of a GIF or WebP at most `max_width` by `max_height`, in the
+/// The frames of a GIF, WebP or PNG (animated or not) at most `max_width` by `max_height`, in the
 /// BGRA order gpui draws; a still image comes back as one frame. `None`
 /// for other formats and broken files.
 #[hotpath::measure]
 pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame>> {
     let frames: Box<dyn Iterator<Item = image::ImageResult<Frame>>> = match bytes {
         [b'G', b'I', b'F', b'8', ..] => Box::new(GifDecoder::new(Cursor::new(bytes)).ok()?.into_frames()),
+        [0x89, b'P', b'N', b'G', ..] => {
+            let decoder = PngDecoder::new(Cursor::new(bytes)).ok()?;
+            if decoder.is_apng().ok()? {
+                Box::new(decoder.apng().ok()?.into_frames())
+            } else {
+                let still = DynamicImage::from_decoder(decoder).ok()?.into_rgba8();
+                Box::new(std::iter::once(Ok(Frame::new(still))))
+            }
+        }
         [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => {
             let decoder = WebPDecoder::new(Cursor::new(bytes)).ok()?;
             if decoder.has_animation() {
@@ -101,6 +111,23 @@ mod tests {
         assert_eq!(frames[0].buffer().dimensions(), (20, 20));
         // Blue went first: BGRA.
         assert_eq!(frames[0].buffer().get_pixel(5, 5)[0], 200);
+    }
+
+    #[test]
+    fn animated_pngs_come_out_frame_by_frame() {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, 8, 8);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_animated(2, 0).unwrap();
+            encoder.set_frame_delay(1, 10).unwrap();
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&[255; 8 * 8 * 4]).unwrap();
+            writer.write_image_data(&[0; 8 * 8 * 4]).unwrap();
+        }
+        let frames = decode(&bytes, 4, 4).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].buffer().dimensions(), (4, 4));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::Snowflake;
+use super::{AvatarDecoration, Collectibles, Snowflake};
 use crate::urls::CDN;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -21,6 +21,10 @@ pub struct User {
     /// Nitro tier, 0 for none. Only present on the current user.
     #[serde(default)]
     pub premium_type: Option<u8>,
+    #[serde(default)]
+    pub avatar_decoration_data: Option<AvatarDecoration>,
+    #[serde(default)]
+    pub collectibles: Option<Collectibles>,
 }
 
 impl User {
@@ -164,6 +168,8 @@ mod tests {
             email: None,
             bot: false,
             premium_type: None,
+            avatar_decoration_data: None,
+            collectibles: None,
         };
         assert_eq!(
             user("a_abc").animated_avatar_url().as_deref(),

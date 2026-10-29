@@ -38,7 +38,7 @@ pub async fn avatar(rest: &Rest, url: String) -> NetEvent {
     let bytes = rest
         .cdn_image(&url)
         .await
-        .map_err(|e| tracing::warn!("avatar {url}: {e:#}"))
+        .map_err(|e| tracing::warn!("image from {}: {e:#}", host(&url)))
         .ok();
     NetEvent::Avatar { url, bytes }
 }

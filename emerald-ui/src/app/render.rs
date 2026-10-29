@@ -39,7 +39,7 @@ impl Render for Emerald {
         let picker = self.render_reaction_picker(cx);
         let place_menu = self.render_place_menu(cx);
         let user_menu = self.render_user_menu(cx);
-        div()
+        let root = div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.dismiss(window, cx)))
@@ -85,6 +85,11 @@ impl Render for Emerald {
             .children(menu)
             .children(picker)
             .children(place_menu)
-            .children(user_menu)
+            .children(user_menu);
+        // A profile effect drawn above has layers on a clock.
+        if self.animating.take() {
+            self.next_animation_frame(cx);
+        }
+        root
     }
 }
