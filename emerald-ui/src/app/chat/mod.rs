@@ -42,6 +42,7 @@ use emerald_discord::model::Snowflake;
 impl Emerald {
     /// The chat column and, when the `width` of the window leaves room, the
     /// profile or member list beside it.
+    #[hotpath::measure]
     pub(super) fn render_chat(&self, width: f32, cx: &mut Context<Self>) -> AnyElement {
         let wide = width >= PROFILE_MIN_WINDOW;
         let members_fit = width >= MEMBERS_MIN_WINDOW;

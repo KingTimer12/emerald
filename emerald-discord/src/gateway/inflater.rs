@@ -25,6 +25,7 @@ impl Inflater {
     }
 
     /// Adds a frame; the text of a whole message once one is complete.
+    #[hotpath::measure]
     pub(super) fn push(&mut self, data: &[u8]) -> Result<Option<&str>> {
         if self.input.is_empty() && self.output.capacity() > BUFFER_TRIM {
             self.output = Vec::new();

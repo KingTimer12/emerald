@@ -27,6 +27,7 @@ impl Emerald {
         }
     }
 
+    #[hotpath::measure]
     pub(super) fn on_user_settings(&mut self, settings: UserSettings, partial: bool, cx: &mut Context<Self>) {
         self.account.apply(settings, partial);
         // Another device may have picked a status.

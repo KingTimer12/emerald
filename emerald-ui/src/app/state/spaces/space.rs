@@ -15,7 +15,7 @@ pub struct Space {
     /// The open thread, listed under its parent even when not joined.
     pub(super) shown_thread: Option<Snowflake>,
     /// DMs: what each is called, from its people's names.
-    pub(super) labels: HashMap<Snowflake, SharedString>,
+    pub(super) labels: FxHashMap<Snowflake, SharedString>,
     /// Who is in a voice channel here, in the order they joined.
     pub(super) voice: Vec<VoiceState>,
 }
@@ -33,14 +33,16 @@ impl Space {
             rows: Vec::new(),
             guild: None,
             shown_thread: None,
-            labels: HashMap::new(),
+            labels: FxHashMap::default(),
             voice: Vec::new(),
         };
         space.rebuild();
         space
     }
 
-    pub fn guild(guild: Guild, me: Snowflake, my_roles: Vec<Snowflake>) -> Self {
+    pub fn guild(mut guild: Guild, me: Snowflake, my_roles: Vec<Snowflake>) -> Self {
+        // Sorted by id, so role lookups are binary searches.
+        guild.roles.sort_unstable_by_key(|role| role.id);
         let name = guild.display_name().to_owned();
         let upload_limit = guild.upload_limit();
         let mut space = Self {
@@ -53,9 +55,9 @@ impl Space {
                 owner: guild.owner(),
                 roles: guild.roles,
                 my_roles,
-                members: HashMap::new(),
-                requested: HashSet::new(),
-                permissions: HashMap::new(),
+                members: FxHashMap::default(),
+                requested: FxHashSet::default(),
+                permissions: FxHashMap::default(),
                 upload_limit,
                 emojis: guild.emojis,
                 stickers: guild.stickers,
@@ -63,7 +65,7 @@ impl Space {
             channels: guild.channels,
             rows: Vec::new(),
             shown_thread: None,
-            labels: HashMap::new(),
+            labels: FxHashMap::default(),
             voice: guild.voice_states.into_iter().filter(|v| v.channel_id.is_some()).collect(),
         };
         for mut thread in guild.threads {
@@ -215,9 +217,9 @@ impl Space {
     /// GUILD_ROLE_CREATE and GUILD_ROLE_UPDATE.
     pub fn upsert_role(&mut self, role: Role) {
         let Some(guild) = &mut self.guild else { return };
-        match guild.roles.iter_mut().find(|r| r.id == role.id) {
-            Some(known) => *known = role,
-            None => guild.roles.push(role),
+        match guild.roles.binary_search_by_key(&role.id, |r| r.id) {
+            Ok(ix) => guild.roles[ix] = role,
+            Err(ix) => guild.roles.insert(ix, role),
         }
         self.rebuild();
     }

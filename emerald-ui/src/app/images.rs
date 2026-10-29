@@ -108,12 +108,17 @@ impl<const MAX: usize, const PIXELS: u16> Players<MAX, PIXELS> {
         None
     }
 
-    /// Takes the download for `url` if it was asked for here.
-    fn store(&self, url: &str, bytes: Option<&[u8]>) -> bool {
-        let mut slots = self.slots.borrow_mut();
-        let Some(slot) = slots.get_mut(url) else { return false };
-        *slot = bytes.and_then(|bytes| Player::new(bytes, PIXELS)).map(Rc::new);
-        true
+    /// The size to read `url`'s download at, if a player here waits for it.
+    fn waiting(&self, url: &str) -> Option<u16> {
+        self.slots.borrow().contains_key(url).then_some(PIXELS)
+    }
+
+    /// Puts the player read from `url`'s download in its slot, if it is
+    /// still there; `None` leaves a permanent blank.
+    fn fill(&self, url: &str, player: Option<Player>) {
+        if let Some(slot) = self.slots.borrow_mut().get_mut(url) {
+            *slot = player.map(Rc::new);
+        }
     }
 
     fn take_retired(&self, into: &mut Vec<Arc<RenderImage>>) {
@@ -138,6 +143,7 @@ impl Images {
 
     /// Frees what was evicted or dropped since the last frame, from memory
     /// and from the GPU, and starts a new frame. Called once per render.
+    #[hotpath::measure]
     pub fn release(&self, window: &mut Window, cx: &mut App) {
         self.frame.set(self.frame.get() + 1);
         for image in self.take_retired() {
@@ -185,6 +191,7 @@ impl Images {
 
     /// The frames for `url` arrived; `None` leaves a permanent blank, and
     /// the caller its still.
+    #[hotpath::measure]
     pub fn store_animation(&self, url: String, frames: Option<Vec<image::Frame>>) {
         let Some(frames) = frames else { return };
         let bytes = frames.iter().map(|frame| frame.buffer().as_raw().len()).sum();
@@ -193,6 +200,20 @@ impl Images {
         let budget = if self.small_animations.borrow().contains(&url) { &self.small_animations } else { &self.animations };
         let evicted = budget.borrow_mut().fill(&url, frames, bytes, self.frame.get());
         self.evicted.borrow_mut().extend(evicted);
+    }
+
+    /// The sizes Lottie players wait to be read at from `url`'s download,
+    /// the chat's and the picker's: the same sticker may play in both.
+    /// Both `None` for anything else, which goes to [`Self::store`].
+    pub fn lottie_sizes(&self, url: &str) -> [Option<u16>; 2] {
+        [self.chat.waiting(url), self.picker.waiting(url)]
+    }
+
+    /// The players read from `url`'s download, in the order of
+    /// [`Self::lottie_sizes`]; `None` leaves a permanent blank.
+    pub fn store_players(&self, url: &str, [chat, picker]: [Option<Player>; 2]) {
+        self.chat.fill(url, chat);
+        self.picker.fill(url, picker);
     }
 
     /// Frames no longer on screen, to be dropped from the GPU atlas.
@@ -205,12 +226,8 @@ impl Images {
 
     /// The download for `url` finished; `None` or undecodable bytes leave a
     /// permanent blank.
+    #[hotpath::measure]
     pub fn store(&self, url: String, bytes: Option<Vec<u8>>) {
-        // The same sticker may play in the chat and in the picker at once.
-        let in_picker = self.picker.store(&url, bytes.as_deref());
-        if self.chat.store(&url, bytes.as_deref()) || in_picker {
-            return;
-        }
         let Some(bytes) = bytes else { return };
         let Some(format) = image_format(&bytes) else {
             // The host only: paths can name channels and files.
@@ -251,6 +268,20 @@ mod tests {
         assert_eq!(outbox.borrow().len(), 1);
         images.store("https://cdn/a.png".into(), Some(b"\x89PNG....".to_vec()));
         assert!(images.get("https://cdn/a.png", &outbox).is_some());
+    }
+
+    #[test]
+    fn stickers_wait_for_their_players() {
+        let images = Images::default();
+        let outbox = RefCell::new(Vec::new());
+        let url = "https://cdn/sticker.json";
+        assert_eq!(images.lottie_sizes(url), [None, None]);
+        assert!(images.animation(url, &outbox).is_none());
+        assert_eq!(images.lottie_sizes(url), [Some(ANIMATION_PIXELS), None]);
+        let lottie = br#"{"v":"5","fr":30,"ip":0,"op":30,"w":10,"h":10,"layers":[]}"#;
+        images.store_players(url, [Player::new(lottie, ANIMATION_PIXELS), None]);
+        assert!(images.animation(url, &outbox).is_some());
+        assert_eq!(outbox.borrow().len(), 1);
     }
 
     #[test]

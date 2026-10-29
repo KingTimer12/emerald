@@ -4,6 +4,7 @@ use super::*;
 use crate::zoom::zoomed;
 
 impl Render for Emerald {
+    #[hotpath::measure]
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Read here, not only on change: the window may start out focused.
         self.window_active = window.is_window_active();

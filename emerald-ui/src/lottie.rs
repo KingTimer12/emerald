@@ -98,6 +98,7 @@ fn worker() -> &'static Sender<(Arc<Shared>, u64)> {
 impl Player {
     /// Reads a Lottie file to play it at `size` pixels square; `None` when
     /// it is not one, or has no frames to show.
+    #[hotpath::measure]
     pub fn new(bytes: &[u8], size: u16) -> Option<Self> {
         let composition = catch_unwind(|| Composition::from_slice(bytes))
             .map_err(|_| tracing::warn!("lottie: velato cannot read this animation"))

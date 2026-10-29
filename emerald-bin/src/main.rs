@@ -8,6 +8,7 @@ mod alerts;
 mod desktop;
 mod logging;
 mod login;
+mod profiling;
 
 use emerald_core::{i18n, paths};
 use emerald_desktop::instance::{self, Instance};
@@ -52,6 +53,7 @@ fn main() {
 
     let logging = logging::init();
     log_startup(&logging, &settings);
+    profiling::start();
 
     // Links the app was opened with (`discord://…`). On Windows a second
     // launch hands them to the running instance and ends here.
@@ -233,6 +235,7 @@ fn main() {
 fn quit(alerts: &alerts::DesktopAlerts, cx: &mut App) {
     tracing::info!("quitting");
     alerts.remove_tray();
+    profiling::finish();
     cx.quit();
 }
 

@@ -14,6 +14,7 @@ use crate::protocol::{Link, NetEvent, ReactionEvent, Snapshot};
 
 /// Sends the event a dispatch of type `kind` stands for, if the UI wants
 /// one. Unhandled types are dropped without parsing.
+#[hotpath::measure]
 pub(super) fn dispatch(
     kind: Option<&str>,
     data: Option<&RawValue>,

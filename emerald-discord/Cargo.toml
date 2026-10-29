@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+hotpath.workspace = true
 emerald-core.workspace = true
 emerald-http.workspace = true
 emerald-audio.workspace = true
@@ -38,3 +39,6 @@ windows = { workspace = true, features = ["Foundation", "Globalization", "Win32_
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt"] }
+
+[features]
+hotpath = ["hotpath/hotpath", "emerald-core/hotpath"]

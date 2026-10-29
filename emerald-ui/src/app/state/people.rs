@@ -2,7 +2,7 @@
 //! payloads, relationships (friends, requests, blocks) with their
 //! nicknames, who is ignored, notes and presences.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use gpui::SharedString;
 
@@ -13,19 +13,19 @@ use emerald_discord::model::{
 #[derive(Default)]
 pub struct People {
     me: Option<User>,
-    users: HashMap<Snowflake, User>,
+    users: FxHashMap<Snowflake, User>,
     /// Relationship kind per user (`relationship_kind`).
-    relationships: HashMap<Snowflake, u8>,
+    relationships: FxHashMap<Snowflake, u8>,
     /// Friend presences; missing means offline.
-    presences: HashMap<Snowflake, SharedString>,
+    presences: FxHashMap<Snowflake, SharedString>,
     /// What friends are doing; missing means nothing.
-    activities: HashMap<Snowflake, Vec<Activity>>,
+    activities: FxHashMap<Snowflake, Vec<Activity>>,
     /// Names the user gave their friends.
-    nicknames: HashMap<Snowflake, String>,
+    nicknames: FxHashMap<Snowflake, String>,
     /// Users whose messages fold away, short of blocking them.
-    ignored: HashSet<Snowflake>,
+    ignored: FxHashSet<Snowflake>,
     /// The user's notes on profiles, as read so far; empty for none.
-    notes: HashMap<Snowflake, String>,
+    notes: FxHashMap<Snowflake, String>,
 }
 
 impl People {
@@ -116,6 +116,7 @@ impl People {
         self.activities.get(&id).map_or(&[], Vec::as_slice)
     }
 
+    #[hotpath::measure]
     pub fn set_presences(&mut self, presences: Vec<FriendPresence>) {
         for FriendPresence { user, status, activities } in presences {
             let offline = status == "offline";

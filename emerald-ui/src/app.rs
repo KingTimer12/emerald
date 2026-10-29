@@ -3,7 +3,7 @@
 //! window lives in its own module.
 
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crate::zoom::zoomed;
@@ -62,6 +62,7 @@ use super::text_input::{MenuKey, PastedImage, Submitted, TextInput};
 use super::theme;
 use emerald_discord::model::{Profile, Snowflake};
 use emerald_discord::{Action, Command, Link};
+use rustc_hash::{FxHashMap, FxHashSet};
 use crate::settings::Settings;
 use add_server::AddServer;
 use composer::Composer;
@@ -183,7 +184,7 @@ pub struct Emerald {
     /// when they arrive.
     sticker_packs: Option<Vec<emerald_discord::model::StickerPack>>,
     /// Slash commands per guild or DM, and the user's own apps'.
-    command_sets: HashMap<emerald_discord::IndexTarget, slash::CommandSet>,
+    command_sets: FxHashMap<emerald_discord::IndexTarget, slash::CommandSet>,
     /// The own message being edited in place, and its edit box.
     edit: Option<chat::Editing>,
     edit_input: Entity<TextInput>,
@@ -214,13 +215,13 @@ pub struct Emerald {
     /// The tab of the full profile.
     profile_tab: profile::ProfileTab,
     /// Friends in common, per user, once asked for.
-    mutual_friends: HashMap<Snowflake, Vec<Snowflake>>,
+    mutual_friends: FxHashMap<Snowflake, Vec<Snowflake>>,
     /// Invites linked in messages, resolved for their cards.
     invite_cards: invites::InviteCards,
     /// Runs of blocked or ignored messages opened, by their first message.
-    revealed_hidden: HashSet<Snowflake>,
+    revealed_hidden: FxHashSet<Snowflake>,
     /// Forums opened this session, by channel.
-    forums: HashMap<Snowflake, chat::Forum>,
+    forums: FxHashMap<Snowflake, chat::Forum>,
     /// Spoiler images the user clicked open, by URL.
     revealed: HashSet<SharedString>,
     /// The menu of the + beside the message box is open.
@@ -228,9 +229,9 @@ pub struct Emerald {
     /// Answers picked on a poll before voting: (message, answers).
     poll_choice: Option<(Snowflake, Vec<u32>)>,
     /// Polls whose results the user asked to see before voting.
-    poll_results: HashSet<Snowflake>,
+    poll_results: FxHashSet<Snowflake>,
     /// Text spoilers the user clicked open.
-    revealed_spoilers: HashSet<chat::SpoilerKey>,
+    revealed_spoilers: FxHashSet<chat::SpoilerKey>,
     /// The window has focus; animated emoji and avatars only play then,
     /// as in the web client, so the app idles when in the background.
     window_active: bool,
@@ -253,7 +254,7 @@ pub struct Emerald {
     dm_search: Entity<TextInput>,
     overlay: Option<Overlay>,
     /// REST actions in flight, one per kind.
-    busy: HashSet<Action>,
+    busy: FxHashSet<Action>,
     /// Select the next new guild, after a join or create succeeds.
     select_new_guild: bool,
     /// The open channel's messages, mirrored from `history`.
@@ -411,17 +412,17 @@ impl Emerald {
             suggestions: Vec::new(),
             member_queries: Vec::new(),
             sticker_packs: None,
-            command_sets: HashMap::new(),
+            command_sets: FxHashMap::default(),
             edit: None,
             edit_input,
             alt_input,
             message_menu: None,
             reaction_picker: None,
             revealed: HashSet::new(),
-            revealed_spoilers: HashSet::new(),
+            revealed_spoilers: FxHashSet::default(),
             plus_menu: false,
             poll_choice: None,
-            poll_results: HashSet::new(),
+            poll_results: FxHashSet::default(),
             window_active: window.is_window_active(),
             window_save: None,
             bulk: None,
@@ -429,7 +430,7 @@ impl Emerald {
             call_notice: None,
             dm_calls: Default::default(),
             weak: cx.entity().downgrade(),
-            forums: HashMap::new(),
+            forums: FxHashMap::default(),
             panel: None,
             search_input,
             thread_query,
@@ -441,14 +442,14 @@ impl Emerald {
             note_input,
             note_user: None,
             profile_tab: profile::ProfileTab::About,
-            mutual_friends: HashMap::new(),
+            mutual_friends: FxHashMap::default(),
             invite_cards: Default::default(),
-            revealed_hidden: HashSet::new(),
+            revealed_hidden: FxHashSet::default(),
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
             dm_search,
             overlay: None,
-            busy: HashSet::new(),
+            busy: FxHashSet::default(),
             select_new_guild: false,
             messages,
             jump: None,

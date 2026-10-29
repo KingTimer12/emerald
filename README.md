@@ -231,6 +231,15 @@ Tests:
 cargo test
 ```
 
+Profiling with [hotpath](https://hotpath.rs): the render, markdown, image-decoding and
+gateway functions are measured, and the report is written when Emerald quits (Cmd+Q or
+the tray's Quit), to `HOTPATH_OUTPUT_PATH` when set:
+
+```sh
+cargo run --release --features hotpath          # time per function
+cargo run --release --features hotpath-alloc    # allocations too
+```
+
 ## Packaging and releases
 
 ```sh
@@ -427,3 +436,6 @@ A few design choices:
   avatars) up to 32 MB (what is on screen always stays),
   and only the visible pages of the member list. Evicted images leave gpui's caches and
   the GPU too.
+- **Cheap hot paths.** Animated frames are scaled with SIMD (`fast_image_resize`), the
+  gateway inflates with `zlib-rs`, maps keyed by ids hash with FxHash (text from the
+  network keeps SipHash), and role lookups are binary searches.

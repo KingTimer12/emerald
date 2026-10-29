@@ -3,7 +3,7 @@
 //! thread search as the list reaches its end, and first messages load in
 //! batches for the cards being drawn, as the web client does.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use gpui::{AnyElement, Context, FontWeight, ListAlignment, ListState, SharedString, div, img, list, prelude::*, rgb};
 
@@ -26,8 +26,8 @@ mod toolbar;
 /// What this client knows of one forum beyond its active posts.
 pub(in super::super) struct Forum {
     /// First messages, once Discord answered for the post.
-    first: HashMap<Snowflake, Msg>,
-    asked: HashSet<Snowflake>,
+    first: FxHashMap<Snowflake, Msg>,
+    asked: FxHashSet<Snowflake>,
     /// Posts loaded from the thread search so far, and whether there are
     /// more: archived ones, or the matches of a name search.
     archived: usize,
@@ -43,8 +43,8 @@ pub(in super::super) struct Forum {
 impl Forum {
     fn new(by_creation: bool) -> Self {
         Self {
-            first: HashMap::new(),
-            asked: HashSet::new(),
+            first: FxHashMap::default(),
+            asked: FxHashSet::default(),
             archived: 0,
             more: true,
             loading: false,

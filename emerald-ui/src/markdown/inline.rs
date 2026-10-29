@@ -34,6 +34,14 @@ impl Parser<'_> {
         let mut open: Vec<(&str, Style, usize)> = Vec::new();
         let mut rest = line;
         while let Some(c) = rest.chars().next() {
+            // Plain text up to the next character that can start something
+            // goes in at once.
+            if !starts_token(c) {
+                let end = rest.find(starts_token).unwrap_or(rest.len());
+                rich.text.push_str(&rest[..end]);
+                rest = &rest[end..];
+                continue;
+            }
             if c == '\\' {
                 // Escaped marker: keep the next character literally.
                 let mut chars = rest.chars();
@@ -76,13 +84,12 @@ impl Parser<'_> {
                 match channel_link(url) {
                     // A pill naming the channel, as Discord draws these.
                     Some((_, channel, message)) => {
-                        let name = (self.name)(Mention::Channel(channel));
-                        let label = match message {
-                            Some(_) => format!("#{name} › 💬"),
-                            None => format!("#{name}"),
-                        };
                         let start = rich.text.len();
-                        rich.text.push_str(&label);
+                        rich.text.push('#');
+                        rich.text.push_str(&(self.name)(Mention::Channel(channel)));
+                        if message.is_some() {
+                            rich.text.push_str(" › 💬");
+                        }
                         rich.spans.push((start..rich.text.len(), Style::Mention));
                         rich.links.push((start..rich.text.len(), url.to_owned()));
                     }
@@ -145,7 +152,9 @@ impl Parser<'_> {
                 self.emojis_left -= 1;
                 rich.emoji(id, animated);
             } else {
-                rich.text.push_str(&format!(":{name}:"));
+                rich.text.push(':');
+                rich.text.push_str(name);
+                rich.text.push(':');
             }
             return Some(len);
         }
@@ -158,6 +167,12 @@ impl Parser<'_> {
         rich.mentions.push((range, target));
         Some(len)
     }
+}
+
+/// Whether `c` can begin an escape, code, link, mention, emoji, URL or
+/// style marker; anything else is plain text.
+fn starts_token(c: char) -> bool {
+    matches!(c, '\\' | '`' | '[' | '<' | '@' | 'h' | '|' | '*' | '_' | '~')
 }
 
 /// `<@id>`, `<@!id>`, `<#id>` and `<@&id>`, as the shown text, what it

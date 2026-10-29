@@ -193,6 +193,7 @@ impl Emerald {
     }
 
     /// Permissions changed: the open channel may now be writable or not.
+    #[hotpath::measure]
     pub(super) fn refresh_composer(&mut self, cx: &mut Context<Self>) {
         if let Some(channel) = self.selected_channel.filter(|_| !self.friends_open) {
             let placeholder = self.composer_placeholder(channel);

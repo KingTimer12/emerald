@@ -128,6 +128,7 @@ impl Emerald {
         .detach();
     }
 
+    #[hotpath::measure]
     pub(super) fn render_member_list(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let searching = self.member_search.is_active();
         let body = if searching {

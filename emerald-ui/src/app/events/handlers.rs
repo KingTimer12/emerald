@@ -1,8 +1,10 @@
 //! What each kind of network event does to the stores and the window.
 
 use super::*;
+use crate::lottie::Player;
 
 impl Emerald {
+    #[hotpath::measure]
     pub(super) fn on_ready(&mut self, snapshot: Snapshot, window: &mut Window, cx: &mut Context<Self>) {
         self.end_call_for_new_session();
         let Snapshot {
@@ -29,7 +31,7 @@ impl Emerald {
         let defaults: Vec<_> = guilds.iter().map(|g| (g.id, g.default_notify())).collect();
         self.notify.load(guild_settings, defaults.into_iter());
         self.server_list.set(folders);
-        let mut my_roles: HashMap<_, _> = members
+        let mut my_roles: FxHashMap<_, _> = members
             .into_iter()
             .map(|(guild, member)| (guild, member.roles))
             .collect();
@@ -64,6 +66,7 @@ impl Emerald {
         self.follow_pending_link(window, cx);
     }
 
+    #[hotpath::measure]
     pub(super) fn on_members(&mut self, chunk: MembersChunk, cx: &mut Context<Self>) {
         let found: Vec<_> = chunk.members.iter().filter_map(|m| m.id()).collect();
         self.member_search.accept(chunk.nonce.as_deref(), found.into_iter());
@@ -96,6 +99,7 @@ impl Emerald {
         }
     }
 
+    #[hotpath::measure]
     pub(super) fn on_message(&mut self, mut message: Message, cx: &mut Context<Self>) {
         let channel = message.channel_id;
         // The REST answer to our own send has no `guild_id`; without one the
@@ -135,6 +139,32 @@ impl Emerald {
         self.history.receive(message, mine, view);
     }
 
+    /// A download arrived. Lottie stickers are read on a background
+    /// thread: a big one takes over 10 ms, a dropped frame on this one.
+    pub(super) fn on_image(&mut self, url: String, bytes: Option<Vec<u8>>, cx: &mut Context<Self>) {
+        let sizes = self.images.lottie_sizes(&url);
+        if sizes == [None, None] {
+            self.images.store(url, bytes);
+            return;
+        }
+        let Some(bytes) = bytes else {
+            self.images.store_players(&url, [None, None]);
+            return;
+        };
+        cx.spawn(async move |this, cx| {
+            let players = cx
+                .background_executor()
+                .spawn(async move { sizes.map(|size| size.and_then(|size| Player::new(&bytes, size))) })
+                .await;
+            this.update(cx, |this, cx| {
+                this.images.store_players(&url, players);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     /// Whether `message` counts as a mention: every DM message does, as on
     /// Discord; in a guild, one naming the user, one of their roles, or
     /// @everyone.
@@ -169,6 +199,7 @@ impl Emerald {
         self.label_dms();
     }
 
+    #[hotpath::measure]
     pub(super) fn on_typing(&mut self, typing: TypingStart, cx: &mut Context<Self>) {
         if self.people.is_me(typing.user_id) {
             return;

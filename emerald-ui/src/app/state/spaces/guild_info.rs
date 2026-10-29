@@ -7,15 +7,16 @@ pub struct GuildInfo {
     /// The current user, whose permissions are computed.
     pub(super) me: Snowflake,
     pub(super) owner: Option<Snowflake>,
+    /// Sorted by id.
     pub(super) roles: Vec<Role>,
     /// The current user's roles here.
     pub(super) my_roles: Vec<Snowflake>,
     /// Nicknames and roles of message authors seen so far.
-    pub(super) members: HashMap<Snowflake, Member>,
+    pub(super) members: FxHashMap<Snowflake, Member>,
     /// Authors already asked for with op 8, so each is requested once.
-    pub(super) requested: HashSet<Snowflake>,
+    pub(super) requested: FxHashSet<Snowflake>,
     /// The current user's permissions per channel.
-    pub(super) permissions: HashMap<Snowflake, u64>,
+    pub(super) permissions: FxHashMap<Snowflake, u64>,
     pub(super) emojis: Vec<GuildEmoji>,
     pub(super) stickers: Vec<StickerItem>,
     /// Upload size the guild's boosts unlock.
@@ -25,7 +26,7 @@ pub struct GuildInfo {
 impl GuildInfo {
     /// A role's guild-wide permissions; 0 for an unknown role.
     pub fn role_permissions(&self, role: Snowflake) -> u64 {
-        self.roles.iter().find(|r| r.id == role).map_or(0, |r| r.permissions)
+        self.role(role).map_or(0, |r| r.permissions)
     }
 
     pub fn owner(&self) -> Option<Snowflake> {
@@ -62,13 +63,15 @@ impl GuildInfo {
 
     /// Color of the highest colored role among `roles`.
     pub fn role_color(&self, roles: &[Snowflake]) -> Option<u32> {
-        self.roles
+        roles
             .iter()
-            .filter(|role| role.color != 0 && roles.contains(&role.id))
+            .filter_map(|id| self.role(*id))
+            .filter(|role| role.color != 0)
             .max_by_key(|role| role.position)
             .map(|role| role.color)
     }
 
+    /// Every role, in id order.
     pub fn roles(&self) -> &[Role] {
         &self.roles
     }
@@ -79,7 +82,7 @@ impl GuildInfo {
     }
 
     pub fn role(&self, id: Snowflake) -> Option<&Role> {
-        self.roles.iter().find(|r| r.id == id)
+        self.roles.binary_search_by_key(&id, |r| r.id).ok().map(|ix| &self.roles[ix])
     }
 
     /// Nickname and roles of a member seen before.
@@ -89,7 +92,7 @@ impl GuildInfo {
 
     /// The known roles among `ids`, highest first, as Discord lists them.
     pub fn roles_of(&self, ids: &[Snowflake]) -> Vec<&Role> {
-        let mut roles: Vec<&Role> = self.roles.iter().filter(|r| ids.contains(&r.id)).collect();
+        let mut roles: Vec<&Role> = ids.iter().filter_map(|id| self.role(*id)).collect();
         roles.sort_by_key(|r| std::cmp::Reverse(r.position));
         roles
     }

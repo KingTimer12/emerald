@@ -4,6 +4,7 @@ use super::*;
 use crate::zoom::zoomed;
 
 impl Emerald {
+    #[hotpath::measure]
     pub(super) fn render_blocks(&self, id: ElementId, content: &str, options: Options) -> AnyElement {
         let blocks = markdown::blocks(content, &|mention| self.mention_name(mention, options.mentions));
         // Large emoji only when the whole text is one plain paragraph of them.

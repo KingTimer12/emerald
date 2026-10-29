@@ -145,6 +145,7 @@ impl Emerald {
         }
     }
 
+    #[hotpath::measure]
     fn render_message(&self, log: &Log, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let msg = &log.messages[ix];
         let fold = hidden::fold(

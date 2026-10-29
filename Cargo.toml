@@ -40,13 +40,20 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "gzip", "deflate", "brotli", "zstd"] }
 # The one CryptoProvider (ring) for reqwest and tungstenite.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-flate2 = "1"
+# Gateway zlib-stream: zlib-rs inflates faster than the default miniz_oxide
+# and wins over it in every crate that uses flate2.
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value", "preserve_order"] }
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 async-channel = "2"
 unicode-segmentation = "1"
+# FxHash for maps keyed by ids: much cheaper than SipHash, and ids are not
+# chosen by an attacker. Maps keyed by text from the network keep SipHash.
+rustc-hash = "2"
+# Profiling, off unless built with `--features hotpath` (see emerald-bin).
+hotpath = { version = "0.30", default-features = false }
 anyhow = "1"
 # localtime_r / localtime_s, for message timestamps in the user's timezone.
 libc = "0.2"
@@ -58,6 +65,8 @@ velato = { version = "0.12", default-features = false }
 vello_cpu = { version = "0.3", default-features = false, features = ["std", "u8_pipeline"] }
 # GIF and WebP for animated media, decoded off the UI thread (`frames.rs`).
 image = { version = "0.25", default-features = false, features = ["gif", "webp"] }
+# Scales those frames down with SIMD; RGBA only, which keeps it small.
+fast_image_resize = { version = "6.1", default-features = false, features = ["std", "only_u8x4"] }
 # Disk cache in one SQLite file; bundled, so no system library is needed.
 rusqlite = { version = "0.40", features = ["bundled"] }
 bytes = "1"

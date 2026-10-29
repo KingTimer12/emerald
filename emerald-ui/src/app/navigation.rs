@@ -323,6 +323,7 @@ impl Emerald {
 
     /// Asks the gateway for the members behind these messages' authors, so
     /// names and role colors match the guild, as the web client does.
+    #[hotpath::measure]
     pub(super) fn request_authors(&mut self, channel: Snowflake) {
         let Some((guild, info)) = self.spaces.guild_of(channel) else { return };
         let missing = info.unrequested(self.history.authors(channel));

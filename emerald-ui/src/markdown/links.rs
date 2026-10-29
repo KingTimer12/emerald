@@ -21,9 +21,8 @@ pub fn web_url(url: &str) -> Option<&str> {
 pub fn channel_link(url: &str) -> Option<(Option<Snowflake>, Snowflake, Option<Snowflake>)> {
     let rest = url.strip_prefix("https://")?;
     let (host, path) = rest.split_once('/')?;
-    let known = ["discord.com", "discordapp.com"]
-        .iter()
-        .any(|base| host == *base || ["ptb.", "canary.", "www."].iter().any(|sub| host == format!("{sub}{base}")));
+    let base = ["ptb.", "canary.", "www."].iter().find_map(|sub| host.strip_prefix(sub)).unwrap_or(host);
+    let known = base == "discord.com" || base == "discordapp.com";
     if !known {
         return None;
     }

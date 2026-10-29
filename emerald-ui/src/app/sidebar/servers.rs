@@ -5,6 +5,7 @@ use super::*;
 use crate::zoom::zoomed;
 
 impl Emerald {
+    #[hotpath::measure]
     pub(in super::super) fn render_servers(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut items = Vec::with_capacity(self.spaces.len() + 3);
         items.extend(self.render_update_ready(cx));

@@ -185,6 +185,7 @@ struct Parser<'a> {
 /// `source` as inline text only, every line in one [`Rich`]: for one-line
 /// places like a channel topic or a reply preview. Headings lose their
 /// hashes and turn bold.
+#[hotpath::measure]
 pub fn parse(source: &str, name: &dyn Fn(Mention) -> String) -> Rich {
     let mut parser = Parser {
         name,

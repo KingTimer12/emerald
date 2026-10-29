@@ -21,6 +21,7 @@ mod dms;
 mod servers;
 
 impl Emerald {
+    #[hotpath::measure]
     pub(super) fn render_channels(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let space = self.spaces.current();
         let dms = space.is_dms();

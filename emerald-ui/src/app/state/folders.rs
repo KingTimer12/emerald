@@ -1,7 +1,7 @@
 //! The server list as the user arranged it: folders and order, synced from
 //! their settings, and which folders are open here.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 use emerald_discord::model::{GuildFolder, Snowflake};
 
@@ -17,7 +17,7 @@ pub enum Item {
 pub struct ServerList {
     folders: Vec<GuildFolder>,
     /// Folders opened here, by id; Discord keeps this per device.
-    open: HashSet<i64>,
+    open: FxHashSet<i64>,
 }
 
 impl ServerList {
@@ -53,7 +53,7 @@ impl ServerList {
     /// new servers on top, then the folders and servers in their order.
     /// Folders with none of their servers left are skipped.
     pub fn items(&self, present: &[Snowflake]) -> Vec<Item> {
-        let placed: HashSet<Snowflake> = self.folders.iter().flat_map(|f| f.guilds.iter().copied()).collect();
+        let placed: FxHashSet<Snowflake> = self.folders.iter().flat_map(|f| f.guilds.iter().copied()).collect();
         let mut items: Vec<Item> = present
             .iter()
             .filter(|g| !placed.contains(g))

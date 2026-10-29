@@ -3,7 +3,9 @@
 
 mod paging;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::msg::{Msg, mention_names};
 use emerald_discord::Page;
@@ -88,11 +90,11 @@ impl Log {
 
 #[derive(Default)]
 pub struct History {
-    logs: HashMap<Snowflake, Log>,
+    logs: FxHashMap<Snowflake, Log>,
     /// Cached channels, least recently viewed first.
     recent: VecDeque<Snowflake>,
     /// Channels whose history the server refused.
-    forbidden: HashSet<Snowflake>,
+    forbidden: FxHashSet<Snowflake>,
 }
 
 impl History {

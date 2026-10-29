@@ -112,6 +112,7 @@ impl Emerald {
     /// The count on the app icon: unread mentions everywhere plus incoming
     /// friend requests, as Discord's desktop app counts them. Sent only
     /// when it changes.
+    #[hotpath::measure]
     pub(super) fn refresh_badge(&mut self) {
         let count = self.reads.all_mentions() + self.people.incoming_requests() as u32;
         if self.badge_shown != Some(count) {

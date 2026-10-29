@@ -1,19 +1,19 @@
 //! Read state per channel: what was read, what is unread, the mentions
 //! waiting to be seen, and the read receipts waiting to go out.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use emerald_discord::model::{Channel, Snowflake};
 
 #[derive(Default)]
 pub struct ReadStates {
     /// Last read message per channel.
-    read: HashMap<Snowflake, Snowflake>,
-    unread: HashSet<Snowflake>,
+    read: FxHashMap<Snowflake, Snowflake>,
+    unread: FxHashSet<Snowflake>,
     /// Unread mentions per channel; in DMs every message counts.
-    mentions: HashMap<Snowflake, u32>,
+    mentions: FxHashMap<Snowflake, u32>,
     /// Channels with a receipt scheduled, so bursts send one.
-    scheduled: HashSet<Snowflake>,
+    scheduled: FxHashSet<Snowflake>,
 }
 
 impl ReadStates {

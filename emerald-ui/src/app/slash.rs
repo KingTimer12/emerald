@@ -4,8 +4,9 @@
 //! Interactions are bot traffic, so nothing here runs on its own: one
 //! Enter, one interaction.
 
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
+
+use rustc_hash::FxHashMap;
 
 use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, rgb};
 
@@ -26,7 +27,7 @@ const MAX_INDEXES: usize = 16;
 pub(super) struct CommandSet {
     commands: Vec<AppCommand>,
     /// App names, by id, shown beside their commands.
-    apps: HashMap<Snowflake, String>,
+    apps: FxHashMap<Snowflake, String>,
     /// When it was asked for; it may still be on its way.
     asked: Instant,
 }
@@ -54,7 +55,7 @@ impl Emerald {
                 self.command_sets.remove(&oldest);
             }
             let commands = self.command_sets.remove(&target).map(|set| set.commands).unwrap_or_default();
-            self.command_sets.insert(target, CommandSet { commands, apps: HashMap::new(), asked: now });
+            self.command_sets.insert(target, CommandSet { commands, apps: FxHashMap::default(), asked: now });
             self.net.post(Command::ListCommands(target));
         }
     }

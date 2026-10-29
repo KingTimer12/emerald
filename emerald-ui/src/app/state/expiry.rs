@@ -1,22 +1,23 @@
 //! Time-based containers the stores share. They take `now` from the caller
 //! so tests can drive the clock.
 
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::time::{Duration, Instant};
+
+use rustc_hash::FxHashMap;
 
 /// Values fetched on demand and refetched once older than `ttl`. A stale
 /// value stays readable until its replacement arrives.
 pub struct TtlCache<K, V> {
     ttl: Duration,
-    entries: HashMap<K, (Instant, Option<V>)>,
+    entries: FxHashMap<K, (Instant, Option<V>)>,
 }
 
 impl<K: Eq + Hash, V> TtlCache<K, V> {
     pub fn new(ttl: Duration) -> Self {
         Self {
             ttl,
-            entries: HashMap::new(),
+            entries: FxHashMap::default(),
         }
     }
 

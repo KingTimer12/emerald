@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+hotpath.workspace = true
 emerald-core.workspace = true
 emerald-audio.workspace = true
 emerald-discord.workspace = true
@@ -20,6 +21,10 @@ tracing.workspace = true
 unicode-segmentation.workspace = true
 velato.workspace = true
 vello_cpu.workspace = true
+rustc-hash.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt"] }
+
+[features]
+hotpath = ["hotpath/hotpath", "emerald-core/hotpath", "emerald-discord/hotpath"]

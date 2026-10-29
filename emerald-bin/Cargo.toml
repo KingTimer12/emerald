@@ -10,6 +10,7 @@ name = "emerald"
 path = "src/main.rs"
 
 [dependencies]
+hotpath = { workspace = true, optional = true }
 emerald-core.workspace = true
 emerald-desktop.workspace = true
 emerald-discord.workspace = true
@@ -26,3 +27,9 @@ tracing-subscriber.workspace = true
 # Embeds assets/emerald.ico into the Windows executable (see build.rs).
 [target.'cfg(windows)'.build-dependencies]
 embed-resource.workspace = true
+
+# Profiling builds: `cargo run --release --features hotpath` for time per
+# measured function, `hotpath-alloc` for allocations too.
+[features]
+hotpath = ["dep:hotpath", "hotpath/hotpath", "emerald-ui/hotpath"]
+hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]

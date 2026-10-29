@@ -10,7 +10,7 @@ pub use guild_info::*;
 pub use rows::*;
 pub use space::*;
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use gpui::SharedString;
 
@@ -29,9 +29,9 @@ pub struct Spaces {
     list: Vec<Space>,
     selected: usize,
     /// Last channel opened per guild.
-    last_channel: HashMap<Snowflake, Snowflake>,
+    last_channel: FxHashMap<Snowflake, Snowflake>,
     /// Guilds already subscribed to with op 37 this session.
-    subscribed: HashSet<Snowflake>,
+    subscribed: FxHashSet<Snowflake>,
 }
 
 impl Default for Spaces {
@@ -39,8 +39,8 @@ impl Default for Spaces {
         Self {
             list: vec![Space::dms(Vec::new())],
             selected: 0,
-            last_channel: HashMap::new(),
-            subscribed: HashSet::new(),
+            last_channel: FxHashMap::default(),
+            subscribed: FxHashSet::default(),
         }
     }
 }

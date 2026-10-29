@@ -1,7 +1,8 @@
 //! "… is typing": who types where, and our own throttled signal.
 
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
+
+use rustc_hash::FxHashMap;
 
 use super::expiry::{Deadlines, Throttle};
 use emerald_discord::model::Snowflake;
@@ -12,14 +13,14 @@ const INTERVAL: Duration = Duration::from_secs(8);
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Typing {
-    channels: HashMap<Snowflake, Deadlines<Snowflake>>,
+    channels: FxHashMap<Snowflake, Deadlines<Snowflake>>,
     sent: Throttle<Snowflake>,
 }
 
 impl Default for Typing {
     fn default() -> Self {
         Self {
-            channels: HashMap::new(),
+            channels: FxHashMap::default(),
             sent: Throttle::new(INTERVAL),
         }
     }

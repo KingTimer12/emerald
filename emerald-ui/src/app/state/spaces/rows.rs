@@ -85,6 +85,7 @@ pub(super) fn channel_icon(kind: ChannelKind) -> &'static str {
 }
 
 impl Space {
+    #[hotpath::measure]
     pub(super) fn rebuild(&mut self) {
         self.rows.clear();
         let Some(guild) = &mut self.guild else {

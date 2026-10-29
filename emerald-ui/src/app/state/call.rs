@@ -3,7 +3,7 @@
 //! voice server (endpoint and token). Once both are in, the voice engine
 //! starts; a new server, or being moved, starts it again.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use emerald_discord::model::{CallUpdate, Snowflake, VoiceServer, VoiceState};
 use emerald_discord::{CallStatus, VoiceCall};
@@ -14,7 +14,7 @@ pub struct Call {
     pub channel: Snowflake,
     pub status: CallStatus,
     /// Who is speaking now, us included.
-    pub speaking: HashSet<Snowflake>,
+    pub speaking: FxHashSet<Snowflake>,
     /// No microphone could be opened.
     pub listen_only: bool,
     session_id: Option<String>,
@@ -42,7 +42,7 @@ impl Call {
             guild,
             channel,
             status: CallStatus::Connecting,
-            speaking: HashSet::new(),
+            speaking: FxHashSet::default(),
             listen_only: false,
             session_id: None,
             server: None,
@@ -112,7 +112,7 @@ impl Call {
 /// Calls going on in DMs and group DMs, whether or not we are in them.
 #[derive(Default)]
 pub struct DmCalls {
-    calls: HashMap<Snowflake, DmCall>,
+    calls: FxHashMap<Snowflake, DmCall>,
 }
 
 #[derive(Default)]

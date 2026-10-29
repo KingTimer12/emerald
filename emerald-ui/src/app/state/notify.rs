@@ -2,7 +2,7 @@
 //! guild settings, and the web client's rules for whether a message makes
 //! a desktop notification.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use emerald_discord::SettingsChange;
 use emerald_discord::model::{GuildSettings, Mute, Notify, Snowflake};
@@ -34,9 +34,9 @@ pub struct Ping {
 #[derive(Default)]
 pub struct NotifySettings {
     /// Per guild, and the DMs' under `None`.
-    guilds: HashMap<Option<Snowflake>, GuildSettings>,
+    guilds: FxHashMap<Option<Snowflake>, GuildSettings>,
     /// The guild's own default when the user set no level.
-    defaults: HashMap<Snowflake, Notify>,
+    defaults: FxHashMap<Snowflake, Notify>,
 }
 
 impl NotifySettings {

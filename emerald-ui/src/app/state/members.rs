@@ -208,6 +208,7 @@ impl MemberLists {
     }
 
     /// Applies `update` to the list it is for.
+    #[hotpath::measure]
     pub fn apply(&mut self, update: MemberListUpdate) -> bool {
         let exact = self
             .lists

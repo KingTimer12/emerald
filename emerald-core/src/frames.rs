@@ -8,7 +8,8 @@ use std::io::Cursor;
 
 use image::codecs::gif::GifDecoder;
 use image::codecs::webp::WebPDecoder;
-use image::imageops::{self, FilterType};
+use fast_image_resize::images::{Image, ImageRef};
+use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
 use image::{AnimationDecoder, DynamicImage, Frame, RgbaImage};
 
 /// Decoded bytes one animation may hold; frames past it are dropped, so a
@@ -18,6 +19,7 @@ const MAX_BYTES: usize = 32 * 1024 * 1024;
 /// The frames of a GIF or WebP at most `max_width` by `max_height`, in the
 /// BGRA order gpui draws; a still image comes back as one frame. `None`
 /// for other formats and broken files.
+#[hotpath::measure]
 pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame>> {
     let frames: Box<dyn Iterator<Item = image::ImageResult<Frame>>> = match bytes {
         [b'G', b'I', b'F', b'8', ..] => Box::new(GifDecoder::new(Cursor::new(bytes)).ok()?.into_frames()),
@@ -34,10 +36,12 @@ pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame
     };
     let mut out = Vec::new();
     let mut total = 0;
+    // One resizer for every frame: it keeps its scratch buffers.
+    let mut resizer = Resizer::new();
     for frame in frames {
         let frame = frame.ok()?;
         let delay = frame.delay();
-        let mut buffer = fit(frame.into_buffer(), max_width, max_height);
+        let mut buffer = fit(&mut resizer, frame.into_buffer(), max_width, max_height);
         total += buffer.as_raw().len();
         if total > MAX_BYTES && !out.is_empty() {
             break;
@@ -51,15 +55,24 @@ pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame
     (!out.is_empty()).then_some(out)
 }
 
-/// `buffer` scaled down to fit the box, never up.
-fn fit(buffer: RgbaImage, max_width: u32, max_height: u32) -> RgbaImage {
+/// `buffer` scaled down to fit the box, never up, with a bilinear filter
+/// (SIMD where the CPU has it) and transparent edges kept clean.
+fn fit(resizer: &mut Resizer, buffer: RgbaImage, max_width: u32, max_height: u32) -> RgbaImage {
     let (width, height) = buffer.dimensions();
     let scale = (max_width as f32 / width as f32).min(max_height as f32 / height as f32);
     if scale >= 1. || width == 0 || height == 0 {
         return buffer;
     }
     let (w, h) = (((width as f32 * scale).round() as u32).max(1), ((height as f32 * scale).round() as u32).max(1));
-    imageops::resize(&buffer, w, h, FilterType::Triangle)
+    let Ok(source) = ImageRef::new(width, height, buffer.as_raw(), PixelType::U8x4) else {
+        return buffer;
+    };
+    let mut target = Image::new(w, h, PixelType::U8x4);
+    let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Bilinear));
+    if resizer.resize(&source, &mut target, &options).is_err() {
+        return buffer;
+    }
+    RgbaImage::from_raw(w, h, target.into_vec()).unwrap_or(buffer)
 }
 
 #[cfg(test)]

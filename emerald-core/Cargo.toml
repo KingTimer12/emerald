@@ -5,6 +5,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+hotpath.workspace = true
+fast_image_resize.workspace = true
 image.workspace = true
 sys-locale.workspace = true
 toml.workspace = true
+
+[features]
+hotpath = ["hotpath/hotpath"]

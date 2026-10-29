@@ -5,6 +5,7 @@ use super::*;
 impl History {
     /// A page of history: the newest one, or one around a message, replaces
     /// the log; older ones go on top and newer ones below, up to the cap.
+    #[hotpath::measure]
     pub fn page(&mut self, channel: Snowflake, page: Page, messages: Vec<Message>, view: Option<&dyn MessageView>) {
         let log = self.logs.entry(channel).or_default();
         log.loading = false;
@@ -23,7 +24,7 @@ impl History {
             }
             Page::After(_) => {
                 log.latest = short;
-                let known: HashSet<Snowflake> = log.messages.iter().map(|m| m.id).collect();
+                let known: FxHashSet<Snowflake> = log.messages.iter().map(|m| m.id).collect();
                 let fresh: Vec<Msg> = messages
                     .into_iter()
                     .filter(|m| !known.contains(&m.id))

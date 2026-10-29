@@ -2,8 +2,9 @@
 
 mod handlers;
 
-use std::collections::HashMap;
 use std::time::Instant;
+
+use rustc_hash::FxHashMap;
 
 use gpui::{Context, Window};
 
@@ -14,6 +15,7 @@ use emerald_discord::model::{Channel, ChannelKind, MembersChunk, Message, Messag
 use emerald_discord::{Action, Command, Link, NetEvent, Snapshot};
 
 impl Emerald {
+    #[hotpath::measure]
     pub fn on_net(&mut self, event: NetEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event {
             NetEvent::Status(link) => self.connection.set_link(link),
@@ -79,7 +81,7 @@ impl Emerald {
                     self.select_channel(id, window, cx);
                 }
             }
-            NetEvent::Avatar { url, bytes } => self.images.store(url, bytes),
+            NetEvent::Avatar { url, bytes } => self.on_image(url, bytes, cx),
             NetEvent::Animation { url, frames } => self.images.store_animation(url, frames),
             NetEvent::MembersChunk(chunk) => self.on_members(chunk, cx),
             NetEvent::MemberList(update) => {
