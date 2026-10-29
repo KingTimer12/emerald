@@ -11,11 +11,15 @@ use image::codecs::png::PngDecoder;
 use image::codecs::webp::WebPDecoder;
 use fast_image_resize::images::{Image, ImageRef};
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer};
-use image::{AnimationDecoder, DynamicImage, Frame, RgbaImage};
+use image::{AnimationDecoder, DynamicImage, Frame, ImageDecoder, Limits, RgbaImage};
 
 /// Decoded bytes one animation may hold; frames past it are dropped, so a
 /// long GIF loops over its start.
 const MAX_BYTES: usize = 32 * 1024 * 1024;
+/// Widest and tallest canvas decoded: a 4096px frame is 64 MB of pixels.
+const MAX_SIDE: u32 = 4096;
+/// Most a decoder may allocate at once.
+const MAX_ALLOC: u64 = 128 * 1024 * 1024;
 
 /// The frames of a GIF, WebP or PNG (animated or not) at most `max_width` by `max_height`, in the
 /// BGRA order gpui draws; a still image comes back as one frame. `None`
@@ -23,9 +27,9 @@ const MAX_BYTES: usize = 32 * 1024 * 1024;
 #[hotpath::measure]
 pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame>> {
     let frames: Box<dyn Iterator<Item = image::ImageResult<Frame>>> = match bytes {
-        [b'G', b'I', b'F', b'8', ..] => Box::new(GifDecoder::new(Cursor::new(bytes)).ok()?.into_frames()),
+        [b'G', b'I', b'F', b'8', ..] => Box::new(bounded(GifDecoder::new(Cursor::new(bytes)).ok()?)?.into_frames()),
         [0x89, b'P', b'N', b'G', ..] => {
-            let decoder = PngDecoder::new(Cursor::new(bytes)).ok()?;
+            let decoder = bounded(PngDecoder::new(Cursor::new(bytes)).ok()?)?;
             if decoder.is_apng().ok()? {
                 Box::new(decoder.apng().ok()?.into_frames())
             } else {
@@ -34,7 +38,7 @@ pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame
             }
         }
         [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => {
-            let decoder = WebPDecoder::new(Cursor::new(bytes)).ok()?;
+            let decoder = bounded(WebPDecoder::new(Cursor::new(bytes)).ok()?)?;
             if decoder.has_animation() {
                 Box::new(decoder.into_frames())
             } else {
@@ -63,6 +67,23 @@ pub fn decode(bytes: &[u8], max_width: u32, max_height: u32) -> Option<Vec<Frame
         out.push(Frame::from_parts(buffer, 0, 0, delay));
     }
     (!out.is_empty()).then_some(out)
+}
+
+/// `decoder`, refused when its canvas is larger than any image Emerald
+/// draws, and held to that size while it decodes. A file from anyone in a
+/// chat can claim 65535 pixels a side; every frame is decoded at full size
+/// before it is scaled down, so that alone would take gigabytes.
+fn bounded<D: ImageDecoder>(mut decoder: D) -> Option<D> {
+    let (width, height) = decoder.dimensions();
+    if width > MAX_SIDE || height > MAX_SIDE {
+        return None;
+    }
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_SIDE);
+    limits.max_image_height = Some(MAX_SIDE);
+    limits.max_alloc = Some(MAX_ALLOC);
+    decoder.set_limits(limits).ok()?;
+    Some(decoder)
 }
 
 /// `buffer` scaled down to fit the box, never up, with a bilinear filter
@@ -128,6 +149,18 @@ mod tests {
         let frames = decode(&bytes, 4, 4).unwrap();
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].buffer().dimensions(), (4, 4));
+    }
+
+    #[test]
+    fn huge_canvases_are_refused() {
+        // A small GIF whose header claims a 65535 by 65535 canvas.
+        let mut bytes = gif(1, 4);
+        bytes[6..10].copy_from_slice(&[0xff; 4]);
+        assert!(bounded(GifDecoder::new(Cursor::new(&bytes)).unwrap()).is_none());
+        assert!(decode(&bytes, 10, 10).is_none());
+        // A real one within the bounds is kept.
+        let small = gif(1, 40);
+        assert!(bounded(GifDecoder::new(Cursor::new(&small)).unwrap()).is_some());
     }
 
     #[test]

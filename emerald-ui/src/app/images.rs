@@ -236,6 +236,13 @@ impl Images {
             return;
         };
         let decoded = still::decoded_size(&bytes, format);
+        // gpui decodes it whole: one claiming more pixels than the whole
+        // budget holds would take that much memory at once.
+        if decoded > MAX_DECODED {
+            let host = url.split('/').nth(2).unwrap_or_default();
+            tracing::warn!("image from {host} is too large to draw");
+            return;
+        }
         // Evicted while downloading, or pushed out: their pixels go at the
         // next `release`.
         self.stills.borrow_mut().fill(&url, Still::new(format, bytes), decoded, self.frame.get());
@@ -313,17 +320,27 @@ mod tests {
     fn decoded_bytes_are_capped_but_not_on_screen() {
         let images = Images::default();
         let outbox = RefCell::new(Vec::new());
-        // 4096² RGBA is 64 MB, past the cap alone.
+        // 3000² RGBA is 36 MB: two of them pass the cap together.
         images.get("https://cdn/big.gif", &outbox);
-        images.store("https://cdn/big.gif".into(), Some(gif(4096)));
+        images.store("https://cdn/big.gif".into(), Some(gif(3000)));
         assert!(images.stills.borrow().contains("https://cdn/big.gif"));
         images.frame.set(2);
-        images.get("https://cdn/small.gif", &outbox);
-        images.store("https://cdn/small.gif".into(), Some(gif(16)));
+        images.get("https://cdn/other.gif", &outbox);
+        images.store("https://cdn/other.gif".into(), Some(gif(3000)));
         assert!(!images.stills.borrow().contains("https://cdn/big.gif"));
-        assert_eq!(images.stills.borrow().bytes(), 16 * 16 * 4);
+        assert_eq!(images.stills.borrow().bytes(), 3000 * 3000 * 4);
         // Its pixels wait to be freed by the window.
         assert_eq!(still::take_released().len(), 1);
+    }
+
+    #[test]
+    fn images_larger_than_the_whole_budget_are_refused() {
+        let images = Images::default();
+        let outbox = RefCell::new(Vec::new());
+        // 4096² RGBA is 64 MB, more than all stills may take together.
+        images.get("https://cdn/huge.gif", &outbox);
+        images.store("https://cdn/huge.gif".into(), Some(gif(4096)));
+        assert_eq!(images.stills.borrow().bytes(), 0);
     }
 
     #[test]
