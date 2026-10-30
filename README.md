@@ -152,6 +152,11 @@ CPU near zero when idle.
 - **Multiple accounts**: up to five signed in at once; switching restarts Emerald on the other.
 - **Settings**: font size, zoom from 90% to 150% (Cmd/Ctrl with + and -, 0 to reset), compact mode;
   language and 12/24-hour time; dark, light or the system's theme; reduced motion (animated emoji, avatars and stickers stop on their first frame).
+- **Title bar**: drawn by Emerald as Discord 2026 draws its own: back and forward through the places opened
+  (Alt+Left/Right, Cmd+[ and ] on macOS), the page's name in the middle, Inbox and Help on the right and, on
+  Windows, minimize, maximize and close (snap layouts included). macOS keeps its traffic lights over it.
+- **Font**: the interface uses [Figtree](https://github.com/erikdkennedy/figtree) (SIL Open Font License,
+  `emerald-ui/assets/fonts/OFL.txt`), a free look-alike of Discord's gg sans, which is licensed and not bundled.
 - **Keyboard shortcuts**: each one can be changed under Settings > Keyboard shortcuts. Alt+Up and
   Alt+Down move between channels, Alt+Shift+Down jumps to the next unread one, Shift+Escape marks
   the channel read.
@@ -348,7 +353,7 @@ emerald-ui/              the gpui interface
     ├── settings.rs      JSON preferences
     ├── markdown.rs      Discord markdown parser (blocks, inline spans, links)
     ├── text_input.rs    text field (editing, offsets, layout, element, IME)
-    ├── theme.rs, zoom.rs, icons.rs, time.rs, emoji.rs, lottie.rs
+    ├── theme/ (colors, radii and fonts per style), zoom.rs, icons.rs, time.rs, emoji.rs, lottie.rs
     ├── app.rs           `Emerald`: composes the stores; the window is drawn in app/render.rs
     └── app/             the main window
         ├── state/       UI-free stores, tested in isolation

@@ -14,6 +14,8 @@ pub const API: BaseUrl = BaseUrl::new("https://discord.com/api/v9");
 pub const CDN: BaseUrl = BaseUrl::new("https://cdn.discordapp.com");
 /// The media proxy: resized stickers and attachments.
 pub const MEDIA: BaseUrl = BaseUrl::new("https://media.discordapp.net");
+/// The help center, opened by the title bar's Help button.
+pub const SUPPORT: BaseUrl = BaseUrl::new("https://support.discord.com");
 /// Where a fresh gateway session connects.
 pub const GATEWAY: BaseUrl = BaseUrl::new("wss://gateway.discord.gg");
 

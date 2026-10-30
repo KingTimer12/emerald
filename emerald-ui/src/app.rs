@@ -13,6 +13,7 @@ mod account;
 mod activity;
 mod add_server;
 mod alerts;
+mod back_forward;
 mod attachments;
 mod chat;
 mod composer;
@@ -43,6 +44,7 @@ mod slash;
 mod state;
 mod suggestions;
 mod switcher;
+mod title_bar;
 mod user_menu;
 mod user_panel;
 mod voice;
@@ -57,7 +59,7 @@ use gpui::{
     SharedString, Subscription, UniformListScrollHandle, Window, actions, div, prelude::*, relative, rgb,
 };
 
-use crate::shortcuts::{EditLast, MarkRead, NextChannel, NextUnread, PreviousChannel, QuickSwitch};
+use crate::shortcuts::{EditLast, GoBack, GoForward, MarkRead, NextChannel, NextUnread, PreviousChannel, QuickSwitch};
 
 use super::text_input::{MenuKey, PastedImage, Submitted, TextInput};
 use super::{theme, time};
@@ -177,6 +179,10 @@ pub struct Emerald {
     typing: Typing,
     /// Channels opened lately, offered first by the quick switcher.
     recent: state::switcher::Recent,
+    /// Places opened, for the title bar's back and forward arrows.
+    places: state::NavHistory,
+    /// Set while back or forward opens a place, so it is not visited again.
+    walking_history: bool,
     /// The chat column shows the friends list instead of a channel.
     friends_open: bool,
     /// The chat column shows the message requests, or the spam inbox.
@@ -415,6 +421,9 @@ impl Emerald {
             reads: ReadStates::default(),
             typing: Typing::default(),
             recent: Default::default(),
+            // Home's friends list shows first, until a channel is restored.
+            places: state::NavHistory::starting_at(state::VisitedPlace::Friends),
+            walking_history: false,
             friends_open: true,
             requests_open: false,
             requests_spam: false,

@@ -657,6 +657,8 @@ mark_read = "Mark channel as read"
 next_unread = "Next unread channel"
 previous_channel = "Previous channel"
 next_channel = "Next channel"
+go_back = "Back"
+go_forward = "Forward"
 quit = "Quit Emerald"
 log_out = "Log out"
 press_keys = "Press keys…"
@@ -751,3 +753,8 @@ version = "Version {version}"
 
 [update]
 ready = "Update ready: version {version}. Click to restart."
+
+[title_bar]
+back = "Back"
+forward = "Forward"
+help = "Help"

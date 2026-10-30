@@ -656,6 +656,8 @@ mark_read = "Marcar canal como lido"
 next_unread = "Próximo canal não lido"
 previous_channel = "Canal anterior"
 next_channel = "Próximo canal"
+go_back = "Voltar"
+go_forward = "Avançar"
 quit = "Sair do Emerald"
 log_out = "Sair da conta"
 press_keys = "Pressione as teclas…"
@@ -750,3 +752,8 @@ version = "Versão {version}"
 
 [update]
 ready = "Atualização pronta: versão {version}. Clique para reiniciar."
+
+[title_bar]
+back = "Voltar"
+forward = "Avançar"
+help = "Ajuda"

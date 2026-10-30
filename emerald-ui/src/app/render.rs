@@ -11,9 +11,10 @@ impl Render for Emerald {
         self.apply_appearance(window);
         self.images.release(window, cx);
         let width = f32::from(window.viewport_size().width);
-        // Visual-refresh frame: server list on the app background, then one
-        // bordered panel with a rounded top-left corner holding sidebar and
-        // chat, and the user panel floating over the bottom-left corner.
+        // Visual-refresh frame: the title bar, then the server list on the app
+        // background and one bordered panel with a rounded top-left corner
+        // holding sidebar and chat, and the user panel floating over the
+        // bottom-left corner.
         let overlay = match &self.overlay {
             Some(Overlay::AddServer(modal)) => Some(self.render_add_server(modal, cx).into_any_element()),
             Some(Overlay::Settings(view)) => Some(self.render_settings(view, cx).into_any_element()),
@@ -52,6 +53,8 @@ impl Render for Emerald {
             .on_action(cx.listener(|this, _: &ZoomReset, _, cx| this.zoom_reset(cx)))
             .on_action(cx.listener(|this, _: &PreviousChannel, window, cx| this.step_channel(false, false, window, cx)))
             .on_action(cx.listener(|this, _: &NextChannel, window, cx| this.step_channel(true, false, window, cx)))
+            .on_action(cx.listener(|this, _: &GoBack, window, cx| this.go_back(window, cx)))
+            .on_action(cx.listener(|this, _: &GoForward, window, cx| this.go_forward(window, cx)))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| this.record_shortcut(event, cx)))
             .on_action(cx.listener(|this, _: &crate::text_input::Copy, _, cx| {
                 this.copy_selection(cx);
@@ -59,25 +62,34 @@ impl Render for Emerald {
             .on_action(cx.listener(|this, _: &crate::Logout, _, cx| this.log_out(cx)))
             .relative()
             .flex()
+            .flex_col()
             .size_full()
             .bg(rgb(theme::base_lowest()))
+            .font_family(theme::fonts::sans())
             .text_size(zoomed(16.))
             // gpui defaults to 1.618; Discord's interface sits near 1.25.
             .line_height(relative(1.25))
             .text_color(theme::text())
-            .child(self.render_servers(cx))
+            .child(self.render_title_bar(window, cx))
             .child(
                 div()
                     .flex()
                     .flex_1()
-                    .min_w(zoomed(0.))
-                    .h_full()
-                    .rounded_tl(zoomed(8.))
-                    .border_l_1()
-                    .border_t_1()
-                    .border_color(theme::border())
-                    .child(self.render_channels(cx))
-                    .child(self.render_chat(width, cx)),
+                    .min_h(zoomed(0.))
+                    .child(self.render_servers(cx))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .min_w(zoomed(0.))
+                            .h_full()
+                            .rounded_tl(theme::radius::card())
+                            .border_l_1()
+                            .border_t_1()
+                            .border_color(theme::border())
+                            .child(self.render_channels(cx))
+                            .child(self.render_chat(width, cx)),
+                    ),
             )
             .children(self.render_call_panel(cx))
             .child(self.render_user_panel(cx))

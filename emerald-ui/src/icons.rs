@@ -47,8 +47,16 @@ pub const PHONE: &str = "icons/phone.svg";
 /// End-to-end encrypted call.
 pub const SHIELD: &str = "icons/shield.svg";
 pub const DOWNLOAD: &str = "icons/download.svg";
+pub const ARROW_LEFT: &str = "icons/arrow_left.svg";
+pub const ARROW_RIGHT: &str = "icons/arrow_right.svg";
+pub const HELP: &str = "icons/help.svg";
+/// The window buttons Emerald draws on Windows.
+pub const WINDOW_MINIMIZE: &str = "icons/window_minimize.svg";
+pub const WINDOW_MAXIMIZE: &str = "icons/window_maximize.svg";
+pub const WINDOW_RESTORE: &str = "icons/window_restore.svg";
+pub const WINDOW_CLOSE: &str = "icons/window_close.svg";
 
-const ALL: [(&str, &[u8]); 39] = [
+const ALL: [(&str, &[u8]); 46] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -88,6 +96,13 @@ const ALL: [(&str, &[u8]); 39] = [
     (PHONE, include_bytes!("../assets/icons/phone.svg")),
     (SHIELD, include_bytes!("../assets/icons/shield.svg")),
     (DOWNLOAD, include_bytes!("../assets/icons/download.svg")),
+    (ARROW_LEFT, include_bytes!("../assets/icons/arrow_left.svg")),
+    (ARROW_RIGHT, include_bytes!("../assets/icons/arrow_right.svg")),
+    (HELP, include_bytes!("../assets/icons/help.svg")),
+    (WINDOW_MINIMIZE, include_bytes!("../assets/icons/window_minimize.svg")),
+    (WINDOW_MAXIMIZE, include_bytes!("../assets/icons/window_maximize.svg")),
+    (WINDOW_RESTORE, include_bytes!("../assets/icons/window_restore.svg")),
+    (WINDOW_CLOSE, include_bytes!("../assets/icons/window_close.svg")),
 ];
 
 pub struct Icons;

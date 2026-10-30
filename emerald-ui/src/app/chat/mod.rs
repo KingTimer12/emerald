@@ -47,10 +47,12 @@ impl Emerald {
         let wide = width >= PROFILE_MIN_WINDOW;
         let members_fit = width >= MEMBERS_MIN_WINDOW;
         if self.friends_open && self.spaces.current().is_dms() {
-            return self.render_friends(cx).into_any_element();
+            let friends = self.render_friends(cx).into_any_element();
+            return self.beside_inbox(friends, cx);
         }
         if self.requests_open && self.spaces.current().is_dms() {
-            return self.render_requests(cx);
+            let requests = self.render_requests(cx);
+            return self.beside_inbox(requests, cx);
         }
         let space = self.spaces.current();
         let row = self.selected_channel.and_then(|id| space.row(id));
@@ -331,6 +333,22 @@ impl Emerald {
             .into_any_element()
     }
 
+    /// A Home page with the Inbox beside it when the title bar opened it there.
+    /// The other panels belong to a channel and stay with it.
+    fn beside_inbox(&self, page: AnyElement, cx: &mut Context<Self>) -> AnyElement {
+        if !self.panel_is(super::panels::PanelKind::Inbox) {
+            return page;
+        }
+        div()
+            .flex()
+            .flex_1()
+            .min_w(zoomed(0.))
+            .h_full()
+            .child(div().flex().flex_1().min_w(zoomed(0.)).h_full().child(page))
+            .children(self.render_panel(cx))
+            .into_any_element()
+    }
+
     /// Redraws when the next sticker frame is due, on the animation clock
     /// so frames keep an even pace, freeing the frames that were replaced.
     /// Runs only while a row with an animation, or a profile effect with
@@ -384,7 +402,7 @@ fn header_toggle(
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .tooltip(widgets::tooltip(if open { hide } else { show }))

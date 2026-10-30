@@ -154,19 +154,12 @@ impl Emerald {
                         .flex()
                         .items_center()
                         .gap_1()
-                        .rounded_md()
+                        .rounded(theme::radius::control())
                         .bg(rgb(theme::base_lowest()))
                         .child(icons::icon(icons::SEARCH, 16., theme::interactive()))
                         .child(div().flex_1().min_w(zoomed(0.)).child(self.search_input.clone())),
                 )
             })
-            .child(tool(
-                "tool-inbox",
-                icons::INBOX,
-                t!("inbox.title"),
-                self.panel_is(PanelKind::Inbox),
-                cx.listener(|this, _, _, cx| this.toggle_inbox(cx)),
-            ))
     }
 
     /// The open panel, beside the chat.
@@ -233,7 +226,7 @@ fn tool(
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .tooltip(widgets::tooltip(tip))

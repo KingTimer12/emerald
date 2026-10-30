@@ -15,7 +15,7 @@ use emerald_desktop::instance::{self, Instance};
 use emerald_discord as discord;
 use emerald_notify::TrayAction;
 use emerald_ui::settings;
-use gpui::{App, AppContext, Application, TitlebarOptions, WindowOptions};
+use gpui::{App, AppContext, Application, TitlebarOptions, WindowOptions, point, px};
 
 /// Child mode (see `login`): runs one webview flow, prints its result and
 /// exits before any gpui / NSApplication setup in this process.
@@ -102,6 +102,7 @@ fn main() {
     });
     app.run(move |cx: &mut App| {
         emerald_ui::bind_keys(cx, &settings.shortcuts);
+        emerald_ui::load_fonts(cx);
 
         // Before the window opens, so the taskbar groups it under the
         // notifications' app id.
@@ -117,9 +118,12 @@ fn main() {
             .open_window(
                 WindowOptions {
                     window_bounds: Some(window_bounds),
+                    // Emerald draws its own title bar; macOS keeps its traffic
+                    // lights over it, as Discord's desktop app does.
                     titlebar: Some(TitlebarOptions {
                         title: Some("Emerald".into()),
-                        ..Default::default()
+                        appears_transparent: true,
+                        traffic_light_position: Some(point(px(12.), px(10.))),
                     }),
                     ..Default::default()
                 },
