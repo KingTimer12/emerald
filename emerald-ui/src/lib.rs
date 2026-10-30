@@ -20,6 +20,7 @@ mod zoom;
 
 pub use app::{Alerts, Desktop, Emerald, Update, initial_bounds};
 pub use icons::Icons;
+pub use theme::fonts::load as load_fonts;
 pub use time::set_time_format;
 
 pub use shortcuts::{Logout, Quit, Shortcut, bind as bind_keys, describe as describe_key};

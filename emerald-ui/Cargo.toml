@@ -24,6 +24,8 @@ vello_cpu.workspace = true
 rustc-hash.workspace = true
 
 [dev-dependencies]
+# Reads the bundled font's names in a test; already in the lock through gpui.
+ttf-parser = "0.25"
 tokio = { workspace = true, features = ["test-util", "macros", "rt"] }
 
 [features]
