@@ -262,7 +262,7 @@ impl Emerald {
                     .size_full()
                     .flex()
                     .flex_col()
-                    .rounded_lg()
+                    .rounded(theme::radius::control())
                     .overflow_hidden()
                     .border_1()
                     .border_color(theme::border())

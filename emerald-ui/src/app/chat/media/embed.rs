@@ -64,7 +64,7 @@ impl Emerald {
                 div()
                     .flex_none()
                     .size(zoomed(EMBED_THUMBNAIL))
-                    .rounded_md()
+                    .rounded(theme::radius::card())
                     .overflow_hidden()
                     .child(img(image).size_full().object_fit(gpui::ObjectFit::Cover)),
             )
@@ -74,7 +74,7 @@ impl Emerald {
             div()
                 .max_w(zoomed(520.))
                 .flex()
-                .rounded_md()
+                .rounded(theme::radius::card())
                 .overflow_hidden()
                 .bg(rgb(theme::base_low()))
                 .border_1()
@@ -191,7 +191,7 @@ impl Emerald {
             .flex_none()
             .w(zoomed(picture.width))
             .h(zoomed(picture.height))
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .overflow_hidden();
         let frame = match animated {
             // An id lets gpui keep the animation's frame between redraws.

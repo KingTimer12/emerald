@@ -149,7 +149,7 @@ impl Emerald {
                 .px_2()
                 .flex()
                 .items_center()
-                .rounded_lg()
+                .rounded(theme::radius::control())
                 .cursor_pointer()
                 .border_1()
                 .border_color(gpui::transparent_black())
@@ -178,7 +178,7 @@ impl Emerald {
             .flex()
             .items_center()
             .gap(zoomed(6.))
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .border_1()
             .map(|chip| {
                 if mine {

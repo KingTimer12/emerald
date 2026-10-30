@@ -249,7 +249,7 @@ impl Emerald {
                 )
         });
         let thumbnail = first.and_then(|msg| msg.images.first()).filter(|p| !p.spoiler).map(|picture| {
-            let frame = div().flex_none().size(zoomed(THUMBNAIL)).rounded_lg().overflow_hidden();
+            let frame = div().flex_none().size(zoomed(THUMBNAIL)).rounded(theme::radius::card()).overflow_hidden();
             match self.avatar_image(&picture.url) {
                 Some(image) => frame.child(img(image).size_full()),
                 None => frame.bg(theme::hover()),
@@ -267,7 +267,7 @@ impl Emerald {
                     .flex()
                     .gap_3()
                     .p_3()
-                    .rounded_lg()
+                    .rounded(theme::radius::card())
                     .border_1()
                     .border_color(theme::border())
                     .bg(rgb(theme::base_low()))

@@ -11,7 +11,7 @@ impl Emerald {
         let count = self.spaces.dms().requests(false).count();
         let color = if selected { theme::text_strong() } else { theme::channels_default() };
         row.gap_3()
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .cursor_pointer()
             .font_weight(FontWeight::MEDIUM)
             .text_color(rgb(color))
@@ -29,7 +29,7 @@ impl Emerald {
         div()
             .id("new-dm")
             .ml_auto()
-            .rounded_sm()
+            .rounded(theme::radius::tag())
             .cursor_pointer()
             .tooltip(widgets::tooltip(t!("group.create_dm_tooltip")))
             .child(icon(icons::PLUS, 16., theme::channels_default()))

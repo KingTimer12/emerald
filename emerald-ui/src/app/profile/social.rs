@@ -72,7 +72,7 @@ impl Emerald {
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().px_2().rounded_md().bg(rgb(theme::base_lower())).child(self.note_input.clone()))
+                .child(div().px_2().rounded(theme::radius::control()).bg(rgb(theme::base_lower())).child(self.note_input.clone()))
                 .child(div().text_xs().text_color(theme::muted()).child(t!("note.hint"))),
         )
     }
@@ -132,7 +132,7 @@ impl Emerald {
                         div()
                             .size(zoomed(40.))
                             .flex_none()
-                            .rounded_xl()
+                            .rounded(theme::radius::server_icon())
                             .overflow_hidden()
                             .bg(theme::hover())
                             .flex()
@@ -190,7 +190,7 @@ fn row(id: (&'static str, usize)) -> gpui::Stateful<Div> {
         .items_center()
         .gap_3()
         .px_2()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
 }

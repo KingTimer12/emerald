@@ -30,7 +30,7 @@ impl Emerald {
                 .items_center()
                 .gap_3()
                 .px_2()
-                .rounded_lg()
+                .rounded(theme::radius::control())
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .when(status == "offline", |row| row.opacity(0.3))

@@ -111,7 +111,7 @@ impl Emerald {
                     shown.push(Shown::Element(
                         div()
                             .flex()
-                            .child(div().flex_none().w(zoomed(4.)).rounded_sm().bg(rgb(theme::interactive_muted())))
+                            .child(div().flex_none().w(zoomed(4.)).rounded(theme::radius::tag()).bg(rgb(theme::interactive_muted())))
                             .child(div().flex().flex_col().flex_1().min_w(zoomed(0.)).pl_3().children(body))
                             .into_any_element(),
                     ));
@@ -148,7 +148,7 @@ impl Emerald {
             .id(ElementId::NamedChild(Box::new(id.clone()), format!("code-{part}").into()))
             .max_w(zoomed(900.))
             .p_2()
-            .rounded_md()
+            .rounded(theme::radius::card())
             .border_1()
             .border_color(theme::border())
             .bg(theme::code_bg())

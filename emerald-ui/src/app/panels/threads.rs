@@ -157,7 +157,7 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .rounded_md()
+                    .rounded(theme::radius::control())
                     .bg(rgb(theme::base_lowest()))
                     .child(icons::icon(icons::SEARCH, 16., theme::interactive()))
                     .child(div().flex_1().min_w(zoomed(0.)).child(self.thread_query.clone())),
@@ -196,7 +196,7 @@ impl Emerald {
             .flex()
             .flex_col()
             .gap(zoomed(2.))
-            .rounded_md()
+            .rounded(theme::radius::control())
             .cursor_pointer()
             .hover(|s| s.bg(theme::hover()))
             .on_click(cx.listener(move |this, _, window, cx| this.open_thread(opened.clone(), window, cx)))

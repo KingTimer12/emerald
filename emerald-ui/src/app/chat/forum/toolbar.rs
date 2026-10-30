@@ -53,7 +53,7 @@ impl Emerald {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .rounded_md()
+                            .rounded(theme::radius::control())
                             .bg(rgb(theme::base_lowest()))
                             .child(icon(icons::SEARCH, 16., theme::interactive()))
                             .child(div().flex_1().min_w(zoomed(0.)).child(self.forum_query.clone())),

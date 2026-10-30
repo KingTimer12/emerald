@@ -150,7 +150,7 @@ impl Emerald {
                 }
                 (None, Place::Guild(_)) => div()
                     .size(zoomed(20.))
-                    .rounded(zoomed(6.))
+                    .rounded(theme::radius::server_icon_at(20.))
                     .bg(rgb(theme::base_low()))
                     .into_any_element(),
                 (None, _) => icons::icon(candidate.icon, 20., theme::channels_default()).into_any_element(),
@@ -163,7 +163,7 @@ impl Emerald {
                 .items_center()
                 .gap_2()
                 .px_2()
-                .rounded_md()
+                .rounded(theme::radius::control())
                 .cursor_pointer()
                 .when(selected, |row| row.bg(theme::selected()))
                 .hover(|s| s.bg(theme::hover()))
@@ -205,7 +205,7 @@ impl Emerald {
             .flex_col()
             .gap_3()
             .p_4()
-            .rounded_lg()
+            .rounded(theme::radius::modal())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::base_lower()))
@@ -217,7 +217,7 @@ impl Emerald {
                     .px_3()
                     .flex()
                     .items_center()
-                    .rounded_md()
+                    .rounded(theme::radius::control())
                     .bg(rgb(theme::base_lowest()))
                     .text_size(zoomed(18.))
                     .child(div().flex_1().child(switcher.input.clone())),

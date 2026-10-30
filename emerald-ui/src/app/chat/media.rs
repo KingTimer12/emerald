@@ -34,7 +34,7 @@ impl Emerald {
             .flex_none()
             .w(zoomed(picture.width))
             .h(zoomed(picture.height))
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .overflow_hidden();
         if picture.spoiler && !self.revealed.contains(&picture.url) {
             return self.spoiler_cover(frame, picture.url.clone(), cx);
@@ -95,7 +95,7 @@ impl Emerald {
             .items_center()
             .gap_3()
             .p_3()
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::base_low()));
@@ -165,7 +165,7 @@ impl Emerald {
             .child(
                 div()
                     .flex()
-                    .child(div().flex_none().w(zoomed(4.)).rounded_sm().bg(rgb(theme::interactive_muted())))
+                    .child(div().flex_none().w(zoomed(4.)).rounded(theme::radius::tag()).bg(rgb(theme::interactive_muted())))
                     .child(
                         div()
                             .flex()
@@ -253,7 +253,7 @@ fn badge(text: &'static str) -> gpui::Div {
         .bottom(zoomed(6.))
         .left(zoomed(6.))
         .px_1()
-        .rounded_sm()
+        .rounded(theme::radius::tag())
         .bg(theme::scrim())
         .text_xs()
         .font_weight(FontWeight::BOLD)

@@ -172,7 +172,7 @@ pub(super) fn dialog(title: SharedString, content: AnyElement, action: gpui::Sta
             div()
                 .id("dialog")
                 .w(zoomed(440.))
-                .rounded_lg()
+                .rounded(theme::radius::modal())
                 .overflow_hidden()
                 .border_1()
                 .border_color(theme::border())

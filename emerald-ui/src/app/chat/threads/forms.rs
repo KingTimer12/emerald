@@ -113,7 +113,7 @@ impl Emerald {
         let modal = div()
             .id(id)
             .w(zoomed(440.))
-            .rounded_lg()
+            .rounded(theme::radius::modal())
             .overflow_hidden()
             .border_1()
             .border_color(theme::border())

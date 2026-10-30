@@ -58,7 +58,7 @@ impl Emerald {
         }
         let cards = self.composer.attachments.iter().enumerate().map(|(ix, file)| {
             let shown = match &file.preview {
-                Some(image) => img(image.image()).size_full().rounded_md().into_any_element(),
+                Some(image) => img(image.image()).size_full().rounded(theme::radius::card()).into_any_element(),
                 None => div().text_size(zoomed(48.)).child("📄").into_any_element(),
             };
             let spoiler = file.upload.spoiler;
@@ -67,7 +67,7 @@ impl Emerald {
                 .top(zoomed(-8.))
                 .right(zoomed(-8.))
                 .flex()
-                .rounded_md()
+                .rounded(theme::radius::control())
                 .overflow_hidden()
                 .border_1()
                 .border_color(theme::border())
@@ -106,7 +106,7 @@ impl Emerald {
                 .flex_col()
                 .gap_2()
                 .p_2()
-                .rounded_md()
+                .rounded(theme::radius::control())
                 .bg(rgb(theme::base_low()))
                 .child(
                     div()
@@ -115,7 +115,7 @@ impl Emerald {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .rounded_md()
+                        .rounded(theme::radius::control())
                         .overflow_hidden()
                         .child(shown)
                         // Covered as readers will first see it.
@@ -154,7 +154,7 @@ impl Emerald {
                 .p_3()
                 .pt_4()
                 .overflow_x_scroll()
-                .rounded_t_lg()
+                .rounded_t(theme::radius::card())
                 .bg(rgb(theme::base_lower()))
                 .children(cards)
                 .into_any_element(),
@@ -177,7 +177,7 @@ impl Emerald {
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded_md()
+                .rounded(theme::radius::control())
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))
                 .tooltip(widgets::tooltip(t!("upload.attach")))

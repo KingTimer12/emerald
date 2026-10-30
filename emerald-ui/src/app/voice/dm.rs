@@ -88,7 +88,7 @@ impl Emerald {
                 .gap_2()
                 .px_3()
                 .py_2()
-                .rounded_lg()
+                .rounded(theme::radius::control())
                 .border_1()
                 .border_color(theme::border())
                 .bg(rgb(theme::base_low()))

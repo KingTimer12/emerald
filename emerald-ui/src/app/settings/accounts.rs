@@ -47,7 +47,7 @@ impl Emerald {
             .items_center()
             .gap_3()
             .p_3()
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .bg(rgb(theme::base_lowest()))
             .child(widgets::avatar(&name, id, avatar, 40., None))
             .child(

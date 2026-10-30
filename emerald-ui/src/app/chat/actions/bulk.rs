@@ -117,7 +117,7 @@ impl Emerald {
                 .gap_2()
                 .h(zoomed(40.))
                 .px_4()
-                .rounded_t_lg()
+                .rounded_t(theme::radius::card())
                 .bg(rgb(theme::base_low()))
                 .text_size(zoomed(14.))
                 .text_color(rgb(theme::text_muted()))

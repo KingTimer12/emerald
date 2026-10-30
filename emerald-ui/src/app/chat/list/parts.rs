@@ -26,7 +26,7 @@ impl Emerald {
             .mr_1()
             .border_l_2()
             .border_t_2()
-            .rounded_tl(zoomed(6.))
+            .rounded_tl(theme::radius::control())
             .border_color(rgb(theme::interactive_muted()));
         let Some(content) = &reply.content else {
             return line.child(connector).child(
@@ -124,7 +124,7 @@ impl Emerald {
             .gap_2()
             .px_3()
             .py_2()
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .cursor_pointer()
             .bg(rgb(theme::base_low()))
             .hover(|s| s.bg(rgb(theme::surface_high())))
@@ -158,7 +158,7 @@ impl Emerald {
         shown.unwrap_or_else(|| {
             div()
                         .size(zoomed(size))
-                        .rounded_lg()
+                        .rounded(theme::radius::card())
                         .bg(theme::hover())
                         .flex()
                         .flex_col()

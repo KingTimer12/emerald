@@ -27,7 +27,7 @@ impl Emerald {
         let avatar = widgets::avatar(&name, user, self.user_avatar(user), AVATAR, None);
         row.ml(zoomed(26.))
             .gap_2()
-            .rounded_md()
+            .rounded(theme::radius::control())
             .cursor_pointer()
             .text_size(zoomed(14.))
             .font_weight(FontWeight::MEDIUM)
@@ -54,7 +54,7 @@ impl Emerald {
                 row.child(
                     div()
                         .px_1()
-                        .rounded_sm()
+                        .rounded(theme::radius::tag())
                         .bg(rgb(theme::danger()))
                         .text_size(zoomed(10.))
                         .font_weight(FontWeight::BOLD)

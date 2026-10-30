@@ -79,7 +79,7 @@ impl Emerald {
             .flex_col()
             .gap_1()
             .p_3()
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::base_low()))

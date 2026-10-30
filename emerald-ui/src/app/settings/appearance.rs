@@ -10,7 +10,7 @@ impl Emerald {
         let preview_text = t!("settings.preview_text");
         let preview = div()
             .p_4()
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::base_lower()))

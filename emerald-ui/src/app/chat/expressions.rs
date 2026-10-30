@@ -274,7 +274,7 @@ impl Emerald {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .rounded_md()
+                        .rounded(theme::radius::control())
                         .cursor_pointer()
                         .hover(|s| s.bg(theme::hover()))
                         .tooltip(super::super::widgets::tooltip(sticker.name.clone()))
@@ -317,7 +317,7 @@ impl Emerald {
                                     .id(("gif", ix))
                                     .w(zoomed(cell))
                                     .h_full()
-                                    .rounded_md()
+                                    .rounded(theme::radius::card())
                                     .overflow_hidden()
                                     .bg(theme::hover())
                                     .cursor_pointer()
@@ -351,7 +351,7 @@ impl Emerald {
         });
         match frame {
             Some(frame) => img(frame).size(zoomed(STICKER)).into_any_element(),
-            None => div().size(zoomed(STICKER)).rounded_lg().bg(theme::hover()).into_any_element(),
+            None => div().size(zoomed(STICKER)).rounded(theme::radius::card()).bg(theme::hover()).into_any_element(),
         }
     }
 }

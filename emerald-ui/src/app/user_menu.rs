@@ -156,7 +156,7 @@ impl Emerald {
             .flex()
             .flex_col()
             .p_2()
-            .rounded_lg()
+            .rounded(theme::radius::modal())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::surface_high()))

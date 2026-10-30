@@ -91,7 +91,7 @@ impl Emerald {
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(zoomed(12.))
+                .rounded(theme::radius::server_icon())
                 .bg(rgb(theme::base_low()))
                 .cursor_pointer()
                 .hover(|s| s.bg(theme::hover()))

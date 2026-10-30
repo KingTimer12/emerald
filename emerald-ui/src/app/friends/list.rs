@@ -140,7 +140,7 @@ impl Emerald {
             .px_2()
             .border_t_1()
             .border_color(theme::border())
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .cursor_pointer()
             .hover(|s| s.bg(theme::hover()))
             .child(widgets::avatar(

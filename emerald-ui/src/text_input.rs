@@ -259,7 +259,7 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .when(self.is_multiline(), |input| input.on_scroll_wheel(cx.listener(Self::on_scroll_wheel)))
             .w_full()
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .border_1()
             .border_color(theme::border())
             .map(|input| {

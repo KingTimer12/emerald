@@ -365,7 +365,7 @@ impl Emerald {
             div()
                 .id(("accent", ix))
                 .size(zoomed(32.))
-                .rounded_md()
+                .rounded(theme::radius::control())
                 .cursor_pointer()
                 .border_2()
                 .border_color(if selected { rgb(theme::text_strong()) } else { theme::border() })
@@ -409,7 +409,7 @@ impl Emerald {
                     .id("server-choice")
                     .px_3()
                     .py_2()
-                    .rounded_md()
+                    .rounded(theme::radius::control())
                     .bg(rgb(theme::base_lowest()))
                     .cursor_pointer()
                     .flex()
@@ -430,7 +430,7 @@ impl Emerald {
                         .id("server-choices")
                         .max_h(zoomed(240.))
                         .overflow_y_scroll()
-                        .rounded_md()
+                        .rounded(theme::radius::control())
                         .bg(rgb(theme::base_lowest()))
                         .children(self.spaces.iter().filter(|s| !s.is_dms()).enumerate().map(|(ix, space)| {
                             let guild = space.id;
@@ -492,7 +492,7 @@ impl Emerald {
         div()
             .w(zoomed(300.))
             .flex_none()
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .overflow_hidden()
             .bg(rgb(theme::base_lowest()))
             .child(match banner_image {

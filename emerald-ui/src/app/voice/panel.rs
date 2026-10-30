@@ -30,7 +30,7 @@ impl Emerald {
             .flex()
             .items_center()
             .gap_1()
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::base_low()));
@@ -147,7 +147,7 @@ fn toggle(id: &'static str, path: &'static str, on: bool) -> gpui::Stateful<gpui
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .child(icons::icon(path, 20., color).when(!on, |icon| {

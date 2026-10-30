@@ -120,7 +120,7 @@ impl Emerald {
         div()
             .my_3()
             .p_4()
-            .rounded_lg()
+            .rounded(theme::radius::card())
             .bg(rgb(theme::base_lowest()))
             .flex()
             .flex_col()

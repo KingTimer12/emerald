@@ -169,7 +169,7 @@ impl Emerald {
                     chip.tooltip(widgets::tooltip(option.description.clone()))
                 })
                 .px_1()
-                .rounded_sm()
+                .rounded(theme::radius::tag())
                 .bg(theme::hover())
                 .text_color(rgb(if option.required { theme::text_strong() } else { theme::text_muted() }))
                 .child(label)
@@ -182,7 +182,7 @@ impl Emerald {
                 .gap_2()
                 .px_3()
                 .py_2()
-                .rounded_t_lg()
+                .rounded_t(theme::radius::card())
                 .bg(rgb(theme::base_low()))
                 .text_size(zoomed(14.))
                 .child(
