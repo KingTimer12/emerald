@@ -150,6 +150,15 @@ pub enum ButtonKind {
     Danger,
 }
 
+/// The label color on a button: white on the colored fills in both palettes,
+/// as Discord draws them, and the strong text color on the neutral one.
+pub fn button_text(kind: ButtonKind) -> u32 {
+    match kind {
+        ButtonKind::Secondary => theme::text_strong(),
+        ButtonKind::Brand | ButtonKind::Positive | ButtonKind::Danger => theme::on_color(),
+    }
+}
+
 pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: ButtonKind) -> Stateful<Div> {
     let (bg, hover) = match kind {
         ButtonKind::Brand => (rgb(theme::brand()), rgb(theme::button_brand_hover())),
@@ -165,11 +174,12 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>, kind: Bu
         .flex()
         .items_center()
         .justify_center()
-        .rounded_lg()
+        .rounded(theme::radius::control())
         .bg(bg)
+        .when(matches!(kind, ButtonKind::Secondary), |button| button.border_1().border_color(theme::border()))
         .text_size(zoomed(14.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(rgb(theme::text_strong()))
+        .text_color(rgb(button_text(kind)))
         .cursor_pointer()
         .hover(move |s| s.bg(hover))
         .child(label.into())
@@ -198,7 +208,7 @@ pub fn icon_button(id: impl Into<ElementId>, glyph: &'static str) -> Stateful<Di
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .text_size(zoomed(18.))
         .text_color(rgb(theme::interactive()))
         .cursor_pointer()
@@ -217,7 +227,7 @@ pub fn svg_button(id: &'static str, path: &'static str) -> Stateful<Div> {
         .flex()
         .items_center()
         .justify_center()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()))
         .child(
@@ -276,7 +286,7 @@ impl Render for Tooltip {
         div()
             .px_3()
             .py(zoomed(6.))
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .border_1()
             .border_color(theme::border())
             .bg(rgb(theme::surface_high()))
@@ -302,7 +312,7 @@ pub fn chip(id: (&'static str, usize), label: impl gpui::IntoElement, selected: 
         .px_3()
         .flex()
         .items_center()
-        .rounded_md()
+        .rounded(theme::radius::control())
         .text_size(zoomed(14.))
         .font_weight(gpui::FontWeight::MEDIUM)
         .cursor_pointer()
@@ -320,6 +330,19 @@ mod tests {
     use image::{Frame, RgbaImage};
 
     use super::*;
+
+    #[test]
+    fn colored_buttons_use_white_text_in_both_palettes() {
+        let _switches = theme::lock_switches();
+        for light in [false, true] {
+            theme::set_light(light);
+            for kind in [ButtonKind::Brand, ButtonKind::Positive, ButtonKind::Danger] {
+                assert_eq!(button_text(kind), 0xffffff);
+            }
+            assert_eq!(button_text(ButtonKind::Secondary), theme::text_strong());
+        }
+        theme::set_light(false);
+    }
 
     #[test]
     fn image_ids_follow_the_frames() {

@@ -96,7 +96,7 @@ impl Emerald {
             .items_center()
             .gap_3()
             .px_2()
-            .rounded_lg()
+            .rounded(theme::radius::control())
             .overflow_hidden()
             .cursor_pointer()
             // A Nitro nameplate: its palette fading in from the left, as
@@ -193,11 +193,11 @@ pub(super) fn app_tag() -> impl IntoElement {
     div()
         .flex_none()
         .px(zoomed(4.))
-        .rounded(zoomed(3.))
+        .rounded(theme::radius::tag())
         .bg(rgb(theme::brand()))
         .text_size(zoomed(10.))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(theme::text_strong()))
+        .text_color(rgb(theme::on_color()))
         .child("APP")
 }
 

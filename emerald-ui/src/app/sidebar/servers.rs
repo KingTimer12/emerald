@@ -47,7 +47,7 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(zoomed(12.))
+                    .rounded(theme::radius::server_icon())
                     .bg(rgb(theme::base_low()))
                     .text_color(rgb(theme::online()))
                     .text_size(zoomed(24.))
@@ -111,7 +111,7 @@ impl Emerald {
                     let image = space.icon_url.as_ref().and_then(|url| self.avatar_image(url));
                     div()
                         .size(zoomed(15.))
-                        .rounded(zoomed(5.))
+                        .rounded(theme::radius::server_icon_at(15.))
                         .overflow_hidden()
                         .bg(rgb(theme::base_low()))
                         .flex()
@@ -143,7 +143,7 @@ impl Emerald {
                         .top(zoomed(16.))
                         .w(zoomed(4.))
                         .h(zoomed(8.))
-                        .rounded_r(zoomed(4.))
+                        .rounded_r(theme::radius::pill())
                         .bg(rgb(theme::text_strong())),
                 )
             })
@@ -154,7 +154,7 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(zoomed(12.))
+                    .rounded(theme::radius::server_icon())
                     .bg(if open { theme::hover() } else { theme::with_alpha(color, 0.4) })
                     .cursor_pointer()
                     .tooltip(widgets::tooltip(name))
@@ -193,7 +193,7 @@ impl Emerald {
                     .flex_col()
                     .items_center()
                     .gap_2()
-                    .rounded(zoomed(16.))
+                    .rounded(theme::radius::folder())
                     .bg(theme::with_alpha(color, 0.15))
                     .child(button)
                     .children(spaces.iter().map(|(ix, space)| self.render_space(*ix, space, cx).into_any_element())),
@@ -220,7 +220,7 @@ impl Emerald {
             .top(zoomed(pill_top))
             .w(zoomed(4.))
             .h(zoomed(pill_height))
-            .rounded_r(zoomed(4.))
+            .rounded_r(theme::radius::pill())
             .bg(rgb(theme::text_strong()))
             .when(!selected, |pill| {
                 pill.group_hover(group.clone(), |s| s.top(zoomed(10.)).h(zoomed(20.)))
@@ -244,14 +244,14 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(zoomed(12.))
+                    .rounded(theme::radius::server_icon())
                     .overflow_hidden()
                     .bg(rgb(if selected { theme::brand() } else { theme::base_low() }))
-                    .text_color(rgb(if selected { theme::text_strong() } else { theme::interactive() }))
+                    .text_color(rgb(if selected { theme::on_color() } else { theme::interactive() }))
                     .text_size(zoomed(initials_size))
                     .font_weight(FontWeight::MEDIUM)
                     .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::brand())).text_color(rgb(theme::text_strong())))
+                    .hover(|s| s.bg(rgb(theme::brand())).text_color(rgb(theme::on_color())))
                     .tooltip(widgets::tooltip(space.name.clone()))
                     .map(|icon| match image {
                         Some(image) => icon.child(img(image).size_full()),
@@ -260,9 +260,9 @@ impl Emerald {
                             icons::icon(
                                 icons::EMERALD,
                                 24.,
-                                if selected { theme::text_strong() } else { theme::interactive() },
+                                if selected { theme::on_color() } else { theme::interactive() },
                             )
-                            .group_hover(group.clone(), |s| s.text_color(rgb(theme::text_strong()))),
+                            .group_hover(group.clone(), |s| s.text_color(rgb(theme::on_color()))),
                         ),
                         None => icon.child(space.initials.clone()),
                     })
