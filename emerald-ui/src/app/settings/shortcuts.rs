@@ -19,6 +19,8 @@ pub(super) fn label(shortcut: Shortcut) -> &'static str {
         Shortcut::NextUnread => t!("shortcuts.next_unread"),
         Shortcut::PreviousChannel => t!("shortcuts.previous_channel"),
         Shortcut::NextChannel => t!("shortcuts.next_channel"),
+        Shortcut::GoBack => t!("shortcuts.go_back"),
+        Shortcut::GoForward => t!("shortcuts.go_forward"),
         Shortcut::Quit => t!("shortcuts.quit"),
         Shortcut::Logout => t!("shortcuts.log_out"),
     }
@@ -58,7 +60,7 @@ impl Emerald {
                 div()
                     .px_2()
                     .py(zoomed(4.))
-                    .rounded_md()
+                    .rounded(theme::radius::control())
                     .bg(theme::hover())
                     .text_color(rgb(if recording { theme::brand() } else { theme::text_strong() }))
                     .child(keys),

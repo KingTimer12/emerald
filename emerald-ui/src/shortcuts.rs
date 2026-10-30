@@ -8,7 +8,7 @@ use gpui::{App, KeyBinding, Keystroke, actions};
 
 actions!(
     emerald,
-    [QuickSwitch, EditLast, MarkRead, NextUnread, PreviousChannel, NextChannel, Quit, Logout]
+    [QuickSwitch, EditLast, MarkRead, NextUnread, PreviousChannel, NextChannel, GoBack, GoForward, Quit, Logout]
 );
 
 /// Keys the text inputs and the window use; no shortcut may take them.
@@ -34,18 +34,23 @@ pub enum Shortcut {
     NextUnread,
     PreviousChannel,
     NextChannel,
+    /// Back to the place opened before, as the title bar's arrow.
+    GoBack,
+    GoForward,
     Quit,
     Logout,
 }
 
 impl Shortcut {
-    pub const ALL: [Shortcut; 8] = [
+    pub const ALL: [Shortcut; 10] = [
         Shortcut::QuickSwitch,
         Shortcut::EditLast,
         Shortcut::MarkRead,
         Shortcut::NextUnread,
         Shortcut::PreviousChannel,
         Shortcut::NextChannel,
+        Shortcut::GoBack,
+        Shortcut::GoForward,
         Shortcut::Quit,
         Shortcut::Logout,
     ];
@@ -59,6 +64,8 @@ impl Shortcut {
             Shortcut::NextUnread => "next_unread",
             Shortcut::PreviousChannel => "previous_channel",
             Shortcut::NextChannel => "next_channel",
+            Shortcut::GoBack => "go_back",
+            Shortcut::GoForward => "go_forward",
             Shortcut::Quit => "quit",
             Shortcut::Logout => "log_out",
         }
@@ -73,6 +80,11 @@ impl Shortcut {
             Shortcut::NextUnread => "alt-shift-down",
             Shortcut::PreviousChannel => "alt-up",
             Shortcut::NextChannel => "alt-down",
+            // The desktop client's history keys.
+            Shortcut::GoBack if cfg!(target_os = "macos") => "cmd-[",
+            Shortcut::GoForward if cfg!(target_os = "macos") => "cmd-]",
+            Shortcut::GoBack => "alt-left",
+            Shortcut::GoForward => "alt-right",
             Shortcut::Quit => "secondary-q",
             Shortcut::Logout => "secondary-shift-l",
         }
@@ -95,6 +107,8 @@ impl Shortcut {
             Shortcut::NextUnread => KeyBinding::new(key, NextUnread, Some("Emerald")),
             Shortcut::PreviousChannel => KeyBinding::new(key, PreviousChannel, Some("Emerald")),
             Shortcut::NextChannel => KeyBinding::new(key, NextChannel, Some("Emerald")),
+            Shortcut::GoBack => KeyBinding::new(key, GoBack, Some("Emerald")),
+            Shortcut::GoForward => KeyBinding::new(key, GoForward, Some("Emerald")),
             Shortcut::Quit => KeyBinding::new(key, Quit, None),
             Shortcut::Logout => KeyBinding::new(key, Logout, None),
         }
@@ -175,6 +189,14 @@ pub fn bind(cx: &mut App, overrides: &BTreeMap<String, String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn back_and_forward_use_the_desktop_client_keys() {
+        let (back, forward) = if cfg!(target_os = "macos") { ("cmd-[", "cmd-]") } else { ("alt-left", "alt-right") };
+        assert_eq!(Shortcut::GoBack.default_key(), back);
+        assert_eq!(Shortcut::GoForward.default_key(), forward);
+        assert!(Shortcut::ALL.contains(&Shortcut::GoBack));
+    }
 
     #[test]
     fn defaults_are_valid_and_distinct() {

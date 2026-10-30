@@ -7,7 +7,7 @@ use gpui::{App, Context, Focusable, Window};
 
 use super::Emerald;
 use super::chat::JumpTarget;
-use super::state::{DMS, Row};
+use super::state::{DMS, Row, VisitedPlace};
 use emerald_discord::{Command, Page};
 use emerald_discord::model::{Channel, Snowflake};
 use emerald_discord::permissions;
@@ -24,8 +24,7 @@ impl Emerald {
         self.spaces.select(ix);
         let space = self.spaces.current();
         if space.is_dms() {
-            self.friends_open = true;
-            cx.notify();
+            self.show_friends(cx);
             return;
         }
         let guild = space.id;
@@ -66,6 +65,9 @@ impl Emerald {
         self.friends_open = false;
         self.requests_open = false;
         self.selected_channel = Some(id);
+        if !self.walking_history {
+            self.places.visit(VisitedPlace::Channel(id));
+        }
         if self.settings.last_channel != Some(id) {
             self.settings.last_channel = Some(id);
             self.save_settings(cx);
@@ -125,17 +127,7 @@ impl Emerald {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let in_dms = self.spaces.dms().channels().iter().any(|c| c.id == channel);
-        let space = match self.spaces.guild_id_of(channel) {
-            Some(guild) => self.spaces.index(guild),
-            None if in_dms => Some(0),
-            None => None,
-        };
-        let visible = space.is_some_and(|ix| {
-            let space = self.spaces.iter().nth(ix);
-            space.is_some_and(|s| s.is_dms() || s.permissions(channel) & permissions::VIEW_CHANNEL != 0)
-        });
-        let Some(ix) = space.filter(|_| visible) else {
+        let Some(ix) = self.reachable_space(channel) else {
             // Named for the log only by whether a guild was given, never by id.
             tracing::info!("link to an unknown channel (guild given: {})", guild.is_some());
             self.connection.set_message(t!("chat.link_unknown"));
@@ -155,10 +147,24 @@ impl Emerald {
         if let Some(message) = message {
             self.start_jump(channel, JumpTarget::Message(message));
         }
-        if self.selected_channel != Some(channel) || self.friends_open {
+        if self.selected_channel != Some(channel) || self.friends_open || self.requests_open {
             self.select_channel(channel, window, cx);
         }
         self.continue_jump(channel, cx);
+    }
+
+    /// The space holding `channel`, when the user can still see it there.
+    pub(super) fn reachable_space(&self, channel: Snowflake) -> Option<usize> {
+        let in_dms = self.spaces.dms().channels().iter().any(|c| c.id == channel);
+        let space = match self.spaces.guild_id_of(channel) {
+            Some(guild) => self.spaces.index(guild),
+            None if in_dms => Some(0),
+            None => None,
+        };
+        space.filter(|ix| {
+            let space = self.spaces.iter().nth(*ix);
+            space.is_some_and(|s| s.is_dms() || s.permissions(channel) & permissions::VIEW_CHANNEL != 0)
+        })
     }
 
     /// Opens `thread`, learning it first when it is archived or new.

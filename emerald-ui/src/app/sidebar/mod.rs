@@ -103,7 +103,7 @@ impl Emerald {
                 let color = if selected { theme::text_strong() } else { theme::channels_default() };
                 row.group("friends-row")
                     .gap_3()
-                    .rounded_lg()
+                    .rounded(theme::radius::control())
                     .cursor_pointer()
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(rgb(if selected { theme::text_strong() } else { theme::channels_default() }))
@@ -124,11 +124,7 @@ impl Emerald {
                     )
                     .child(div().flex_1().child(t!("friends.title")))
                     .when(pending > 0, |r| r.child(widgets::badge(pending)))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.friends_open = true;
-                        this.requests_open = false;
-                        cx.notify();
-                    }))
+                    .on_click(cx.listener(|this, _, _, cx| this.show_friends(cx)))
                     .into_any_element()
             }
             Row::Requests => self.render_requests_row(row, cx),
@@ -210,7 +206,7 @@ impl Emerald {
                 };
                 row.relative()
                     .gap(zoomed(6.))
-                    .rounded_lg()
+                    .rounded(theme::radius::control())
                     .cursor_pointer()
                     .font_weight(if unread { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
                     .text_color(rgb(color))
@@ -227,7 +223,7 @@ impl Emerald {
                                 .top(zoomed(13.))
                                 .w(zoomed(4.))
                                 .h(zoomed(8.))
-                                .rounded_r(zoomed(4.))
+                                .rounded_r(theme::radius::pill())
                                 .bg(rgb(theme::text_strong())),
                         )
                     })
@@ -243,7 +239,7 @@ impl Emerald {
                                 .h(zoomed(22.))
                                 .border_l_1()
                                 .border_b_1()
-                                .rounded_bl(zoomed(8.))
+                                .rounded_bl(theme::radius::control())
                                 .border_color(rgb(theme::interactive_muted())),
                         ),
                         Some(user) => r.gap_3().child(widgets::avatar(
