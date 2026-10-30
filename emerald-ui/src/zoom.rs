@@ -60,6 +60,7 @@ mod tests {
 
     #[test]
     fn zoom_keeps_within_range() {
+        let _switches = crate::theme::lock_switches();
         set(1000);
         assert_eq!(PERCENT.load(Ordering::Relaxed), RANGE.1);
         set(1);

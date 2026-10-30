@@ -1,30 +1,11 @@
-//! Discord's dark and light themes (2025 visual refresh), resolved from the
+//! Discord's dark and light palettes (2025 visual refresh), resolved from the
 //! `.theme-dark` and `.theme-light` design tokens in the web client's CSS on
 //! 2026-10-19 and 2026-10-27 with the default saturation factor and no custom
 //! theme. Names follow the CSS variables.
-//!
-//! Every color is a function that picks its value for the theme in use, so
-//! one switch (`set_light`) recolors the whole window on its next draw.
-
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{Hsla, Rgba, rgb, rgba};
 
-static LIGHT: AtomicBool = AtomicBool::new(false);
-
-/// Switches every color to the light palette, or back to the dark one.
-pub fn set_light(light: bool) {
-    LIGHT.store(light, Ordering::Relaxed);
-}
-
-/// Whether the light palette is in use.
-pub fn is_light() -> bool {
-    LIGHT.load(Ordering::Relaxed)
-}
-
-fn pick(dark: u32, light: u32) -> u32 {
-    if is_light() { light } else { dark }
-}
+use super::pick;
 
 /// `--background-base-lowest`: server list and channel sidebar.
 pub fn base_lowest() -> u32 {
@@ -49,6 +30,11 @@ pub fn surface_high() -> u32 {
 /// `--background-brand`.
 pub fn brand() -> u32 {
     0x5865f2
+}
+
+/// `--white`: text and icons on brand, danger and positive fills, in both palettes.
+pub fn on_color() -> u32 {
+    0xffffff
 }
 
 /// `--status-danger`.
@@ -235,26 +221,4 @@ pub fn code_bg() -> Rgba {
 /// the text under it cannot be read.
 pub fn spoiler_hidden() -> u32 {
     pick(0x1e1f22, 0x8f9097)
-}
-
-/// Code blocks: the system's monospace face, as the web client falls back
-/// to when its own font is missing.
-#[cfg(target_os = "macos")]
-pub const MONO: &str = "Menlo";
-#[cfg(not(target_os = "macos"))]
-pub const MONO: &str = "Consolas";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn light_palette_only_while_switched() {
-        set_light(false);
-        assert_eq!(base_lowest(), 0x2c2d32);
-        set_light(true);
-        assert_eq!(base_lowest(), 0xf3f3f4);
-        assert_eq!(brand(), 0x5865f2);
-        set_light(false);
-    }
 }

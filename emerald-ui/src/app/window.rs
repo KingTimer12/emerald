@@ -62,11 +62,12 @@ impl Emerald {
 }
 
 impl Emerald {
-    /// Draws the chosen palette and zoom. The palette follows the system's
+    /// Draws the chosen style, palette and zoom. The palette follows the system's
     /// when the choice says so.
     pub(super) fn apply_appearance(&self, window: &mut Window) {
         let system_light = matches!(window.appearance(), WindowAppearance::Light | WindowAppearance::VibrantLight);
         theme::set_light(self.settings.theme.is_light(system_light));
+        theme::set_style(self.settings.style);
         zoom::set(self.settings.zoom);
         zoom::apply(window);
     }

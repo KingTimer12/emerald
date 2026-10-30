@@ -35,6 +35,31 @@ impl ThemeChoice {
     }
 }
 
+/// "Style" in Appearance: which year of Discord's look the window draws.
+/// Saved as the year; a year this build does not know (written by a newer
+/// one) reads as the default instead of failing the whole file.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+pub enum Style {
+    #[default]
+    #[serde(rename = "2026")]
+    Y2026,
+}
+
+impl Style {
+    pub const ALL: [Style; 1] = [Style::Y2026];
+}
+
+impl<'de> Deserialize<'de> for Style {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Any value, not only a string, so a number or null cannot fail the file.
+        let year = serde_json::Value::deserialize(deserializer)?;
+        Ok(match year.as_str() {
+            Some("2026") => Style::Y2026,
+            _ => Style::default(),
+        })
+    }
+}
+
 /// The window's last place and size, restored on the next launch.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WindowFrame {
@@ -129,6 +154,7 @@ pub struct Settings {
     /// emoji as text, custom ones as `name:id`.
     pub recent_emojis: Vec<String>,
     pub theme: ThemeChoice,
+    pub style: Style,
     /// Animated emoji, avatars and embeds stay on their first frame.
     pub reduced_motion: bool,
     /// Interface zoom in percent, one of `zoom::LEVELS` when picked in the settings.
@@ -155,6 +181,7 @@ impl Default for Settings {
             time_format: TimeFormat::Auto,
             recent_emojis: Vec::new(),
             theme: ThemeChoice::Dark,
+            style: Style::Y2026,
             reduced_motion: false,
             zoom: 100,
             shortcuts: BTreeMap::new(),
@@ -196,6 +223,29 @@ fn path() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_style_falls_back_without_losing_other_settings() {
+        let settings: Settings = serde_json::from_str(r#"{"style":"1999","font_size":18.0}"#).unwrap();
+        assert_eq!(settings.style, Style::Y2026);
+        assert_eq!(settings.font_size, 18.);
+    }
+
+    #[test]
+    fn a_style_that_is_not_a_year_keeps_the_other_settings() {
+        for style in ["2018", "null", "{}"] {
+            let json = format!(r#"{{"style":{style},"compact":true}}"#);
+            let settings: Settings = serde_json::from_str(&json).unwrap();
+            assert_eq!(settings.style, Style::Y2026);
+            assert!(settings.compact);
+        }
+    }
+
+    #[test]
+    fn style_round_trips_as_its_year() {
+        let json = serde_json::to_string(&Settings::default()).unwrap();
+        assert!(json.contains(r#""style":"2026""#));
+    }
 
     #[test]
     fn partial_file_keeps_defaults() {
