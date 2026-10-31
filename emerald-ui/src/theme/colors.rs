@@ -161,6 +161,13 @@ pub fn active() -> Rgba {
     overlay(0x29)
 }
 
+/// `--border-normal`: menus, search fields and cards. Its value is not in the
+/// bundle downloaded for this build (JS only); 30% matches the screenshots'
+/// `#dfdfe1` over white.
+pub fn border_normal() -> Rgba {
+    overlay(0x4d)
+}
+
 /// `--border-subtle`, also `--app-frame-border` (12%).
 pub fn border() -> Rgba {
     overlay(0x1f)

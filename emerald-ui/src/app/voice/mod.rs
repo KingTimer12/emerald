@@ -3,6 +3,7 @@
 //! call panel, the people in voice and the DM call bar are drawn in
 //! [`panel`], [`rows`] and [`dm`].
 
+pub(super) mod audio_menu;
 mod dm;
 mod panel;
 mod rows;
@@ -87,6 +88,15 @@ impl Emerald {
             self.post_voice_state();
         }
         self.save_settings(cx);
+    }
+
+    /// A volume changed: only the local engine hears of it. Discord's voice
+    /// state carries mute and deafen, not volume, so nothing is sent, and a
+    /// dragged slider saves once it stops.
+    pub(in crate::app) fn voice_volume_changed(&mut self, cx: &mut Context<Self>) {
+        self.post_voice_controls();
+        self.save_settings_soon(cx);
+        cx.notify();
     }
 
     /// What the engine is told: the saved switches, and muted while a

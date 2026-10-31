@@ -22,6 +22,7 @@ impl Emerald {
     /// channel, else its first one the user can read, like the web client.
     pub(super) fn select_space(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.spaces.select(ix);
+        self.refresh_search_placeholder(cx);
         let space = self.spaces.current();
         if space.is_dms() {
             self.show_friends(cx);
@@ -65,6 +66,8 @@ impl Emerald {
         self.friends_open = false;
         self.requests_open = false;
         self.selected_channel = Some(id);
+        // Spaces also change without `select_space` (links, history, launch).
+        self.refresh_search_placeholder(cx);
         if !self.walking_history {
             self.places.visit(VisitedPlace::Channel(id));
         }
@@ -136,6 +139,7 @@ impl Emerald {
         };
         if ix != self.spaces.selected() {
             self.spaces.select(ix);
+            self.refresh_search_placeholder(cx);
             let (is_dms, guild) = (self.spaces.current().is_dms(), self.spaces.current().id);
             self.reveal_guild(guild);
             if !is_dms && self.spaces.subscribe(guild) {
@@ -151,6 +155,17 @@ impl Emerald {
             self.select_channel(channel, window, cx);
         }
         self.continue_jump(channel, cx);
+    }
+
+    /// The header search names the server it searches, as on discord.com.
+    pub(super) fn refresh_search_placeholder(&mut self, cx: &mut Context<Self>) {
+        let space = self.spaces.current();
+        let placeholder = if space.is_dms() {
+            t!("search.placeholder").to_owned()
+        } else {
+            t!("search.in_server", name = space.name)
+        };
+        self.search_input.update(cx, |input, cx| input.set_placeholder(placeholder, cx));
     }
 
     /// The space holding `channel`, when the user can still see it there.
@@ -179,22 +194,6 @@ impl Emerald {
         self.select_channel(id, window, cx);
     }
 
-    /// Enter in the DM search: opens the first match and clears the search.
-    pub(super) fn open_first_dm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let dms = self.spaces.dms();
-        let first = dms
-            .search(self.dm_search.read(cx).text())
-            .into_iter()
-            .find_map(|ix| match &dms.rows()[ix] {
-                Row::Channel(channel) => Some(channel.id),
-                _ => None,
-            });
-        let Some(channel) = first else { return };
-        self.dm_search.update(cx, |input, cx| input.set_text("", cx));
-        self.spaces.select_dms();
-        self.select_channel(channel, window, cx);
-    }
-
     /// Opens the DM with `user`, selecting it when it is already listed and
     /// asking Discord for it otherwise.
     pub(super) fn open_dm(&mut self, user: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
@@ -209,12 +208,13 @@ impl Emerald {
         }
     }
 
-    /// Rows of the current space's sidebar: DMs filtered by the search,
-    /// guild channels minus collapsed categories.
-    pub(super) fn visible_rows(&self, cx: &App) -> Vec<usize> {
+    /// Rows of the current space's sidebar: every DM, in activity order,
+    /// or guild channels minus collapsed categories. Finding a DM by name is
+    /// the quick switcher's job, as on discord.com.
+    pub(super) fn visible_rows(&self, _cx: &App) -> Vec<usize> {
         let space = self.spaces.current();
         if space.is_dms() {
-            return space.search(self.dm_search.read(cx).text());
+            return space.search("");
         }
         let guild = space.id;
         let now = crate::time::now_secs();

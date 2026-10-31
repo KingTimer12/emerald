@@ -45,6 +45,7 @@ impl Space {
         guild.roles.sort_unstable_by_key(|role| role.id);
         let name = guild.display_name().to_owned();
         let upload_limit = guild.upload_limit();
+        let header = GuildHeader::of(&guild);
         let mut space = Self {
             id: guild.id,
             initials: initials(&name).into(),
@@ -59,6 +60,7 @@ impl Space {
                 requested: FxHashSet::default(),
                 permissions: FxHashMap::default(),
                 upload_limit,
+                header,
                 emojis: guild.emojis,
                 stickers: guild.stickers,
             }),
@@ -74,6 +76,11 @@ impl Space {
         }
         space.rebuild();
         space
+    }
+
+    /// The banner and boost goal atop a server's channels; `None` for DMs.
+    pub fn header(&self) -> Option<&GuildHeader> {
+        self.guild.as_ref().map(|guild| &guild.header)
     }
 
     pub fn is_dms(&self) -> bool {
@@ -324,6 +331,11 @@ impl Space {
     /// Who is in voice `channel`.
     pub fn voice_in(&self, channel: Snowflake) -> impl Iterator<Item = &VoiceState> {
         self.voice.iter().filter(move |v| v.channel_id == Some(channel))
+    }
+
+    /// The voice channel `user` is in here, if any.
+    pub fn voice_channel_of(&self, user: Snowflake) -> Option<Snowflake> {
+        self.voice.iter().find(|v| v.user_id == user).and_then(|v| v.channel_id)
     }
 
     /// Everyone in voice here.

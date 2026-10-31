@@ -4,8 +4,10 @@
 use crate::zoom::zoomed;
 
 mod modal;
+mod own;
 mod social;
 
+pub(super) use own::OwnPopover;
 pub(super) use social::ProfileTab;
 
 use std::rc::Rc;
@@ -194,7 +196,11 @@ impl Emerald {
             user,
             self.profile_avatar(user),
             size,
-            Some((self.people.presence(user), theme::base_lowest())),
+            // Emerald does not get its own presence back; the status picked is it.
+            Some((
+                if self.people.is_me(user) { self.own_status().unwrap_or("offline") } else { self.people.presence(user) },
+                theme::base_lowest(),
+            )),
         );
         div()
             .p(zoomed(ring))

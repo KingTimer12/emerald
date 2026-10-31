@@ -1,6 +1,7 @@
 //! Panels beside the chat, opened from the header as in the web client:
-//! pinned messages, search results, the inbox and a channel's threads.
-//! One is open at a time, in place of the member list or profile.
+//! pinned messages, search results and a channel's threads. One is open
+//! at a time, in place of the member list or profile. The Inbox lives here
+//! too, though it opens as a popover.
 
 use crate::zoom::zoomed;
 
@@ -10,7 +11,7 @@ mod pins;
 mod search;
 mod threads;
 
-pub(super) use inbox::InboxTab;
+pub(super) use inbox::Inbox;
 pub(super) use search::SearchPanel;
 pub(super) use threads::ThreadsPanel;
 
@@ -56,10 +57,6 @@ pub(super) enum Panel {
         last_pinned: Option<String>,
     },
     Search(SearchPanel),
-    Inbox {
-        tab: InboxTab,
-        mentions: Results,
-    },
     Threads(ThreadsPanel),
 }
 
@@ -68,7 +65,6 @@ pub(super) enum Panel {
 pub(super) enum PanelKind {
     Pins,
     Search,
-    Inbox,
     Threads,
 }
 
@@ -77,7 +73,6 @@ impl Panel {
         match self {
             Self::Pins { .. } => PanelKind::Pins,
             Self::Search(_) => PanelKind::Search,
-            Self::Inbox { .. } => PanelKind::Inbox,
             Self::Threads(_) => PanelKind::Threads,
         }
     }
@@ -95,7 +90,7 @@ impl Emerald {
     }
 
     /// The panel opened from the channel header for another channel goes
-    /// away with it; the inbox and a server search stay.
+    /// away with it; a server search stays.
     pub(super) fn panel_follow(&mut self, channel: Snowflake) {
         let stale = match &self.panel {
             Some(Panel::Pins { channel: shown, .. }) => *shown != channel,
@@ -108,10 +103,17 @@ impl Emerald {
         }
     }
 
-    /// The buttons at the right of the channel header: threads, pins, the
-    /// search box and the inbox.
-    pub(super) fn render_header_tools(&self, channel: Option<Snowflake>, cx: &mut Context<Self>) -> impl IntoElement {
+    /// The buttons at the right of the channel header, in Discord 2026's
+    /// order: threads, notification bell, pins, `toggle` (member list or
+    /// profile), then the search box.
+    pub(super) fn render_header_tools(
+        &self,
+        channel: Option<Snowflake>,
+        toggle: Option<AnyElement>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let space = self.spaces.current();
+        let guild = (!space.is_dms()).then_some(space.id);
         let kind = channel.and_then(|id| space.channels().iter().find(|c| c.id == id)).map(|c| c.kind);
         let threads = !space.is_dms() && kind.is_some_and(|k| !k.is_thread() && !k.is_forum() && !k.is_voice());
         let pins = kind.is_some_and(|k| !k.is_forum()) || (space.is_dms() && channel.is_some());
@@ -132,6 +134,12 @@ impl Emerald {
                     }),
                 ))
             })
+            .children(
+                guild
+                    .zip(channel)
+                    .filter(|_| kind.is_some_and(super::place_menu::shows_bell))
+                    .map(|(guild, channel)| self.render_bell(guild, channel, cx)),
+            )
             .when(pins, |tools| {
                 tools.child(tool(
                     "tool-pins",
@@ -145,21 +153,61 @@ impl Emerald {
                     }),
                 ))
             })
+            .children(toggle)
             .when(channel.is_some(), |tools| {
                 tools.child(
                     div()
-                        .w(zoomed(220.))
-                        .h(zoomed(28.))
+                        .w(zoomed(240.))
+                        .h(zoomed(32.))
                         .px_2()
                         .flex()
                         .items_center()
                         .gap_1()
                         .rounded(theme::radius::control())
-                        .bg(rgb(theme::base_lowest()))
-                        .child(icons::icon(icons::SEARCH, 16., theme::interactive()))
-                        .child(div().flex_1().min_w(zoomed(0.)).child(self.search_input.clone())),
+                        .border_1()
+                        .border_color(theme::border_normal())
+                        .bg(rgb(theme::surface_high()))
+                        .child(div().flex_1().min_w(zoomed(0.)).child(self.search_input.clone()))
+                        .child(icons::icon(icons::SEARCH, 16., theme::interactive())),
                 )
             })
+    }
+
+    /// The channel's notification bell: slashed while muted or not notifying
+    /// of every message. A click opens the notification menu; Shift+click
+    /// mutes or unmutes at once, as on discord.com.
+    fn render_bell(&self, guild: Snowflake, channel: Snowflake, cx: &mut Context<Self>) -> AnyElement {
+        let now = crate::time::now_secs();
+        let place = self.place_of(Some(guild), channel);
+        let muted = self.notify.channel_muted(Some(guild), channel, now);
+        let glyph = super::place_menu::bell_icon(self.notify.muted(&place, now), self.notify.resolved(&place));
+        let tracked = widgets::popover::Tracked::default();
+        let button = div()
+            .id("tool-bell")
+            .size(zoomed(32.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(theme::radius::control())
+            .cursor_pointer()
+            .hover(|s| s.bg(theme::hover()))
+            .tooltip(widgets::tooltip(t!("notify.settings")))
+            .child(icons::icon(glyph, 24., theme::interactive()));
+        tracked
+            .track(button)
+            .on_click(cx.listener({
+                let tracked = tracked.clone();
+                move |this, event: &gpui::ClickEvent, _, cx| {
+                    if event.modifiers().shift {
+                        this.toggle_channel_mute(guild, channel, muted, cx);
+                    } else {
+                        let anchor = widgets::popover::Anchor::below_end(tracked.bounds());
+                        this.open_notify_menu(guild, channel, anchor, cx);
+                    }
+                }
+            }))
+            .into_any_element()
     }
 
     /// The open panel, beside the chat.
@@ -168,7 +216,6 @@ impl Emerald {
         let (title, body) = match panel {
             Panel::Pins { results, .. } => (t!("pins.title").into(), self.render_pins(results, cx)),
             Panel::Search(search) => (self.search_title(search), self.render_search(search, cx)),
-            Panel::Inbox { tab, mentions } => (t!("inbox.title").into(), self.render_inbox(*tab, mentions, cx)),
             Panel::Threads(threads) => (t!("threads.title").into(), self.render_threads(threads, cx)),
         };
         Some(

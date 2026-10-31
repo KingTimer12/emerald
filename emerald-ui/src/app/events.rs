@@ -184,6 +184,7 @@ impl Emerald {
                 page,
             } => self.on_search_results(scope, query, offset, page),
             NetEvent::Mentions { before, messages } => self.on_mentions(before, messages),
+            NetEvent::Unread { channel, messages } => self.on_unread(channel, messages),
             NetEvent::GuildSettings(settings) => self.notify.update(settings),
             NetEvent::Folders(folders) => {
                 self.server_list.set(Some(folders));

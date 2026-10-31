@@ -7,6 +7,7 @@ use gpui::{Context, Div, FontWeight, SharedString, div, img, prelude::*, rgb};
 use super::super::super::icons::{self, icon};
 use super::super::super::{emoji, theme};
 use super::super::state::{Msg, Reacted};
+use super::super::widgets::popover::{Anchor, Tracked};
 use super::super::{Emerald, shown, widgets};
 use emerald_discord::model::{Emoji, Snowflake, custom_url};
 use emerald_discord::{Command, ReactionEvent, ReactionSource, permissions};
@@ -143,7 +144,7 @@ impl Emerald {
             }
         }
         let add = self.may_react(channel, msg, true).then(|| {
-            div()
+            let button = div()
                 .id(("reaction-add", ix))
                 .h(zoomed(28.))
                 .px_2()
@@ -156,9 +157,10 @@ impl Emerald {
                 .bg(rgb(theme::base_low()))
                 .hover(|s| s.border_color(theme::border()))
                 .tooltip(widgets::tooltip(t!("reaction.add")))
-                .child(icon(icons::REACTION, 18., theme::interactive()))
-                .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                    this.open_reaction_picker(channel, id, event.position(), window, cx)
+                .child(icon(icons::REACTION, 18., theme::interactive()));
+            let tracked = Tracked::default();
+            tracked.track(button).on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_reaction_picker(channel, id, Anchor::below(tracked.bounds()), window, cx)
                 }))
         });
         Some(div().flex().flex_wrap().gap_1().pt_1().children(chips).children(add))

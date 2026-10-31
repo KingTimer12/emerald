@@ -3,12 +3,14 @@
 //! without a window.
 
 pub mod account;
+pub mod active_now;
 pub mod autocomplete;
 pub mod call;
 pub mod commands;
 pub mod drafts;
 pub mod expiry;
 pub mod folders;
+pub mod friend_filter;
 pub mod hidden;
 pub mod history;
 pub mod member_search;

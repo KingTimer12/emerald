@@ -11,15 +11,13 @@ const SENSITIVITIES: [i16; 5] = [-70, -60, -50, -40, -30];
 
 impl Emerald {
     /// Lists the devices off the UI thread; slow on some systems.
-    pub(super) fn list_audio_devices(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::app) fn list_audio_devices(&mut self, cx: &mut Context<Self>) {
         let task = cx.background_executor().spawn(async { emerald_audio::devices() });
         cx.spawn(async move |this, cx| {
             let devices = task.await;
             this.update(cx, |this, cx| {
-                if let Some(view) = this.settings_view() {
-                    view.audio_devices = Some(devices);
-                    cx.notify();
-                }
+                this.audio_devices = Some(devices);
+                cx.notify();
             })
             .ok();
         })
@@ -31,7 +29,7 @@ impl Emerald {
         self.voice_controls_changed(cx);
     }
 
-    pub(super) fn render_voice(&self, view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_voice(&self, _view: &SettingsView, cx: &mut Context<Self>) -> AnyElement {
         let voice = &self.settings.voice;
         let devices = |id: &'static str, list: Option<&[emerald_audio::Device]>, chosen: Option<&String>, input: bool, cx: &mut Context<Self>| {
             let Some(list) = list else {
@@ -52,7 +50,7 @@ impl Emerald {
                 ))
             }))
         };
-        let listed = view.audio_devices.as_ref();
+        let listed = self.audio_devices.as_ref();
         let volumes = |id: &'static str, current: u16, input: bool, cx: &mut Context<Self>| {
             div().flex().gap_2().children(VOLUMES.into_iter().enumerate().map(|(ix, level)| {
                 widgets::chip((id, ix), format!("{level}%"), level == current).on_click(cx.listener(move |this, _, _, cx| {

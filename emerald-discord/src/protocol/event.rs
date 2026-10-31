@@ -210,6 +210,11 @@ pub enum NetEvent {
         before: Option<Snowflake>,
         messages: Result<Vec<Message>, String>,
     },
+    /// Answer to `Command::Unread`, oldest first.
+    Unread {
+        channel: Snowflake,
+        messages: Result<Vec<Message>, String>,
+    },
     /// A server's notification settings, or the DMs', changed here or on
     /// another device.
     GuildSettings(GuildSettings),

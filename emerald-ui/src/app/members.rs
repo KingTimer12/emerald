@@ -31,7 +31,7 @@ struct MemberRow<'a> {
     activity: Option<String>,
 }
 
-const WIDTH: f32 = 240.;
+const WIDTH: f32 = 256.;
 const ROW_HEIGHT: f32 = 44.;
 /// Scrolling settles this long before the new ranges are subscribed, so a
 /// fling through a huge list sends one op 37 instead of dozens.
@@ -156,8 +156,24 @@ impl Emerald {
             .flex_col()
             .border_l_1()
             .border_color(theme::border())
-            .bg(rgb(theme::base_lowest()))
-            .child(div().w_full().flex_none().p_2().child(self.member_query.clone()))
+            .bg(rgb(theme::base_lower()))
+            // Kept, though 2026 has no member search: styled like the header's.
+            .child(
+                div().w_full().flex_none().p_2().child(
+                    div()
+                        .h(zoomed(32.))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .rounded(theme::radius::control())
+                        .border_1()
+                        .border_color(theme::border_normal())
+                        .bg(rgb(theme::surface_high()))
+                        .child(div().flex_1().min_w(zoomed(0.)).child(self.member_query.clone()))
+                        .child(crate::icons::icon(crate::icons::SEARCH, 16., theme::interactive())),
+                ),
+            )
             .child(div().w_full().flex_1().min_h(zoomed(0.)).child(body))
     }
 

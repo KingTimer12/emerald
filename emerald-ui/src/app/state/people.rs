@@ -26,6 +26,8 @@ pub struct People {
     ignored: FxHashSet<Snowflake>,
     /// The user's notes on profiles, as read so far; empty for none.
     notes: FxHashMap<Snowflake, String>,
+    /// The message sent with a friend request, while it is pending.
+    request_notes: FxHashMap<Snowflake, String>,
 }
 
 impl People {
@@ -35,6 +37,7 @@ impl People {
         self.relationships.clear();
         self.nicknames.clear();
         self.ignored.clear();
+        self.request_notes.clear();
         // Notes come back with each profile; another device may have
         // changed them meanwhile.
         self.notes.clear();
@@ -142,6 +145,10 @@ impl People {
             Some(nickname) => self.nicknames.insert(id, nickname),
             None => self.nicknames.remove(&id),
         };
+        match relationship.note.filter(|note| !note.is_empty()) {
+            Some(note) => self.request_notes.insert(id, note),
+            None => self.request_notes.remove(&id),
+        };
         if relationship.user_ignored {
             self.ignored.insert(id);
         } else {
@@ -156,7 +163,13 @@ impl People {
     pub fn remove_relationship(&mut self, id: Snowflake) {
         self.relationships.remove(&id);
         self.nicknames.remove(&id);
+        self.request_notes.remove(&id);
         self.ignored.remove(&id);
+    }
+
+    /// The message `id` sent with their friend request, if any.
+    pub fn request_note(&self, id: Snowflake) -> Option<&str> {
+        self.request_notes.get(&id).map(String::as_str)
     }
 
     /// The relationship kind with `id`, if any (`relationship_kind`).
@@ -237,6 +250,22 @@ impl People {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_friend_request_keeps_its_note_until_it_ends() {
+        let mut people = People::default();
+        people.add_relationship(Relationship {
+            id: Snowflake(7),
+            kind: relationship_kind::INCOMING,
+            user: None,
+            nickname: None,
+            user_ignored: false,
+            note: Some("oi".into()),
+        });
+        assert_eq!(people.request_note(Snowflake(7)), Some("oi"));
+        people.remove_relationship(Snowflake(7));
+        assert_eq!(people.request_note(Snowflake(7)), None);
+    }
     use emerald_discord::model::ChannelKind;
 
     fn user(id: u64, name: &str) -> User {
@@ -262,6 +291,7 @@ mod tests {
             user: None,
             nickname: None,
             user_ignored: false,
+            note: None,
         };
         assert!(!people.add_relationship(friend(relationship_kind::OUTGOING)));
         assert!(people.add_relationship(friend(relationship_kind::FRIEND)));
@@ -296,6 +326,7 @@ mod tests {
             user: None,
             nickname: Some("Bibi".into()),
             user_ignored: false,
+            note: None,
         });
         assert_eq!(people.dm_name(&dm), "ana, Bibi");
         dm.name = Some("Grupo".into());
@@ -311,6 +342,7 @@ mod tests {
             user: None,
             nickname: None,
             user_ignored: ignored,
+            note: None,
         };
         people.add_relationship(relationship(2, relationship_kind::BLOCKED, false));
         people.add_relationship(relationship(3, 0, true));

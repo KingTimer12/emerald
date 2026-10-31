@@ -21,6 +21,8 @@ pub struct GuildInfo {
     pub(super) stickers: Vec<StickerItem>,
     /// Upload size the guild's boosts unlock.
     pub(super) upload_limit: Option<u64>,
+    /// Banner and boost goal, drawn atop the channel list.
+    pub(super) header: GuildHeader,
 }
 
 impl GuildInfo {

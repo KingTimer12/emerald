@@ -7,12 +7,11 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Context, Focusable, FontWeight, Pixels, Point, SharedString, Window, anchored, deferred, div,
-    prelude::*,
-    rgb, uniform_list,
+    AnyElement, Context, Focusable, FontWeight, SharedString, Window, div, prelude::*, rgb, uniform_list,
 };
 
 use super::super::super::{emoji, icons, theme};
+use super::super::widgets::popover::{self, Anchor, Tracked};
 use super::super::{Emerald, widgets};
 use super::expressions::{GifResults, StickerList};
 use super::reactions::emoji_label;
@@ -33,7 +32,7 @@ pub(super) const WIDTH: f32 = COLUMNS as f32 * CELL + 24.;
 pub(in super::super) struct ReactionPicker {
     pub channel: Snowflake,
     pub message: Option<Snowflake>,
-    pub position: Point<Pixels>,
+    pub anchor: Anchor,
     /// Named in the footer.
     pub hovered: Option<Emoji>,
     /// GIFs, stickers or emoji; only the message box offers all three.
@@ -62,32 +61,29 @@ impl Emerald {
         &mut self,
         channel: Snowflake,
         message: Snowflake,
-        position: Point<Pixels>,
+        anchor: Anchor,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_picker(channel, Some(message), position, window, cx);
+        self.open_picker(channel, Some(message), anchor, window, cx);
     }
 
-    /// The emoji button in the message box.
+    /// The emoji button in the message box; the picker opens over it.
     pub(in super::super) fn open_composer_picker(
         &mut self,
-        position: Point<Pixels>,
+        button: gpui::Bounds<gpui::Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(channel) = self.selected_channel else { return };
-        // Opens over the chat, up and to the left of the button and clear
-        // of the message box.
-        let position = position - gpui::point(zoomed(WIDTH), zoomed(HEIGHT + 24.));
-        self.open_picker(channel, None, position, window, cx);
+        self.open_picker(channel, None, Anchor::above_end(button), window, cx);
     }
 
     fn open_picker(
         &mut self,
         channel: Snowflake,
         message: Option<Snowflake>,
-        position: Point<Pixels>,
+        anchor: Anchor,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -95,7 +91,7 @@ impl Emerald {
         self.reaction_picker = Some(ReactionPicker {
             channel,
             message,
-            position,
+            anchor,
             hovered: None,
             tab: PickerTab::Emoji,
             gifs: GifResults::default(),
@@ -304,11 +300,7 @@ impl Emerald {
             .child(div().flex_none().p_2().child(self.emoji_query.clone()))
             .child(div().flex_1().min_h(zoomed(0.)).px_2().child(body))
             .children(footer);
-        Some(
-            deferred(anchored().position(picker.position).snap_to_window_with_margin(zoomed(8.)).child(panel))
-                .with_priority(2)
-                .into_any_element(),
-        )
+        Some(popover::at_priority(picker.anchor, 2, panel))
     }
 
     fn render_picker_row(&self, row: &Row, ix: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -365,22 +357,25 @@ impl Emerald {
             return None;
         }
         let open = self.reaction_picker.as_ref().is_some_and(|p| p.message.is_none());
+        let button = div()
+            .id("composer-emoji")
+            .flex_none()
+            .mt(zoomed(7.))
+            .size(zoomed(32.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(theme::radius::control())
+            .cursor_pointer()
+            .hover(|s| s.bg(theme::hover()))
+            .tooltip(widgets::tooltip(t!("composer.emoji")))
+            .child(icons::icon(icons::REACTION, 22., if open { theme::text_strong() } else { theme::interactive() }));
+        let tracked = Tracked::default();
         Some(
-            div()
-                .id("composer-emoji")
-                .flex_none()
-                .mt(zoomed(7.))
-                .size(zoomed(32.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(theme::radius::control())
-                .cursor_pointer()
-                .hover(|s| s.bg(theme::hover()))
-                .tooltip(widgets::tooltip(t!("composer.emoji")))
-                .child(icons::icon(icons::REACTION, 22., if open { theme::text_strong() } else { theme::interactive() }))
-                .on_click(cx.listener(|this, event: &gpui::ClickEvent, window, cx| {
-                    this.open_composer_picker(event.position(), window, cx)
+            tracked
+                .track(button)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_composer_picker(tracked.bounds(), window, cx)
                 }))
                 .into_any_element(),
         )

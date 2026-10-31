@@ -3,10 +3,12 @@
 //! permissions, nicknames and role colors.
 
 mod guild_info;
+mod header;
 mod rows;
 mod space;
 
 pub use guild_info::*;
+pub use header::*;
 pub use rows::*;
 pub use space::*;
 

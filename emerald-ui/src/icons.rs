@@ -35,6 +35,7 @@ pub const SEARCH: &str = "icons/search.svg";
 pub const INBOX: &str = "icons/inbox.svg";
 pub const FOLDER: &str = "icons/folder.svg";
 pub const CHECK: &str = "icons/check.svg";
+pub const CHECK_DOUBLE: &str = "icons/check_double.svg";
 pub const CHEVRON_RIGHT: &str = "icons/chevron_right.svg";
 pub const USER_ADD: &str = "icons/user_add.svg";
 pub const PLUS: &str = "icons/plus.svg";
@@ -50,13 +51,19 @@ pub const DOWNLOAD: &str = "icons/download.svg";
 pub const ARROW_LEFT: &str = "icons/arrow_left.svg";
 pub const ARROW_RIGHT: &str = "icons/arrow_right.svg";
 pub const HELP: &str = "icons/help.svg";
+pub const BELL: &str = "icons/bell.svg";
+pub const BELL_OFF: &str = "icons/bell_off.svg";
+pub const PLUS_CIRCLE: &str = "icons/plus_circle.svg";
+pub const SPEAKER: &str = "icons/speaker.svg";
+pub const CHAT_BUBBLE: &str = "icons/chat_bubble.svg";
+pub const CHAT_PLUS: &str = "icons/chat_plus.svg";
 /// The window buttons Emerald draws on Windows.
 pub const WINDOW_MINIMIZE: &str = "icons/window_minimize.svg";
 pub const WINDOW_MAXIMIZE: &str = "icons/window_maximize.svg";
 pub const WINDOW_RESTORE: &str = "icons/window_restore.svg";
 pub const WINDOW_CLOSE: &str = "icons/window_close.svg";
 
-const ALL: [(&str, &[u8]); 46] = [
+const ALL: [(&str, &[u8]); 53] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -85,6 +92,7 @@ const ALL: [(&str, &[u8]); 46] = [
     (INBOX, include_bytes!("../assets/icons/inbox.svg")),
     (FOLDER, include_bytes!("../assets/icons/folder.svg")),
     (CHECK, include_bytes!("../assets/icons/check.svg")),
+    (CHECK_DOUBLE, include_bytes!("../assets/icons/check_double.svg")),
     (CHEVRON_RIGHT, include_bytes!("../assets/icons/chevron_right.svg")),
     (USER_ADD, include_bytes!("../assets/icons/user_add.svg")),
     (PLUS, include_bytes!("../assets/icons/plus.svg")),
@@ -99,6 +107,12 @@ const ALL: [(&str, &[u8]); 46] = [
     (ARROW_LEFT, include_bytes!("../assets/icons/arrow_left.svg")),
     (ARROW_RIGHT, include_bytes!("../assets/icons/arrow_right.svg")),
     (HELP, include_bytes!("../assets/icons/help.svg")),
+    (BELL, include_bytes!("../assets/icons/bell.svg")),
+    (BELL_OFF, include_bytes!("../assets/icons/bell_off.svg")),
+    (PLUS_CIRCLE, include_bytes!("../assets/icons/plus_circle.svg")),
+    (SPEAKER, include_bytes!("../assets/icons/speaker.svg")),
+    (CHAT_BUBBLE, include_bytes!("../assets/icons/chat_bubble.svg")),
+    (CHAT_PLUS, include_bytes!("../assets/icons/chat_plus.svg")),
     (WINDOW_MINIMIZE, include_bytes!("../assets/icons/window_minimize.svg")),
     (WINDOW_MAXIMIZE, include_bytes!("../assets/icons/window_maximize.svg")),
     (WINDOW_RESTORE, include_bytes!("../assets/icons/window_restore.svg")),

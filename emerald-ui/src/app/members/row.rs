@@ -31,8 +31,8 @@ impl Emerald {
                     .items_end()
                     .pb(zoomed(6.))
                     .px_4()
-                    .text_size(zoomed(12.))
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_size(zoomed(13.))
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(rgb(theme::channels_default()))
                     .child(
                         div()
@@ -175,16 +175,22 @@ impl Emerald {
 
     /// "Online", "Offline", or the hoisted role's name.
     pub(super) fn group_label(&self, id: &str) -> String {
-        let label = match id {
-            "online" => t!("members.online").to_owned(),
-            "offline" => t!("members.offline").to_owned(),
-            role => role
-                .parse()
-                .ok()
-                .and_then(|role| self.spaces.current().info()?.role(Snowflake(role)))
-                .map_or_else(|| "?".to_owned(), |role| role.name.clone()),
-        };
-        label.to_uppercase()
+        let role = id
+            .parse()
+            .ok()
+            .and_then(|role| self.spaces.current().info()?.role(Snowflake(role)))
+            .map(|role| role.name.as_str());
+        group_title(id, role)
+    }
+}
+
+/// A member group's heading: the role's own name as written (2026 no longer
+/// shouts it in capitals), or the built-in Online and Offline groups.
+fn group_title(id: &str, role_name: Option<&str>) -> String {
+    match id {
+        "online" => t!("members.online").to_owned(),
+        "offline" => t!("members.offline").to_owned(),
+        _ => role_name.unwrap_or("?").to_owned(),
     }
 }
 
@@ -238,6 +244,13 @@ impl Emerald {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn role_groups_keep_their_case() {
+        assert_eq!(group_title("123", Some("Classe S")), "Classe S");
+        assert_eq!(group_title("online", None), t!("members.online"));
+        assert_eq!(group_title("456", None), "?");
+    }
 
     #[test]
     fn counts_use_dots() {

@@ -167,6 +167,8 @@ pub struct Settings {
     /// The channel open when Emerald last ran, reopened on the next launch.
     pub last_channel: Option<Snowflake>,
     pub voice: VoiceSettings,
+    /// The Inbox's Unreads tip was put away with "Got it!".
+    pub inbox_tip_dismissed: bool,
 }
 
 impl Default for Settings {
@@ -188,6 +190,7 @@ impl Default for Settings {
             window: None,
             last_channel: None,
             voice: VoiceSettings::default(),
+            inbox_tip_dismissed: false,
         }
     }
 }

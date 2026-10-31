@@ -68,6 +68,7 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::Pins { channel, before } => Some(search::pins(rest, channel, before).await),
         Command::Search { scope, query, offset } => Some(search::messages(rest, scope, query, offset).await),
         Command::Mentions { before } => Some(search::mentions(rest, before).await),
+        Command::Unread { channel, after } => Some(search::unread(rest, channel, after).await),
         Command::GuildSettings { guild, change } => Some(settings::guild(rest, guild, change).await),
         Command::AckBulk { channels } => settings::ack_bulk(rest, channels).await,
         Command::CreateThread {

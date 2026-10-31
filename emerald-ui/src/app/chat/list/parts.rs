@@ -185,7 +185,7 @@ pub(super) fn system_text(kind: u8, author: &str) -> Option<String> {
 }
 
 /// "19 de outubro de 2026" between two hairlines.
-pub(super) fn day_separator(label: String) -> Div {
+pub(in crate::app) fn day_separator(label: String) -> Div {
     let line = || div().flex_1().h(zoomed(1.)).bg(theme::border());
     div()
         .w_full()

@@ -157,6 +157,11 @@ impl DmCalls {
         self.calls.remove(&channel);
     }
 
+    /// The DM or group call `user` is in, if any.
+    pub fn channel_of(&self, user: Snowflake) -> Option<Snowflake> {
+        self.calls.iter().find(|(_, call)| call.users.contains(&user)).map(|(channel, _)| *channel)
+    }
+
     pub fn get(&self, channel: Snowflake) -> Option<&DmCall> {
         self.calls.get(&channel).filter(|call| !call.users.is_empty() || !call.ringing.is_empty())
     }

@@ -2,14 +2,15 @@
 
 use super::*;
 use super::bulk;
+use super::super::widgets::popover::{self, Anchor, Tracked};
 use crate::zoom::zoomed;
 
 impl Emerald {
-    pub(super) fn open_message_menu(&mut self, channel: Snowflake, message: Snowflake, position: Point<Pixels>, cx: &mut Context<Self>) {
+    pub(super) fn open_message_menu(&mut self, channel: Snowflake, message: Snowflake, anchor: Anchor, cx: &mut Context<Self>) {
         self.message_menu = Some(MessageMenu {
             channel,
             message,
-            position,
+            anchor,
         });
         cx.notify();
     }
@@ -112,11 +113,12 @@ impl Emerald {
                         }))
                 }))
                 .when(react, |bar| {
-                    bar.child(button("msg-react", icons::REACTION, t!("reaction.add")).on_click(cx.listener(
-                        move |this, event: &gpui::ClickEvent, window, cx| {
-                            this.open_reaction_picker(channel, id, event.position(), window, cx)
-                        },
-                    )))
+                    let tracked = Tracked::default();
+                    bar.child(tracked.track(button("msg-react", icons::REACTION, t!("reaction.add"))).on_click(
+                        cx.listener(move |this, _, window, cx| {
+                            this.open_reaction_picker(channel, id, Anchor::left_of(tracked.bounds()), window, cx)
+                        }),
+                    ))
                 })
                 .when(rights.reply, |bar| {
                     bar.child(button("msg-reply", icons::REPLY, t!("message.reply")).on_click(cx.listener(
@@ -128,11 +130,12 @@ impl Emerald {
                         move |this, _, window, cx| this.start_edit(channel, id, window, cx),
                     )))
                 })
-                .child(button("msg-more", icons::MORE, t!("message.more")).on_click(cx.listener(
-                    move |this, event: &gpui::ClickEvent, _, cx| {
-                        this.open_message_menu(channel, id, event.position(), cx)
-                    },
-                )))
+                .child({
+                    let tracked = Tracked::default();
+                    tracked.track(button("msg-more", icons::MORE, t!("message.more"))).on_click(cx.listener(
+                        move |this, _, _, cx| this.open_message_menu(channel, id, Anchor::left_of(tracked.bounds()), cx),
+                    ))
+                })
                 .into_any_element(),
         )
     }
@@ -144,7 +147,7 @@ impl Emerald {
             .zip(self.selected_channel.and_then(|c| self.history.get(c)?.messages.get(ix)).map(|m| m.id));
         cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
             if let Some((channel, message)) = target {
-                this.open_message_menu(channel, message, event.position, cx);
+                this.open_message_menu(channel, message, Anchor::pointer(event.position), cx);
             }
         })
     }
@@ -176,7 +179,7 @@ impl Emerald {
         let react = self.may_react(channel, msg, true);
         let thread = self.may_start_thread(channel, msg);
         let this_picked = self.is_bulk_picked(channel, id);
-        let position = menu.position;
+        let anchor = menu.anchor;
         let list = div()
             .id("message-menu")
             .w(zoomed(220.))
@@ -195,7 +198,7 @@ impl Emerald {
             }))
             .when(react, |menu| {
                 menu.child(item("menu-react", t!("reaction.add"), icons::REACTION, false).on_click(cx.listener(
-                    move |this, _, window, cx| this.open_reaction_picker(channel, id, position, window, cx),
+                    move |this, _, window, cx| this.open_reaction_picker(channel, id, anchor, window, cx),
                 )))
             })
             .when(rights.reply, |menu| {
@@ -240,11 +243,7 @@ impl Emerald {
             .child(item("menu-copy-id", t!("message.copy_id"), icons::COPY, false).on_click(cx.listener(
                 move |this, _, _, cx| this.copy_message(channel, id, true, cx),
             )));
-        Some(
-            deferred(anchored().position(menu.position).snap_to_window_with_margin(zoomed(8.)).child(list))
-                .with_priority(1)
-                .into_any_element(),
-        )
+        Some(popover::at(menu.anchor, list))
     }
 
     /// "Delete Message": the message as it will vanish, then the choice.

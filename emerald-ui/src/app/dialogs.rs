@@ -17,6 +17,7 @@ pub(super) enum Ask {
     LeaveGuild(Snowflake),
     LeaveGroup(Snowflake),
     Block(Snowflake),
+    RemoveFriend(Snowflake),
     RemoveRecipient { channel: Snowflake, user: Snowflake },
     /// Kick, and ban, a member of `guild`.
     Kick { guild: Snowflake, user: Snowflake },
@@ -60,6 +61,7 @@ impl Emerald {
             Ask::LeaveGuild(guild) => Command::LeaveGuild { guild },
             Ask::LeaveGroup(channel) => Command::CloseChannel { channel },
             Ask::Block(user) => Command::Block { user, block: true },
+            Ask::RemoveFriend(user) => Command::RemoveRelationship { user },
             Ask::RemoveRecipient { channel, user } => Command::RemoveRecipient { channel, user },
             Ask::Kick { guild, user } => Command::Kick { guild, user },
             Ask::Ban { guild, user } => Command::Ban { guild, user, delete_seconds: 0 },
@@ -104,6 +106,11 @@ impl Emerald {
                 t!("block.title", name = user_name(user)),
                 t!("block.body", name = user_name(user)),
                 t!("block.block"),
+            ),
+            Ask::RemoveFriend(user) => (
+                t!("friends.remove_title", name = user_name(user)),
+                t!("friends.remove_body", name = user_name(user)),
+                t!("friends.remove_friend"),
             ),
             Ask::RemoveRecipient { user, .. } => (
                 t!("group.remove_title", name = user_name(user)),

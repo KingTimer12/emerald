@@ -41,6 +41,13 @@ pub enum Command {
     Mentions {
         before: Option<Snowflake>,
     },
+    /// The first page of `channel` newer than `after`, the last message
+    /// read there, or its newest page when none was read, for the Inbox's
+    /// Unreads tab.
+    Unread {
+        channel: Snowflake,
+        after: Option<Snowflake>,
+    },
     /// Changes the notification settings of a server, or of the DMs.
     GuildSettings {
         guild: Option<Snowflake>,

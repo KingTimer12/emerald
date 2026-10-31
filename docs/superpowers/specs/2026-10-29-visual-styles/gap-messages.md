@@ -92,6 +92,22 @@ Emerald:
 - Pronouns are on a separate muted line (`profile.rs:306-311`, `modal.rs:118-123`).
 - **Bug in the light theme:** `widgets::button` paints every kind with `text_strong()` (`widgets.rs:172`), which is #28282d in light (`theme.rs:70-72`). Brand, Positive and Danger buttons get dark text on blue, green or red; Discord uses white. Certain.
 
+**Update (2026-10-30):** the user's newer screenshot
+(`popover_ao_clicar_na_conta_propria_nao_abre_a_tela_de_config.png`) shows the own popover with
+grouped menu cards instead of the single button: Edit Profile, status (side panel), Badges, Orbs,
+then Switch Accounts (side panel) and Copy User ID. Built between plans 2 and 3 (`profile/own.rs`)
+without Orbs (quests are excluded), Badges and the game collection card.
+
+## 4b. Inbox popover (`popover_inbox.png`), left for plan 3
+
+The Inbox is now a popover under the title bar button (`panels/inbox.rs`) with Unreads and
+Mentions. Plan 3 adds its two other tabs, which need new requests found in the bundle:
+- **Favorites** ("Favoritar mensagem" in the message menu): `GET /users/@me/saved-messages/bookmarks`.
+- **Reminders** ("Lembretes", a reminder set on a message for later):
+  `GET /users/@me/saved-messages`, `PUT` and `DELETE /users/@me/saved-messages/{channel}/{message}`.
+Both writes only touch the user's own account. Find each body and query string in the
+bundle (`GET_SAVED_MESSAGES`, `GET_BOOKMARKS`, `PUT_SAVED_MESSAGE`) before building.
+
 ## 5. Full profile modal ("Ver perfil completo")
 
 Discord 2026:

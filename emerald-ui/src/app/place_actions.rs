@@ -22,7 +22,7 @@ const CREATE_INVITE: u64 = 1;
 impl Emerald {
     /// A channel of `guild` the user may invite to: the open one, else the
     /// first listed, as "Invite People" on a server picks.
-    fn invite_channel(&self, guild: Snowflake) -> Option<Snowflake> {
+    pub(super) fn invite_channel(&self, guild: Snowflake) -> Option<Snowflake> {
         let space = self.spaces.iter().find(|s| s.id == guild)?;
         let allowed = |id: Snowflake| {
             let granted = space.permissions(id);

@@ -47,13 +47,16 @@ impl Emerald {
                     .flex()
                     .items_center()
                     .justify_center()
+                    .group("add-server")
                     .rounded(theme::radius::server_icon())
                     .bg(rgb(theme::base_low()))
-                    .text_color(rgb(theme::online()))
-                    .text_size(zoomed(24.))
                     .cursor_pointer()
-                    .hover(|s| s.bg(rgb(theme::online())).text_color(rgb(theme::text_strong())))
-                    .child("+")
+                    .hover(|s| s.bg(theme::hover()))
+                    .tooltip(widgets::tooltip(t!("servers.add_server")))
+                    .child(
+                        icons::icon(icons::PLUS_CIRCLE, 20., theme::interactive())
+                            .group_hover("add-server", |s| s.text_color(rgb(theme::text_strong()))),
+                    )
                     .on_click(cx.listener(|this, _, window, cx| this.open_add_server(window, cx))),
             )
     }
@@ -206,6 +209,7 @@ impl Emerald {
         let unread = !selected && self.space_unread(space);
         let guild = (!space.is_dms()).then_some(space.id);
         let mentions = self.reads.total_mentions(space.channels().iter());
+        let friends_in_voice = !space.is_dms() && space.voice_users().any(|user| self.people.is_friend(user));
         let group: SharedString = format!("space-{ix}").into();
         // White pill on the left edge: full height when selected, a dot when
         // unread, half height on hover.
@@ -271,11 +275,29 @@ impl Emerald {
                         icon.on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
-                                this.open_place_menu(Target::Guild(guild), event.position, cx)
+                                this.open_place_menu(Target::Guild(guild), super::super::widgets::popover::Anchor::pointer(event.position), cx)
                             }),
                         )
                     }),
             )
+            // A speaker in the top corner while a friend is in one of its
+            // voice channels. Which voice activity discord.com marks this way
+            // is a guess; friends keep it to people the user knows.
+            .when(friends_in_voice, |space| {
+                space.child(
+                    div()
+                        .absolute()
+                        .top(zoomed(-4.))
+                        .right(zoomed(10.))
+                        .size(zoomed(20.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_full()
+                        .bg(rgb(theme::base_lowest()))
+                        .child(icons::icon(icons::SPEAKER, 12., theme::interactive())),
+                )
+            })
             // Mention count in the icon's corner, ringed with the background.
             .when(mentions > 0, |space| {
                 space.child(

@@ -129,14 +129,15 @@ impl Emerald {
         i18n::set(code);
         self.net.post(Command::SetLocale(code.to_owned()));
         let placeholders = [
-            (&self.dm_search, t!("dm.search_placeholder")),
             (&self.member_query, t!("members.search")),
             (&self.friends.input, t!("friends.username_placeholder")),
+            (&self.friends.search, t!("friends.search")),
             (&self.composer.input, t!("composer.no_channel")),
         ];
         for (input, text) in placeholders {
             input.update(cx, |input, cx| input.set_placeholder(text, cx));
         }
+        self.refresh_search_placeholder(cx);
         if let Some(view) = self.settings_view() {
             let inputs = [
                 (view.display_name.clone(), t!("settings.display_name_placeholder")),

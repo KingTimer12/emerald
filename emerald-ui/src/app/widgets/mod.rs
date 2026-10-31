@@ -10,6 +10,9 @@ use super::Feedback;
 use emerald_discord::model::Snowflake;
 use crate::zoom::zoomed;
 
+pub mod popover;
+pub mod slider;
+
 /// Discord's default avatar colors, picked by user id.
 const AVATAR_COLORS: [u32; 6] = [0x5865f2, 0x3ba55c, 0xfaa61a, 0xed4245, 0xeb459e, 0x747f8d];
 
@@ -214,6 +217,35 @@ pub fn icon_button(id: impl Into<ElementId>, glyph: &'static str) -> Stateful<Di
         .cursor_pointer()
         .hover(|s| s.bg(theme::hover()).text_color(rgb(theme::text_strong())))
         .child(glyph)
+}
+
+/// The narrow chevron half of a split button: opens the menu of the button
+/// beside it, and points up while that menu is open.
+pub fn chevron_button(id: &'static str, open: bool) -> Stateful<Div> {
+    div()
+        .id(id)
+        .group(id)
+        .flex_none()
+        .w(zoomed(16.))
+        .h(zoomed(32.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(theme::radius::control())
+        .cursor_pointer()
+        .when(open, |b| b.bg(theme::active()))
+        .hover(|s| s.bg(theme::hover()))
+        .child(
+            icons::icon(icons::CHEVRON, 12., theme::interactive())
+                .when(open, |chevron| chevron.with_transformation(gpui::Transformation::rotate(gpui::radians(std::f32::consts::PI))))
+                .group_hover(id, |s| s.text_color(rgb(theme::text_strong()))),
+        )
+}
+
+/// An icon button and its chevron, side by side, as Discord's microphone
+/// and headset buttons.
+pub fn split_button(button: Stateful<Div>, chevron: Stateful<Div>) -> Div {
+    div().flex().items_center().child(button).child(chevron)
 }
 
 /// [`icon_button`] with an SVG icon. Svg colors are not inherited, so the

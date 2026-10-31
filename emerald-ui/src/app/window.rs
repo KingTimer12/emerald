@@ -53,6 +53,12 @@ impl Emerald {
             return;
         }
         self.settings.window = Some(frame);
+        self.save_settings_soon(cx);
+    }
+
+    /// Saves the settings once changes stop coming, for values that change
+    /// many times a second (window bounds, a dragged slider).
+    pub(super) fn save_settings_soon(&mut self, cx: &mut Context<Self>) {
         // Replacing the task drops the one still waiting, so only the last counts.
         self.window_save = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(SAVE_DELAY).await;

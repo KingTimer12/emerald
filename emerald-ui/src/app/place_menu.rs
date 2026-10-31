@@ -2,12 +2,11 @@
 //! read, mute for a while, what to be notified of, and the server's own
 //! switches. Changes apply at once and go to Discord, which echoes them.
 
-use gpui::{
-    AnyElement, Context, FontWeight, Pixels, Point, SharedString, anchored, deferred, div, prelude::*, rgb,
-};
+use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::super::{icons, theme};
 use super::Emerald;
+use super::widgets::popover::Anchor;
 use emerald_discord::model::{Notify, Snowflake};
 use emerald_discord::{Command, MUTE_WINDOWS, SettingsChange};
 use crate::zoom::zoomed;
@@ -27,6 +26,19 @@ pub enum Target {
     },
 }
 
+/// Whether a channel of `kind` gets the header bell. Not threads: their
+/// settings live on the thread membership, which Emerald does not write
+/// yet, and the server's channel overrides are not where discord.com puts them.
+pub(super) fn shows_bell(kind: emerald_discord::model::ChannelKind) -> bool {
+    !kind.is_thread()
+}
+
+/// The header bell's glyph: slashed when the channel is muted or does not
+/// notify of every message, as the web client draws it.
+pub(super) fn bell_icon(muted: bool, level: Notify) -> &'static str {
+    if muted || level != Notify::All { icons::BELL_OFF } else { icons::BELL }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
     Main,
@@ -36,7 +48,7 @@ enum Page {
 
 pub struct PlaceMenu {
     target: Target,
-    position: Point<Pixels>,
+    anchor: Anchor,
     page: Page,
 }
 
@@ -57,13 +69,31 @@ impl Target {
 }
 
 impl Emerald {
-    pub(super) fn open_place_menu(&mut self, target: Target, position: Point<Pixels>, cx: &mut Context<Self>) {
+    pub(super) fn open_place_menu(&mut self, target: Target, anchor: Anchor, cx: &mut Context<Self>) {
         self.place_menu = Some(PlaceMenu {
             target,
-            position,
+            anchor,
             page: Page::Main,
         });
         cx.notify();
+    }
+
+    /// The header bell's menu: this channel's notification levels.
+    pub(super) fn open_notify_menu(&mut self, guild: Snowflake, channel: Snowflake, anchor: Anchor, cx: &mut Context<Self>) {
+        let thread = self.spaces.channel(channel).is_some_and(|c| c.kind.is_thread());
+        self.place_menu = Some(PlaceMenu {
+            target: Target::Channel { guild: Some(guild), channel, category: false, thread },
+            anchor,
+            page: Page::Notify,
+        });
+        cx.notify();
+    }
+
+    /// Shift+click on the bell: mutes the channel until turned back on, or
+    /// lifts its mute.
+    pub(super) fn toggle_channel_mute(&mut self, guild: Snowflake, channel: Snowflake, muted: bool, cx: &mut Context<Self>) {
+        let seconds = (!muted).then_some(-1);
+        self.change_settings(Some(guild), SettingsChange::Mute { channel: Some(channel), seconds }, cx);
     }
 
     fn place_menu_page(&mut self, page: Page, cx: &mut Context<Self>) {
@@ -157,28 +187,13 @@ impl Emerald {
                 }
             }
         }
-        let list = div()
-            .id("place-menu")
-            .w(zoomed(240.))
-            .flex()
-            .flex_col()
-            .p_2()
-            .rounded(theme::radius::modal())
-            .border_1()
-            .border_color(theme::border())
-            .bg(rgb(theme::surface_high()))
-            .shadow_lg()
-            .occlude()
+        let list = super::widgets::popover::panel("place-menu", 240.)
             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                 this.place_menu = None;
                 cx.notify();
             }))
             .children(items);
-        Some(
-            deferred(anchored().position(menu.position).snap_to_window_with_margin(zoomed(8.)).child(list))
-                .with_priority(1)
-                .into_any_element(),
-        )
+        Some(super::widgets::popover::at(menu.anchor, list))
     }
 
     /// The level a server notifies of when the user picked none.
@@ -266,6 +281,42 @@ impl Emerald {
     }
 }
 
+/// A menu row with a second, muted line under its title, such as a setting
+/// and its current value.
+pub(super) fn item_two_line(
+    id: (&'static str, usize),
+    title: SharedString,
+    subtitle: SharedString,
+    trailing: Option<&'static str>,
+) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .py_1p5()
+        .px_2()
+        .flex()
+        .items_center()
+        .gap_2()
+        .rounded(theme::radius::control())
+        .cursor_pointer()
+        .hover(|s| s.bg(theme::hover()))
+        .child(
+            div()
+                .flex_1()
+                .min_w(zoomed(0.))
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .text_size(zoomed(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(theme::text_default()))
+                        .child(title),
+                )
+                .child(div().truncate().text_size(zoomed(12.)).text_color(theme::muted()).child(subtitle)),
+        )
+        .children(trailing.map(|glyph| icons::icon(glyph, 16., theme::interactive())))
+}
+
 pub(super) fn item(id: (&'static str, usize), label: SharedString, trailing: Option<&'static str>) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -320,4 +371,25 @@ fn level_label(level: Notify) -> SharedString {
         Notify::Inherit => t!("notify.default"),
     }
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn threads_get_no_bell() {
+        use emerald_discord::model::ChannelKind;
+        assert!(shows_bell(ChannelKind::GUILD_TEXT));
+        assert!(!shows_bell(ChannelKind::PUBLIC_THREAD));
+        assert!(!shows_bell(ChannelKind::PRIVATE_THREAD));
+    }
+
+    #[test]
+    fn bell_is_slashed_when_muted_or_not_every_message() {
+        assert_eq!(bell_icon(false, Notify::All), icons::BELL);
+        assert_eq!(bell_icon(true, Notify::All), icons::BELL_OFF);
+        assert_eq!(bell_icon(false, Notify::Mentions), icons::BELL_OFF);
+        assert_eq!(bell_icon(false, Notify::Nothing), icons::BELL_OFF);
+    }
 }

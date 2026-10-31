@@ -2,11 +2,12 @@
 //! profile, a message, a note, the friend nickname, removing them from a
 //! group, ignoring and blocking.
 
-use gpui::{AnyElement, Context, MouseButton, MouseDownEvent, Pixels, Point, anchored, deferred, div, prelude::*, rgb};
+use gpui::{AnyElement, Context, MouseButton, MouseDownEvent, div, prelude::*, rgb};
 
 use super::super::theme;
 use super::dialogs::{Ask, Prompt};
 use super::place_menu::item;
+use super::widgets::popover::Anchor;
 use super::Emerald;
 use emerald_discord::Command;
 use emerald_discord::model::{ChannelKind, Snowflake};
@@ -18,7 +19,7 @@ pub(super) struct UserMenu {
     guild: Option<Snowflake>,
     /// The group DM listing them, when the click came from it.
     group: Option<Snowflake>,
-    position: Point<Pixels>,
+    anchor: Anchor,
 }
 
 impl Emerald {
@@ -27,12 +28,12 @@ impl Emerald {
         user: Snowflake,
         guild: Option<Snowflake>,
         group: Option<Snowflake>,
-        position: Point<Pixels>,
+        anchor: Anchor,
         cx: &mut Context<Self>,
     ) {
         self.place_menu = None;
         self.message_menu = None;
-        self.user_menu = Some(UserMenu { user, guild, group, position });
+        self.user_menu = Some(UserMenu { user, guild, group, anchor });
         cx.notify();
     }
 
@@ -46,7 +47,7 @@ impl Emerald {
     ) -> impl Fn(&MouseDownEvent, &mut gpui::Window, &mut gpui::App) + 'static {
         cx.listener(move |this, event: &MouseDownEvent, _, cx| {
             cx.stop_propagation();
-            this.open_user_menu(user, guild, group, event.position, cx)
+            this.open_user_menu(user, guild, group, Anchor::pointer(event.position), cx)
         })
     }
 
@@ -116,6 +117,14 @@ impl Emerald {
         }
         if !me {
             items.push(separator());
+            if self.people.is_friend(user) {
+                items.push(
+                    item(("user-remove-friend", 0), t!("friends.remove_friend").into(), None)
+                        .text_color(rgb(theme::feedback_critical()))
+                        .on_click(cx.listener(move |this, _, _, cx| this.ask(Ask::RemoveFriend(user), cx)))
+                        .into_any_element(),
+                );
+            }
             let blocked = self.people.is_blocked(user);
             if !blocked {
                 let ignored = self.people.is_ignored(user);
@@ -150,28 +159,13 @@ impl Emerald {
                     .into_any_element(),
             );
         }
-        let list = div()
-            .id("user-menu")
-            .w(zoomed(220.))
-            .flex()
-            .flex_col()
-            .p_2()
-            .rounded(theme::radius::modal())
-            .border_1()
-            .border_color(theme::border())
-            .bg(rgb(theme::surface_high()))
-            .shadow_lg()
-            .occlude()
+        let list = super::widgets::popover::panel("user-menu", 220.)
             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                 this.user_menu = None;
                 cx.notify();
             }))
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .children(items);
-        Some(
-            deferred(anchored().position(menu.position).snap_to_window_with_margin(zoomed(8.)).child(list))
-                .with_priority(1)
-                .into_any_element(),
-        )
+        Some(super::widgets::popover::at(menu.anchor, list))
     }
 }

@@ -36,10 +36,13 @@ impl Render for Emerald {
             Some(Overlay::Invite(modal)) => Some(self.render_invite_modal(modal, cx)),
             None => None,
         };
+        let inbox = self.render_inbox(window.viewport_size().height, cx);
         let menu = self.render_message_menu(cx);
         let picker = self.render_reaction_picker(cx);
         let place_menu = self.render_place_menu(cx);
         let user_menu = self.render_user_menu(cx);
+        let audio_menu = self.render_audio_menu(cx);
+        let own_popover = self.render_own_popover(cx);
         let root = div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
@@ -94,13 +97,19 @@ impl Render for Emerald {
             .children(self.render_call_panel(cx))
             .child(self.render_user_panel(cx))
             .children(overlay)
+            .children(inbox)
             .children(menu)
             .children(picker)
             .children(place_menu)
-            .children(user_menu);
+            .children(user_menu)
+            .children(audio_menu)
+            .children(own_popover);
         // A profile effect drawn above has layers on a clock.
         if self.animating.take() {
             self.next_animation_frame(cx);
+        }
+        if self.typing_animating.take() {
+            self.next_typing_frame(cx);
         }
         root
     }

@@ -23,7 +23,7 @@ pub(super) use actions::{Editing, MessageMenu, Replying};
 pub(super) use forum::Forum;
 pub(super) use jump::{Jump, JumpTarget};
 pub(super) use poll_form::NewPoll;
-pub(super) use list::spoiler_pill;
+pub(super) use list::{day_separator, spoiler_pill};
 pub(super) use picker::ReactionPicker;
 pub(super) use rich::SpoilerKey;
 pub(super) use select::TextSelection;
@@ -47,12 +47,12 @@ impl Emerald {
         let wide = width >= PROFILE_MIN_WINDOW;
         let members_fit = width >= MEMBERS_MIN_WINDOW;
         if self.friends_open && self.spaces.current().is_dms() {
-            let friends = self.render_friends(cx).into_any_element();
-            return self.beside_inbox(friends, cx);
+            let friends = self.render_friends(width, cx).into_any_element();
+            return friends;
         }
         if self.requests_open && self.spaces.current().is_dms() {
             let requests = self.render_requests(cx);
-            return self.beside_inbox(requests, cx);
+            return requests;
         }
         let space = self.spaces.current();
         let row = self.selected_channel.and_then(|id| space.row(id));
@@ -134,14 +134,14 @@ impl Emerald {
             )
             .children(topic.map(|topic| {
                 let topic = self.rich_line("topic", &topic, &[]);
-                // Divider and one-line topic, as in the web client's header.
+                // A dot, then the topic on one line, as in the 2026 header.
                 div()
                     .flex()
                     .flex_1()
                     .min_w(zoomed(0.))
                     .items_center()
                     .gap_2()
-                    .child(div().flex_none().w(zoomed(1.)).h(zoomed(24.)).bg(theme::border()))
+                    .child(div().flex_none().text_color(rgb(theme::text_muted())).child("•"))
                     .child(
                         div()
                             .flex_1()
@@ -171,8 +171,9 @@ impl Emerald {
                         .on_click(cx.listener(move |this, _, window, cx| this.open_group_picker(Some(dm), window, cx))),
                 )
             })
-            .map(|d| match (user, self.selected_channel) {
-                (Some(_), _) => d.child(header_toggle(
+            .child({
+                let toggle = match (user, self.selected_channel) {
+                (Some(_), _) => Some(header_toggle(
                     "toggle-profile",
                     icons::PROFILE,
                     self.settings.show_profile,
@@ -181,8 +182,8 @@ impl Emerald {
                         this.settings.show_profile = !this.settings.show_profile;
                         this.save_settings(cx);
                     }),
-                )),
-                (None, Some(_)) if !space.is_dms() || group.is_some() => d.child(header_toggle(
+                ).into_any_element()),
+                (None, Some(_)) if !space.is_dms() || group.is_some() => Some(header_toggle(
                     "toggle-members",
                     icons::FRIENDS,
                     self.settings.show_members,
@@ -192,10 +193,12 @@ impl Emerald {
                         this.sync_member_list(cx);
                         this.save_settings(cx);
                     }),
-                )),
-                _ => d,
-            })
-            .child(self.render_header_tools(self.selected_channel, cx));
+                ).into_any_element()),
+                _ => None,
+                };
+                // The toggle sits between the pins and the search box.
+                self.render_header_tools(self.selected_channel, toggle, cx)
+            });
 
         let body = if self.selected_channel.is_none() {
             div()
@@ -221,7 +224,8 @@ impl Emerald {
                 }),
             )
             .size_full()
-            .pb_4()
+            // Room for the typing line, so it never hides the last message.
+            .pb_6()
             // Discord's 1.375 line height, scaled with the chosen font size.
             .text_size(zoomed(self.settings.font_size))
             .line_height(zoomed((self.settings.font_size * 1.375).round()));
@@ -230,6 +234,8 @@ impl Emerald {
                 .flex_1()
                 .min_h(zoomed(0.))
                 .child(messages)
+                // Under the bars, so "jump to present" covers it when shown.
+                .children(self.render_typing())
                 .children(self.render_unread_bar(cx))
                 .children(self.render_present_bar(cx))
                 .children(self.render_dm_call_bar(cx))
@@ -270,16 +276,9 @@ impl Emerald {
                             .children(self.render_emoji_button(cx)),
                     ),
             )
-            // Typing indicator in the strip under the input, as on Discord.
-            .child(
-                div()
-                    .h(zoomed(24.))
-                    .flex()
-                    .items_center()
-                    .text_xs()
-                    .text_color(rgb(theme::text_default()))
-                    .children(self.typing_text()),
-            );
+            // The box ends where the user panel does, 8px above the window's
+            // edge; the typing line sits above it, over the messages.
+            .pb_2();
 
         let column = div()
             .id("chat-column")
@@ -330,22 +329,6 @@ impl Emerald {
                             }),
                     }),
             )
-            .into_any_element()
-    }
-
-    /// A Home page with the Inbox beside it when the title bar opened it there.
-    /// The other panels belong to a channel and stay with it.
-    fn beside_inbox(&self, page: AnyElement, cx: &mut Context<Self>) -> AnyElement {
-        if !self.panel_is(super::panels::PanelKind::Inbox) {
-            return page;
-        }
-        div()
-            .flex()
-            .flex_1()
-            .min_w(zoomed(0.))
-            .h_full()
-            .child(div().flex().flex_1().min_w(zoomed(0.)).h_full().child(page))
-            .children(self.render_panel(cx))
             .into_any_element()
     }
 

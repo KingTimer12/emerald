@@ -80,6 +80,9 @@ pub struct Relationship {
     /// Their messages fold away and they cannot ping the user.
     #[serde(default)]
     pub user_ignored: bool,
+    /// The message someone wrote with their friend request, shown on demand.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,6 +160,12 @@ impl Status {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relationship_keeps_its_note() {
+        let relationship: Relationship = serde_json::from_value(serde_json::json!({"id": "1", "type": 3, "note": "oi"})).unwrap();
+        assert_eq!(relationship.note.as_deref(), Some("oi"));
+    }
 
     #[test]
     fn animated_avatars_come_as_gifs() {

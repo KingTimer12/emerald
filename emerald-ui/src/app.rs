@@ -163,6 +163,9 @@ pub struct Emerald {
     /// A row drawn this frame shows an animation, so another frame follows.
     animating: Cell<bool>,
     /// The next animation frame is already on its way.
+    /// The typing dots were drawn moving this frame.
+    typing_animating: Cell<bool>,
+    typing_frame_pending: bool,
     frame_pending: bool,
     /// Profiles, global or per guild, refetched after `PROFILE_TTL`.
     profiles: TtlCache<(Snowflake, Option<Snowflake>), Profile>,
@@ -208,8 +211,20 @@ pub struct Emerald {
     alt_input: Entity<TextInput>,
     message_menu: Option<chat::MessageMenu>,
     reaction_picker: Option<chat::ReactionPicker>,
-    /// Pins, search results, the inbox or threads, beside the chat.
+    /// Pins, search results or threads, beside the chat.
     panel: Option<panels::Panel>,
+    /// The Inbox, open under its title bar button.
+    inbox: Option<panels::Inbox>,
+    /// When a press outside the Inbox last closed it.
+    inbox_dismissed: Option<std::time::Instant>,
+    /// The title bar's Inbox button and the user panel, as last drawn, for
+    /// the popovers they open.
+    inbox_button: widgets::popover::Tracked,
+    user_panel: widgets::popover::Tracked,
+    /// The popover of the user's own profile, over the user panel.
+    own_popover: Option<profile::OwnPopover>,
+    /// When a press outside it last closed it.
+    own_popover_dismissed: Option<std::time::Instant>,
     /// The search box in the channel header.
     search_input: Entity<TextInput>,
     /// The search box of the threads panel.
@@ -220,6 +235,14 @@ pub struct Emerald {
     place_menu: Option<place_menu::PlaceMenu>,
     /// The right-click menu of a person.
     user_menu: Option<user_menu::UserMenu>,
+    /// The microphone or headset menu, open from the user panel.
+    audio_menu: Option<voice::audio_menu::AudioMenu>,
+    /// Which menu a press outside it closed, and when, so the click on its
+    /// own chevron that caused it does not open it again.
+    audio_menu_dismissed: Option<(voice::audio_menu::AudioMenuKind, std::time::Instant)>,
+    /// Microphones and speakers, last listed when a menu or the Voice page
+    /// opened; `None` until the first listing ends.
+    audio_devices: Option<emerald_audio::Devices>,
     /// The text field of a name dialog.
     prompt_input: Entity<TextInput>,
     /// The search box of the friend picker.
@@ -267,7 +290,6 @@ pub struct Emerald {
     emoji_query: Entity<TextInput>,
     emoji_scroll: UniformListScrollHandle,
     /// Filters the DM list by name; enter opens the first match.
-    dm_search: Entity<TextInput>,
     overlay: Option<Overlay>,
     /// REST actions in flight, one per kind.
     busy: FxHashSet<Action>,
@@ -311,11 +333,6 @@ impl Emerald {
         net.post(Command::VoiceControls(settings.voice.controls()));
         let composer = Composer::new(cx);
         let friends = Friends::new(cx);
-        let dm_search = cx.new(|cx| {
-            TextInput::new(t!("dm.search_placeholder"), cx)
-                .keep_on_submit()
-                .compact()
-        });
         let member_query = cx.new(|cx| TextInput::new(t!("members.search"), cx).keep_on_submit().compact());
         let edit_input = cx.new(|cx| TextInput::new("", cx).multiline(composer::MAX_ROWS));
         let alt_input = cx.new(|cx| TextInput::new(t!("upload.description_placeholder"), cx).keep_on_submit().submit_empty());
@@ -359,16 +376,13 @@ impl Emerald {
             cx.subscribe(&friends.input, |this, _, event: &Submitted, cx| {
                 this.send_friend_request(event.0.clone(), cx)
             }),
-            cx.observe(&dm_search, |_, _, cx| cx.notify()),
+            cx.observe(&friends.search, |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, |this, window, cx| {
                 this.window_active = window.is_window_active();
                 cx.notify();
             }),
             cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
-            cx.subscribe_in(&dm_search, window, |this, _, _: &Submitted, window, cx| {
-                this.open_first_dm(window, cx)
-            }),
         ];
 
         let messages = ListState::new(0, ListAlignment::Bottom, zoomed(400.));
@@ -412,6 +426,8 @@ impl Emerald {
             animation_clock: Instant::now(),
             animating: Cell::new(false),
             frame_pending: false,
+            typing_animating: Cell::new(false),
+            typing_frame_pending: false,
             profiles: TtlCache::new(PROFILE_TTL),
             profile_effects: FxHashMap::default(),
             profile_opened: Instant::now(),
@@ -454,11 +470,20 @@ impl Emerald {
             weak: cx.entity().downgrade(),
             forums: FxHashMap::default(),
             panel: None,
+            inbox: None,
+            inbox_dismissed: None,
+            inbox_button: Default::default(),
+            user_panel: Default::default(),
+            own_popover: None,
+            own_popover_dismissed: None,
             search_input,
             thread_query,
             forum_query,
             place_menu: None,
             user_menu: None,
+            audio_menu: None,
+            audio_menu_dismissed: None,
+            audio_devices: None,
             prompt_input,
             picker_query,
             note_input,
@@ -469,7 +494,6 @@ impl Emerald {
             revealed_hidden: FxHashSet::default(),
             emoji_query,
             emoji_scroll: UniformListScrollHandle::new(),
-            dm_search,
             overlay: None,
             busy: FxHashSet::default(),
             select_new_guild: false,

@@ -6,7 +6,7 @@ use crate::zoom::zoomed;
 mod parts;
 
 use parts::*;
-pub(in super::super) use parts::spoiler_pill;
+pub(in super::super) use parts::{day_separator, spoiler_pill};
 
 use gpui::{
     AnyElement, Context, Div, ElementId, FontWeight, HighlightStyle, ListOffset, ListState, MouseButton, SharedString,

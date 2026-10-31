@@ -18,7 +18,15 @@ use super::{Emerald, widgets};
 use crate::zoom::zoomed;
 
 mod dms;
+mod guild_header;
 mod servers;
+
+
+/// The channel sidebar's width; the user and call panels span it and the
+/// server list.
+pub(in crate::app) const SIDEBAR_WIDTH: f32 = 240.;
+/// The server list's width.
+pub(in crate::app) const SERVER_LIST_WIDTH: f32 = 72.;
 
 impl Emerald {
     #[hotpath::measure]
@@ -33,37 +41,43 @@ impl Emerald {
             .border_b_1()
             .border_color(theme::border());
         let header = if dms {
-            // Search field in place of a title, like the web client.
-            header.px_2().child(self.dm_search.clone())
-        } else {
+            // A button that opens the quick switcher, as on discord.com.
             header
-                .px_4()
-                .gap_1()
-                .text_color(rgb(theme::text_strong()))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(div().flex_1().min_w(zoomed(0.)).truncate().child(space.name.clone()))
-                .child(icon(icons::CHEVRON, 18., theme::interactive()))
+                .px_2()
+                .child(
+                    div()
+                        .id("find-conversation")
+                        .w_full()
+                        .h(zoomed(32.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(theme::radius::control())
+                        .border_1()
+                        .border_color(theme::border())
+                        .bg(rgb(theme::base_low()))
+                        .text_size(zoomed(14.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(theme::text_muted()))
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(rgb(theme::text_default())))
+                        .child(t!("dm.search_placeholder"))
+                        .on_click(cx.listener(|this, _, window, cx| this.open_switcher(window, cx))),
+                )
+                .into_any_element()
+        } else {
+            self.render_guild_header(cx)
         };
         let visible = self.visible_rows(cx);
         let clearance = self.panel_clearance();
-        let searching = dms && visible.is_empty() && !self.dm_search.read(cx).text().trim().is_empty();
 
         div()
             .flex()
             .flex_col()
-            .w(zoomed(240.))
+            .w(zoomed(SIDEBAR_WIDTH))
             .h_full()
             .flex_none()
             .child(header)
-            .when(searching, |sidebar| {
-                sidebar.child(
-                    div()
-                        .p_4()
-                        .text_size(zoomed(14.))
-                        .text_color(theme::muted())
-                        .child(t!("dm.no_results")),
-                )
-            })
             .child(
                 uniform_list(
                     "channels",
@@ -138,8 +152,10 @@ impl Emerald {
                     .items_end()
                     .gap_1()
                     .pb(zoomed(4.))
-                    .text_size(zoomed(12.))
-                    .font_weight(FontWeight::SEMIBOLD)
+                    // "Direct Messages" is a 14px medium heading in 2026;
+                    // server categories stay 12px semibold.
+                    .text_size(zoomed(if category.is_none() { 14. } else { 12. }))
+                    .font_weight(if category.is_none() { FontWeight::MEDIUM } else { FontWeight::SEMIBOLD })
                     .text_color(rgb(theme::channels_default()))
                     .hover(|s| s.text_color(rgb(theme::text_default())))
                     .child(div().truncate().child(title.clone()))
@@ -168,7 +184,7 @@ impl Emerald {
                                         category: true,
                                         thread: false,
                                     };
-                                    this.open_place_menu(target, event.position, cx)
+                                    this.open_place_menu(target, super::widgets::popover::Anchor::pointer(event.position), cx)
                                 }),
                             )
                     })
@@ -298,7 +314,7 @@ impl Emerald {
                                 category: false,
                                 thread,
                             };
-                            this.open_place_menu(target, event.position, cx)
+                            this.open_place_menu(target, super::widgets::popover::Anchor::pointer(event.position), cx)
                         }),
                     )
                     .map(|r| {

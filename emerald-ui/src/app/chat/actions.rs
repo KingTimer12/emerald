@@ -6,8 +6,8 @@ mod editing;
 mod menu;
 
 use gpui::{
-    AnyElement, ClipboardItem, Context, Div, Focusable, FontWeight, MouseButton, Pixels, Point, SharedString, Window,
-    anchored, deferred, div, prelude::*, rgb,
+    AnyElement, ClipboardItem, Context, Div, Focusable, FontWeight, MouseButton, SharedString, Window, div,
+    prelude::*, rgb,
 };
 
 use super::super::super::icons::{self, icon};
@@ -39,7 +39,7 @@ pub(in super::super) struct Replying {
 pub(in super::super) struct MessageMenu {
     pub channel: Snowflake,
     pub message: Snowflake,
-    pub position: Point<Pixels>,
+    pub anchor: super::super::widgets::popover::Anchor,
 }
 
 /// What the current user may do to one message.
@@ -94,6 +94,9 @@ impl Emerald {
         } else if self.message_menu.take().is_some()
             || self.place_menu.take().is_some()
             || self.user_menu.take().is_some()
+            || self.audio_menu.take().is_some()
+            || self.inbox.take().is_some()
+            || self.own_popover.take().is_some()
             || std::mem::take(&mut self.plus_menu)
         {
             cx.notify();

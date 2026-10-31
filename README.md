@@ -128,10 +128,15 @@ CPU near zero when idle.
   servers, open into a column of their color, and carry the unread dot and mentions.
 - **Quick switcher** (Ctrl+K / Cmd+K): channels, threads, DMs and servers by name, the
   recent ones first; `#`, `@` and `*` narrow to channels, people or servers.
-- **Pinned messages**, **search** and **inbox** panels from the channel header. Search
+- **Pinned messages** and **search** panels from the channel header. Search
   takes Discord's filters (`from:`, `mentions:`, `in:`, `has:`, `before:`, `during:`,
-  `after:`, `pinned:`), in a server or a DM; the inbox lists recent mentions and the
-  unread channels. A result jumps to its message.
+  `after:`, `pinned:`), in a server or a DM. A result jumps to its message.
+- **Inbox**: a popover under its title bar button, as in Discord 2026. Unreads shows one card
+  per unread channel with its unread messages, a bell, mark read and fold; a check marks
+  everything read. Mentions lists recent mentions. Favorites and Reminders are not there yet.
+- **Own profile popover**: a click on your avatar or name in the user panel shows your card,
+  Edit Profile, the status (a side panel to pick it or the custom status), switching accounts and
+  Copy User ID. Badges and Orbs are left out.
 - **Threads browser**: a channel's active and older threads, and a search by name.
   Forums sort by activity or by date, filter by tags and search posts by name.
 - **Moderation** (for those whose permissions allow it): select messages in a channel (up to
@@ -152,6 +157,12 @@ CPU near zero when idle.
 - **Multiple accounts**: up to five signed in at once; switching restarts Emerald on the other.
 - **Settings**: font size, zoom from 90% to 150% (Cmd/Ctrl with + and -, 0 to reset), compact mode;
   language and 12/24-hour time; dark, light or the system's theme; reduced motion (animated emoji, avatars and stickers stop on their first frame).
+- **Discord 2026 frame**: the user panel's microphone and headset buttons open menus for the device and
+  its volume (a slider); the typing line sits over the messages with pulsing dots; the channel header has
+  the notification bell (Shift+click mutes) and a search box naming the server; servers show their banner,
+  an invite button and the boost goal bar; the DM list opens with "Find or start a conversation" (the quick
+  switcher); Friends has a search, round actions, "View Request" for request notes and the Active Now
+  column; member groups keep their role's own case.
 - **Title bar**: drawn by Emerald as Discord 2026 draws its own: back and forward through the places opened
   (Alt+Left/Right, Cmd+[ and ] on macOS), the page's name in the middle, Inbox and Help on the right and, on
   Windows, minimize, maximize and close (snap layouts included). macOS keeps its traffic lights over it.
@@ -189,7 +200,10 @@ CPU near zero when idle.
   What still differs from a browser: the DTLS and STUN handshakes come from str0m, not
   Chrome's WebRTC, and Chrome's video payload types in the offer are a guess.
 
-Not there yet: video and screen sharing; speaking on a stage (asking to speak); a ringtone
+Not there yet: the Server Guide, Events and Channels & Roles rows of a server's header; the member
+list's Activity section; writing a note on a friend request (discord.com offers it only to accounts
+in an experiment); the Inbox's Favorites and Reminders tabs (bookmarked messages and reminders);
+the Badges and Game Collection parts of your own profile popover; the microphone's input profiles; video and screen sharing; speaking on a stage (asking to speak); a ringtone
 for incoming calls; echo cancellation (use headphones), push-to-talk and per-person volume; playing video and audio
 inside the app; profile frames, and the cosmetics members set for one server only;
 animated avatars in the
@@ -360,7 +374,7 @@ emerald-ui/              the gpui interface
         ├── events.rs    hands each NetEvent to the stores (handlers in events/)
         ├── navigation.rs, composer.rs
         ├── alerts.rs    which messages notify, and the count on the app icon
-        ├── panels/      pins, search, inbox and threads beside the chat
+        ├── panels/      pins, search and threads beside the chat; the Inbox popover
         ├── place_menu.rs  right-click menu: mark read, mute, notification levels
         ├── place_actions.rs  …and invite, leave, close a DM, run a group DM
         ├── user_menu.rs right-click menu of a person: note, nickname, ignore, block

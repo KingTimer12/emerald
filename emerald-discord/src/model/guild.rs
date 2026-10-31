@@ -115,6 +115,14 @@ pub struct GuildProperties {
     pub features: Vec<String>,
     #[serde(default)]
     pub default_message_notifications: Option<u8>,
+    /// The banner's CDN hash, drawn atop the channel list.
+    #[serde(default)]
+    pub banner: Option<String>,
+    #[serde(default)]
+    pub premium_subscription_count: Option<u32>,
+    /// The server shows its boost goal bar under the banner.
+    #[serde(default)]
+    pub premium_progress_bar_enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -154,6 +162,15 @@ pub struct Guild {
     /// Who is in the guild's voice channels.
     #[serde(default)]
     pub voice_states: Vec<super::VoiceState>,
+    #[serde(default)]
+    pub banner: Option<String>,
+    #[serde(default)]
+    pub premium_subscription_count: Option<u32>,
+    #[serde(default)]
+    pub premium_progress_bar_enabled: bool,
+    /// Events scheduled on the server; only how many is read for now.
+    #[serde(default)]
+    pub guild_scheduled_events: Vec<serde::de::IgnoredAny>,
 }
 
 impl Guild {
@@ -191,6 +208,30 @@ impl Guild {
             .default_message_notifications
             .or(self.properties.as_ref().and_then(|p| p.default_message_notifications));
         if level == Some(0) { super::Notify::All } else { super::Notify::Mentions }
+    }
+
+    /// The banner at 360px wide rounded up to a power of two, as the web
+    /// client asks for it at 1x. Animated banners are drawn still.
+    pub fn banner_url(&self) -> Option<String> {
+        let hash = self.banner.as_deref().or(self.properties.as_ref().and_then(|p| p.banner.as_deref()))?;
+        Some(CDN.join(format_args!("/banners/{}/{hash}.webp?size=512", self.id)))
+    }
+
+    /// How many boosts the server has.
+    pub fn boosts(&self) -> u32 {
+        self.premium_subscription_count
+            .or(self.properties.as_ref().and_then(|p| p.premium_subscription_count))
+            .unwrap_or(0)
+    }
+
+    /// The server shows its boost goal bar.
+    pub fn boost_bar(&self) -> bool {
+        self.premium_progress_bar_enabled || self.properties.as_ref().is_some_and(|p| p.premium_progress_bar_enabled)
+    }
+
+    /// Whether the server has `feature`, wherever the gateway put the list.
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.features.iter().chain(self.properties.iter().flat_map(|p| &p.features)).any(|f| f == feature)
     }
 
     pub fn owner(&self) -> Option<Snowflake> {
@@ -256,5 +297,34 @@ mod upload_tests {
         assert_eq!(guild.upload_limit(), Some(100 * 1024 * 1024));
         let guild: Guild = serde_json::from_str(r#"{"id":"1"}"#).unwrap();
         assert_eq!(guild.upload_limit(), None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn guild_reads_banner_and_boost_fields_from_properties() {
+        let guild: Guild = serde_json::from_value(json!({
+            "id": "1",
+            "properties": { "name": "g", "banner": "abc", "premium_tier": 2,
+                "premium_subscription_count": 14, "premium_progress_bar_enabled": true },
+            "guild_scheduled_events": [{}, {}, {}]
+        }))
+        .unwrap();
+        assert_eq!(guild.banner_url().unwrap(), "https://cdn.discordapp.com/banners/1/abc.webp?size=512");
+        assert_eq!(guild.boosts(), 14);
+        assert!(guild.boost_bar());
+        assert_eq!(guild.guild_scheduled_events.len(), 3);
+    }
+
+    #[test]
+    fn guild_without_the_new_fields_still_parses() {
+        let guild: Guild = serde_json::from_value(json!({ "id": "1", "name": "g" })).unwrap();
+        assert!(guild.banner_url().is_none());
+        assert!(!guild.boost_bar());
+        assert_eq!(guild.boosts(), 0);
     }
 }

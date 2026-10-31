@@ -63,7 +63,6 @@ pub struct SettingsView {
     /// The shortcut waiting for its new keys, if any.
     recording: Option<crate::shortcuts::Shortcut>,
     /// Microphones and speakers, listed when Voice opens.
-    audio_devices: Option<emerald_audio::Devices>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -125,7 +124,6 @@ impl Emerald {
             privacy_ask: None,
             accounts: Default::default(),
             recording: None,
-            audio_devices: None,
             _subscriptions: subscriptions,
         })));
         window.focus(&self.focus_handle);

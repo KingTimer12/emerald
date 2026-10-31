@@ -35,6 +35,17 @@ pub async fn mentions(rest: &Rest, before: Option<Snowflake>) -> NetEvent {
     }
 }
 
+/// Unread messages of one channel. Fetched as history is, a page after
+/// the last one read; the web client's own inbox request was not found in
+/// its bundle, so this is a guess.
+pub async fn unread(rest: &Rest, channel: Snowflake, after: Option<Snowflake>) -> NetEvent {
+    let page = after.map_or(crate::protocol::Page::Latest, crate::protocol::Page::After);
+    match worded(rest.messages(channel, page).await) {
+        Ok(messages) => NetEvent::Unread { channel, messages },
+        Err(Expired) => NetEvent::AuthExpired,
+    }
+}
+
 pub async fn pins(rest: &Rest, channel: Snowflake, before: Option<String>) -> NetEvent {
     let result = rest.pins(channel, before.as_deref()).await;
     match worded(result) {

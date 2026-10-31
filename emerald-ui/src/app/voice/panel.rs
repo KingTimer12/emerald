@@ -1,6 +1,7 @@
 //! The call panel over the user panel ("Voice Connected", the channel,
 //! hang up), and the mute and deafen buttons in the user panel.
 
+use super::audio_menu::AudioMenuKind;
 use gpui::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, rgb};
 
 use super::super::super::{icons, theme};
@@ -24,7 +25,7 @@ impl Emerald {
             .absolute()
             .left_2()
             .bottom(zoomed(USER_PANEL))
-            .w(zoomed(72. + 240. - 16.))
+            .w(zoomed(super::super::sidebar::SERVER_LIST_WIDTH + super::super::sidebar::SIDEBAR_WIDTH - 16.))
             .h(zoomed(CALL_PANEL - 8.))
             .px_2()
             .flex()
@@ -113,18 +114,33 @@ impl Emerald {
         )
     }
 
-    /// Mute and deafen, red when on, as beside the web client's name.
+    /// Mute and deafen, red when on, each with the chevron of its device
+    /// menu, as beside the web client's name.
     pub(in crate::app) fn render_voice_buttons(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let voice = &self.settings.voice;
         let muted = voice.muted || voice.deafened;
+        let open = |kind| self.audio_menu.as_ref().is_some_and(|menu| menu.kind == kind);
+        // The menu opens over the whole split button, wherever on the
+        // chevron the click landed.
+        let input = widgets::popover::Tracked::default();
+        let output = widgets::popover::Tracked::default();
+        let chevron = |id, kind: AudioMenuKind, tip, tracked: &widgets::popover::Tracked, cx: &mut Context<Self>| {
+            let tracked = tracked.clone();
+            widgets::chevron_button(id, open(kind))
+                .tooltip(widgets::tooltip(tip))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.open_audio_menu(kind, widgets::popover::Anchor::above(tracked.bounds()), cx)
+                }))
+        };
         div()
             .flex()
-            .child(
+            .child(input.track(widgets::split_button(
                 toggle("voice-mute", if muted { icons::MICROPHONE_OFF } else { icons::MICROPHONE }, muted)
                     .tooltip(widgets::tooltip(if muted { t!("voice.unmute") } else { t!("voice.mute") }))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_mute(cx))),
-            )
-            .child(
+                chevron("voice-input-menu", AudioMenuKind::Input, t!("voice.input_options"), &input, cx),
+            )))
+            .child(output.track(widgets::split_button(
                 toggle(
                     "voice-deafen",
                     if voice.deafened { icons::HEADPHONES_OFF } else { icons::HEADPHONES },
@@ -132,7 +148,8 @@ impl Emerald {
                 )
                 .tooltip(widgets::tooltip(if voice.deafened { t!("voice.undeafen") } else { t!("voice.deafen") }))
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_deafen(cx))),
-            )
+                chevron("voice-output-menu", AudioMenuKind::Output, t!("voice.output_options"), &output, cx),
+            )))
     }
 }
 

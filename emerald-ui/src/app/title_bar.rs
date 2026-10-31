@@ -4,7 +4,6 @@
 
 use gpui::{AnyElement, Context, FontWeight, SharedString, Window, WindowControlArea, div, img, prelude::*, rgb};
 
-use super::panels::PanelKind;
 use super::state::Space;
 use super::{Emerald, widgets};
 use crate::icons;
@@ -113,7 +112,8 @@ impl Emerald {
                 ),
         );
 
-        let inbox_open = self.panel_is(PanelKind::Inbox);
+        let inbox_open = self.inbox.is_some();
+        let inbox_button = self.inbox_button.clone();
         let right = div()
             .flex()
             .items_center()
@@ -125,8 +125,15 @@ impl Emerald {
                     .gap_1()
                     .px_2()
                     .child(
-                        bar_button("title-inbox", icons::INBOX, t!("inbox.title"), inbox_open)
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_inbox(cx))),
+                        inbox_button
+                            .track(bar_button("title-inbox", icons::INBOX, t!("inbox.title"), inbox_open))
+                            .on_click(cx.listener({
+                                let inbox_button = inbox_button.clone();
+                                move |this, _, _, cx| {
+                                    let anchor = super::widgets::popover::Anchor::below_end(inbox_button.bounds());
+                                    this.toggle_inbox(anchor, cx)
+                                }
+                            })),
                     )
                     .child(
                         bar_button("title-help", icons::HELP, t!("title_bar.help"), false)
