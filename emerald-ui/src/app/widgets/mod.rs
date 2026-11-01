@@ -10,6 +10,7 @@ use super::Feedback;
 use emerald_discord::model::Snowflake;
 use crate::zoom::zoomed;
 
+pub mod name;
 pub mod popover;
 pub mod slider;
 

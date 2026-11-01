@@ -133,10 +133,29 @@ CPU near zero when idle.
   `after:`, `pinned:`), in a server or a DM. A result jumps to its message.
 - **Inbox**: a popover under its title bar button, as in Discord 2026. Unreads shows one card
   per unread channel with its unread messages, a bell, mark read and fold; a check marks
-  everything read. Mentions lists recent mentions. Favorites and Reminders are not there yet.
+  everything read. Mentions lists recent mentions. Bookmarks and Reminders list saved messages
+  (reminders soonest first, with their due time, to edit, snooze or remove).
+- **Bookmarks and reminders**: from a message's menu (Bookmark Message, Create Reminder with
+  Discord's times or a custom date) or the Shift hover bar; synced with your other devices, and a
+  desktop notification when a reminder comes due.
+- **Message actions 2026**: the hover bar in Discord 2026's order (Edit on your own messages,
+  Forward), and its longer form while Shift is held (Copy Link, Mark Unread, Bookmark, Pin,
+  Delete). **Forward** sends a message to up to five DMs or channels you already have, with an
+  optional message. **Mark Unread** and **Copy Message Link** are in the menu too.
 - **Own profile popover**: a click on your avatar or name in the user panel shows your card,
   Edit Profile, the status (a side panel to pick it or the custom status), switching accounts and
   Copy User ID. Badges and Orbs are left out.
+- **Profiles 2026**: a click on someone's name or avatar opens their card beside it (theme colors,
+  server tag, badges, friends and servers in common, a box to message them). The full profile has
+  two columns: the person, with Message, Add Friend, Member Since, Friends Since and the note, and
+  tabs for the Board (favorite and played games) and what you share. The DM side panel follows the
+  same look.
+- **Names 2026**: server tags after names (messages, member list, DMs, friends), role icons in
+  message headers and member-list groups, and display-name fonts where an open-licence copy exists.
+- **Message times** as in 2026: only the time for today's messages, and the time beside follow-up
+  messages on hover.
+- **Activity** at the top of a server's member list: what members played, watched or listened to
+  lately, from Discord's content feed.
 - **Threads browser**: a channel's active and older threads, and a search by name.
   Forums sort by activity or by date, filter by tags and search posts by name.
 - **Moderation** (for those whose permissions allow it): select messages in a channel (up to
@@ -200,9 +219,12 @@ CPU near zero when idle.
   What still differs from a browser: the DTLS and STUN handshakes come from str0m, not
   Chrome's WebRTC, and Chrome's video payload types in the offer are a guess.
 
-Not there yet: the Server Guide, Events and Channels & Roles rows of a server's header; the member
-list's Activity section; writing a note on a friend request (discord.com offers it only to accounts
-in an experiment); the Inbox's Favorites and Reminders tabs (bookmarked messages and reminders);
+Not there yet: the Server Guide, Events and Channels & Roles rows of a server's header; the full
+profile's Activity and Wishlist tabs, and Board widgets other than games; display-name effects
+(neon, gradient and the like show as one color) and the fonts without an open licence (Compagnon,
+Neo Castel, Ribes, Sinistre, Hexagon); writing a note on a friend request (discord.com offers it only to accounts
+in an experiment); forwarding to a friend with no DM open yet, and forwarding only some files of a
+message;
 the Badges and Game Collection parts of your own profile popover; the microphone's input profiles; video and screen sharing; speaking on a stage (asking to speak); a ringtone
 for incoming calls; echo cancellation (use headphones), push-to-talk and per-person volume; playing video and audio
 inside the app; profile frames, and the cosmetics members set for one server only;

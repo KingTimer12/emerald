@@ -12,6 +12,7 @@ pub mod guild;
 pub mod interaction;
 pub mod message;
 pub mod moderation;
+pub mod saved;
 pub mod search;
 pub mod settings;
 pub mod thread;

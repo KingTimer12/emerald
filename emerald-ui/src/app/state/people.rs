@@ -28,6 +28,8 @@ pub struct People {
     notes: FxHashMap<Snowflake, String>,
     /// The message sent with a friend request, while it is pending.
     request_notes: FxHashMap<Snowflake, String>,
+    /// When each relationship began, in Unix seconds: "Friends Since".
+    since: FxHashMap<Snowflake, i64>,
 }
 
 impl People {
@@ -38,6 +40,7 @@ impl People {
         self.nicknames.clear();
         self.ignored.clear();
         self.request_notes.clear();
+        self.since.clear();
         // Notes come back with each profile; another device may have
         // changed them meanwhile.
         self.notes.clear();
@@ -141,6 +144,9 @@ impl People {
     pub fn add_relationship(&mut self, relationship: Relationship) -> bool {
         let id = relationship.id;
         let previous = self.relationships.insert(id, relationship.kind);
+        if let Some(since) = relationship.since.as_deref().and_then(emerald_discord::model::iso_secs) {
+            self.since.insert(id, since);
+        }
         match relationship.nickname.filter(|n| !n.is_empty()) {
             Some(nickname) => self.nicknames.insert(id, nickname),
             None => self.nicknames.remove(&id),
@@ -162,6 +168,7 @@ impl People {
 
     pub fn remove_relationship(&mut self, id: Snowflake) {
         self.relationships.remove(&id);
+        self.since.remove(&id);
         self.nicknames.remove(&id);
         self.request_notes.remove(&id);
         self.ignored.remove(&id);
@@ -193,6 +200,12 @@ impl People {
     /// Whether `id`'s messages fold away in the chat.
     pub fn is_hidden(&self, id: Snowflake) -> bool {
         self.is_blocked(id) || self.ignored.contains(&id)
+    }
+
+    /// When the user and `id` became friends, in Unix seconds; only for
+    /// friends, as the web client shows it.
+    pub fn friends_since(&self, id: Snowflake) -> Option<i64> {
+        self.is_friend(id).then(|| self.since.get(&id).copied()).flatten()
     }
 
     pub fn nickname(&self, id: Snowflake) -> Option<&str> {
@@ -261,6 +274,7 @@ mod tests {
             nickname: None,
             user_ignored: false,
             note: Some("oi".into()),
+            since: None,
         });
         assert_eq!(people.request_note(Snowflake(7)), Some("oi"));
         people.remove_relationship(Snowflake(7));
@@ -279,6 +293,8 @@ mod tests {
             premium_type: None,
             avatar_decoration_data: None,
             collectibles: None,
+            primary_guild: None,
+            display_name_styles: None,
         }
     }
 
@@ -292,6 +308,7 @@ mod tests {
             nickname: None,
             user_ignored: false,
             note: None,
+            since: None,
         };
         assert!(!people.add_relationship(friend(relationship_kind::OUTGOING)));
         assert!(people.add_relationship(friend(relationship_kind::FRIEND)));
@@ -327,6 +344,7 @@ mod tests {
             nickname: Some("Bibi".into()),
             user_ignored: false,
             note: None,
+            since: None,
         });
         assert_eq!(people.dm_name(&dm), "ana, Bibi");
         dm.name = Some("Grupo".into());
@@ -343,6 +361,7 @@ mod tests {
             nickname: None,
             user_ignored: ignored,
             note: None,
+            since: None,
         };
         people.add_relationship(relationship(2, relationship_kind::BLOCKED, false));
         people.add_relationship(relationship(3, 0, true));

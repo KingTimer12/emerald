@@ -205,13 +205,16 @@ impl Emerald {
                             .flex()
                             .items_center()
                             .gap_1()
-                            .child(
-                                div()
+                            .child({
+                                let style = self.people.user(id).and_then(|u| u.display_name_styles.as_ref());
+                                widgets::name::styled_name(entry.name, style, theme::text_strong(), true, theme::base_lower(), cx)
                                     .truncate()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(rgb(theme::text_strong()))
-                                    .child(entry.name),
-                            )
+                            })
+                            .children(self.tag_of(id).map(|tag| {
+                                let badge = tag.badge_url(28).and_then(|url| self.avatar_image(&url));
+                                widgets::name::tag_chip(("friend-tag", id.0 as usize), tag.tag.as_deref().unwrap_or_default(), badge, 14.)
+                            }))
                             // The username shows only while the row is hovered, as in 2026.
                             .child(
                                 div()

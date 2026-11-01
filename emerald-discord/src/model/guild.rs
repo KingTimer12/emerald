@@ -18,6 +18,12 @@ pub struct Role {
     /// Anyone may ping it; otherwise only those allowed to mention everyone.
     #[serde(default)]
     pub mentionable: bool,
+    /// Icon image hash, shown after the names of its members.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// An emoji standing in for the icon.
+    #[serde(default)]
+    pub unicode_emoji: Option<String>,
 }
 
 pub mod overwrite_kind {
@@ -48,6 +54,9 @@ pub struct Member {
     pub nick: Option<String>,
     #[serde(default)]
     pub roles: Vec<Snowflake>,
+    /// The name style for this server, over the user's own.
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub display_name_styles: Option<super::NameStyle>,
 }
 
 impl Member {
@@ -65,6 +74,8 @@ pub struct MemberUpdate {
     pub nick: Option<String>,
     #[serde(default)]
     pub roles: Vec<Snowflake>,
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub display_name_styles: Option<super::NameStyle>,
 }
 
 impl MemberUpdate {
@@ -75,6 +86,7 @@ impl MemberUpdate {
             user: Some(self.user),
             nick: self.nick,
             roles: self.roles,
+            display_name_styles: self.display_name_styles,
         };
         (self.guild_id, id, member)
     }

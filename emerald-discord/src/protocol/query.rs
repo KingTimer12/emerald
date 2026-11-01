@@ -29,6 +29,17 @@ pub enum SettingsChange {
 /// turn it back on".
 pub const MUTE_WINDOWS: [i64; 6] = [900, 3600, 10_800, 28_800, 86_400, -1];
 
+/// Which view a profile is fetched for; each asks for different extras.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ProfileKind {
+    /// The side panel of a DM.
+    Panel,
+    /// "View Full Profile": servers in common and how many friends.
+    Modal,
+    /// The card on clicking a name: servers and friends in common.
+    Popout,
+}
+
 /// Where to search messages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SearchScope {

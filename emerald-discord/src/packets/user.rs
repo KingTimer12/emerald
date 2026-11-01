@@ -4,6 +4,26 @@
 use serde_json::{Value, json};
 
 use crate::model::Snowflake;
+use crate::protocol::ProfileKind;
+
+/// The query string of `GET /users/{id}/profile` for each view, in the
+/// web client's order. The modal asks only how many friends are shared;
+/// the popout asks for them.
+pub fn profile_query(kind: ProfileKind, guild: Option<Snowflake>) -> String {
+    let mut query = match kind {
+        ProfileKind::Panel => "with_mutual_guilds=false&with_mutual_friends=false&with_mutual_friends_count=false".to_owned(),
+        ProfileKind::Modal => {
+            "type=modal&with_mutual_guilds=true&with_mutual_friends=false&with_mutual_friends_count=true".to_owned()
+        }
+        ProfileKind::Popout => {
+            "type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=false".to_owned()
+        }
+    };
+    if let Some(guild) = guild {
+        query.push_str(&format!("&guild_id={guild}"));
+    }
+    query
+}
 
 pub fn friend_request(username: &str) -> Value {
     json!({ "username": username, "discriminator": null })
@@ -64,4 +84,18 @@ pub fn global_name(name: Option<&str>) -> Value {
 /// Revokes the token, as the web client does on "Log Out".
 pub fn logout() -> Value {
     json!({ "provider": null, "voip_provider": null })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn popouts_ask_for_friends_and_servers_in_common() {
+        assert_eq!(
+            profile_query(ProfileKind::Popout, Some(Snowflake(5))),
+            "type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=false&guild_id=5"
+        );
+        assert!(profile_query(ProfileKind::Modal, None).starts_with("type=modal&"));
+    }
 }

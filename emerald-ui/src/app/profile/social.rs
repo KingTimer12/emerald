@@ -64,20 +64,14 @@ impl Emerald {
         cx.notify();
     }
 
-    /// The "Note" section: a field saved on Enter.
-    pub(in super::super) fn note_section(&self) -> Div {
-        section(
-            t!("note.title"),
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().px_2().rounded(theme::radius::control()).bg(rgb(theme::base_lower())).child(self.note_input.clone()))
-                .child(div().text_xs().text_color(theme::muted()).child(t!("note.hint"))),
-        )
+    /// The note, in place: a field saved on Enter, quiet until clicked.
+    pub(in super::super) fn note_field(&self) -> Div {
+        div().text_size(zoomed(14.)).italic().child(self.note_input.clone())
     }
 
-    /// The tab strip under the name, with the counts Discord gives.
+    /// The tab strip of the full profile: the Board, then what both share,
+    /// with the counts Discord gives. The user's own profile has the Board
+    /// only.
     pub(in super::super) fn profile_tabs(&self, user: Snowflake, guild: Option<Snowflake>, cx: &mut Context<Self>) -> Div {
         let profile = self.profiles.get(&(user, guild));
         let servers = profile.and_then(|p| p.mutual_guilds.as_ref()).map(Vec::len);
@@ -85,18 +79,19 @@ impl Emerald {
             .mutual_friends
             .get(&user)
             .map(Vec::len)
+            .or(profile.and_then(|p| p.mutual_friends.as_ref().map(Vec::len)))
             .or(profile.and_then(|p| p.mutual_friends_count).map(|n| n as usize));
-        let label = |text: &'static str, count: Option<usize>| match count {
-            Some(count) => format!("{text} ({count})"),
-            None => text.to_owned(),
-        };
+        let shown = self.shown_profile_tab(user, guild);
+        let board = self.has_board(profile) || self.people.is_me(user);
         let tab = |id: &'static str, text: String, tab: ProfileTab, cx: &mut Context<Self>| {
-            let on = self.profile_tab == tab;
+            let on = shown == tab;
             div()
                 .id(id)
-                .pb_2()
+                .h(zoomed(48.))
+                .flex()
+                .items_center()
                 .border_b_2()
-                .border_color(if on { theme::text() } else { gpui::transparent_black() })
+                .border_color(if on { rgb(theme::brand()).into() } else { gpui::transparent_black() })
                 .text_size(zoomed(14.))
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
@@ -105,14 +100,30 @@ impl Emerald {
                 .child(text)
                 .on_click(cx.listener(move |this, _, _, cx| this.set_profile_tab(user, tab, cx)))
         };
+        let friends_label = match friends {
+            Some(0) => t!("profile.no_mutual_friends").to_owned(),
+            Some(1) => t!("profile.mutual_friends_one", count = 1),
+            Some(n) => t!("profile.mutual_friends_many", count = n),
+            None => t!("profile.mutual_friends").to_owned(),
+        };
+        let servers_label = match servers {
+            Some(0) => t!("profile.no_mutual_servers").to_owned(),
+            Some(1) => t!("profile.mutual_servers_one", count = 1),
+            Some(n) => t!("profile.mutual_servers_many", count = n),
+            None => t!("profile.mutual_servers").to_owned(),
+        };
         div()
+            .flex_none()
+            .px_4()
             .flex()
             .gap_5()
             .border_b_1()
             .border_color(theme::border())
-            .child(tab("profile-about", t!("profile.about_tab").to_owned(), ProfileTab::About, cx))
-            .child(tab("profile-servers", label(t!("profile.mutual_servers"), servers), ProfileTab::Servers, cx))
-            .child(tab("profile-friends", label(t!("profile.mutual_friends"), friends), ProfileTab::Friends, cx))
+            .when(board, |row| row.child(tab("profile-board", t!("profile.board").to_owned(), ProfileTab::About, cx)))
+            .when(!self.people.is_me(user), |row| {
+                row.child(tab("profile-friends", friends_label, ProfileTab::Friends, cx))
+                    .child(tab("profile-servers", servers_label, ProfileTab::Servers, cx))
+            })
     }
 
     /// The servers both are in, with their nickname there; a click opens one.
@@ -165,8 +176,17 @@ impl Emerald {
     }
 
     /// The friends both have; a click opens theirs.
-    pub(in super::super) fn mutual_friends_list(&self, user: Snowflake, cx: &mut Context<Self>) -> Div {
-        let Some(friends) = self.mutual_friends.get(&user) else { return empty(t!("common.loading")) };
+    pub(in super::super) fn mutual_friends_list(&self, user: Snowflake, guild: Option<Snowflake>, cx: &mut Context<Self>) -> Div {
+        // The popout's answer already lists them; else they are asked for.
+        let from_profile: Option<Vec<Snowflake>> = self
+            .profiles
+            .get(&(user, guild))
+            .or_else(|| self.profiles.get(&(user, None)))
+            .and_then(|p| p.mutual_friends.as_ref())
+            .map(|friends| friends.iter().map(|f| f.id).collect());
+        let Some(friends) = self.mutual_friends.get(&user).or(from_profile.as_ref()) else {
+            return empty(t!("common.loading"));
+        };
         if friends.is_empty() {
             return empty(t!("profile.no_mutual_friends"));
         }

@@ -126,6 +126,8 @@ mod tests {
             position: 0,
             permissions,
             mentionable: false,
+            icon: None,
+            unicode_emoji: None,
         }
     }
 

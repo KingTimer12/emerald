@@ -8,6 +8,8 @@ impl Render for Emerald {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Read here, not only on change: the window may start out focused.
         self.window_active = window.is_window_active();
+        self.shift_held = super::state::hover_bar::shift_after(self.shift_held, self.window_active);
+        self.fetch_activity();
         self.apply_appearance(window);
         self.images.release(window, cx);
         let width = f32::from(window.viewport_size().width);
@@ -34,6 +36,8 @@ impl Render for Emerald {
             Some(Overlay::Prompt(prompt)) => Some(self.render_prompt(*prompt, cx)),
             Some(Overlay::GroupPicker(picker)) => Some(self.render_group_picker(picker, cx)),
             Some(Overlay::Invite(modal)) => Some(self.render_invite_modal(modal, cx)),
+            Some(Overlay::Forward(modal)) => Some(self.render_forward_modal(modal, cx)),
+            Some(Overlay::CustomReminder(form)) => Some(self.render_custom_reminder(form, cx)),
             None => None,
         };
         let inbox = self.render_inbox(window.viewport_size().height, cx);
@@ -43,6 +47,8 @@ impl Render for Emerald {
         let user_menu = self.render_user_menu(cx);
         let audio_menu = self.render_audio_menu(cx);
         let own_popover = self.render_own_popover(cx);
+        let popout = self.render_popout(cx);
+        let toast = self.render_toast();
         let root = div()
             .track_focus(&self.focus_handle)
             .key_context("Emerald")
@@ -59,6 +65,9 @@ impl Render for Emerald {
             .on_action(cx.listener(|this, _: &GoBack, window, cx| this.go_back(window, cx)))
             .on_action(cx.listener(|this, _: &GoForward, window, cx| this.go_forward(window, cx)))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| this.record_shortcut(event, cx)))
+            .on_modifiers_changed(cx.listener(|this, event: &gpui::ModifiersChangedEvent, _, cx| {
+                this.on_modifiers(event.modifiers.shift, cx)
+            }))
             .on_action(cx.listener(|this, _: &crate::text_input::Copy, _, cx| {
                 this.copy_selection(cx);
             }))
@@ -103,7 +112,9 @@ impl Render for Emerald {
             .children(place_menu)
             .children(user_menu)
             .children(audio_menu)
-            .children(own_popover);
+            .children(own_popover)
+            .children(popout)
+            .children(toast);
         // A profile effect drawn above has layers on a clock.
         if self.animating.take() {
             self.next_animation_frame(cx);

@@ -1,6 +1,7 @@
 //! What can be done to a message: reply, edit, pin, copy and delete. The
 //! toolbar shown on hover and the context menu offer the same actions.
 
+mod bar;
 pub(super) mod bulk;
 mod editing;
 mod menu;
@@ -35,11 +36,18 @@ pub(in super::super) struct Replying {
     pub mention: bool,
 }
 
-/// The context menu of a message, open at `position`.
+/// The context menu of a message, open at `anchor`.
 pub(in super::super) struct MessageMenu {
     pub channel: Snowflake,
     pub message: Snowflake,
     pub anchor: super::super::widgets::popover::Anchor,
+    /// The menu as last drawn, to place its side menu.
+    pub panel: super::super::widgets::popover::Tracked,
+    /// The "Remind Me" side menu is open.
+    pub remind: bool,
+    /// Its item and the side menu, as last drawn, to place and keep it.
+    pub remind_item: super::super::widgets::popover::Tracked,
+    pub remind_panel: super::super::widgets::popover::Tracked,
 }
 
 /// What the current user may do to one message.
@@ -97,6 +105,7 @@ impl Emerald {
             || self.audio_menu.take().is_some()
             || self.inbox.take().is_some()
             || self.own_popover.take().is_some()
+            || self.popout.take().is_some()
             || std::mem::take(&mut self.plus_menu)
         {
             cx.notify();

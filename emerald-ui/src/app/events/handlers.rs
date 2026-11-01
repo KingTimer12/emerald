@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::lottie::Player;
+use crate::icons;
 
 impl Emerald {
     #[hotpath::measure]
@@ -64,6 +65,7 @@ impl Emerald {
             self.restore_channel(channel, window, cx);
         }
         self.follow_pending_link(window, cx);
+        self.net.post(Command::SavedMessages);
     }
 
     #[hotpath::measure]
@@ -247,6 +249,8 @@ impl Emerald {
             }
             Action::Relationship => {
                 if let Err(error) = result {
+                    // Opening a DM failed: the card's message must not go later.
+                    self.popout_pending = None;
                     self.connection.set_message(t!("common.error", error = error));
                 }
             }
@@ -309,6 +313,18 @@ impl Emerald {
                     view.feedback = Some(Feedback::from_result(result, t!("settings.profile_saved")));
                 }
             }
+            Action::Bookmark { added } | Action::Reminder { added } => match result {
+                Ok(()) => {
+                    let (text, icon) = match action {
+                        Action::Bookmark { .. } if added => (t!("saved.bookmark_added"), icons::BOOKMARK),
+                        Action::Bookmark { .. } => (t!("saved.bookmark_removed"), icons::BOOKMARK),
+                        _ if added => (t!("saved.reminder_added"), icons::CLOCK),
+                        _ => (t!("saved.reminder_removed"), icons::CLOCK),
+                    };
+                    self.show_toast(text, Some(icon), cx);
+                }
+                Err(error) => self.connection.set_message(t!("common.error", error = error)),
+            },
             Action::AccountSettings | Action::Sessions => {
                 if let Err(error) = result {
                     match &mut self.overlay {

@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 mod colors;
 pub mod fonts;
+pub mod name_fonts;
 pub mod radius;
 
 pub use colors::*;

@@ -36,6 +36,11 @@ pub const INBOX: &str = "icons/inbox.svg";
 pub const FOLDER: &str = "icons/folder.svg";
 pub const CHECK: &str = "icons/check.svg";
 pub const CHECK_DOUBLE: &str = "icons/check_double.svg";
+pub const BOOKMARK: &str = "icons/bookmark.svg";
+pub const BOOKMARK_FILLED: &str = "icons/bookmark_filled.svg";
+pub const CLOCK: &str = "icons/clock.svg";
+pub const LINK: &str = "icons/link.svg";
+pub const MARK_UNREAD: &str = "icons/mark_unread.svg";
 pub const CHEVRON_RIGHT: &str = "icons/chevron_right.svg";
 pub const USER_ADD: &str = "icons/user_add.svg";
 pub const PLUS: &str = "icons/plus.svg";
@@ -63,7 +68,7 @@ pub const WINDOW_MAXIMIZE: &str = "icons/window_maximize.svg";
 pub const WINDOW_RESTORE: &str = "icons/window_restore.svg";
 pub const WINDOW_CLOSE: &str = "icons/window_close.svg";
 
-const ALL: [(&str, &[u8]); 53] = [
+const ALL: [(&str, &[u8]); 58] = [
     (FRIENDS, include_bytes!("../assets/icons/friends.svg")),
     (PROFILE, include_bytes!("../assets/icons/profile.svg")),
     (TEXT, include_bytes!("../assets/icons/text.svg")),
@@ -93,6 +98,11 @@ const ALL: [(&str, &[u8]); 53] = [
     (FOLDER, include_bytes!("../assets/icons/folder.svg")),
     (CHECK, include_bytes!("../assets/icons/check.svg")),
     (CHECK_DOUBLE, include_bytes!("../assets/icons/check_double.svg")),
+    (BOOKMARK, include_bytes!("../assets/icons/bookmark.svg")),
+    (BOOKMARK_FILLED, include_bytes!("../assets/icons/bookmark_filled.svg")),
+    (CLOCK, include_bytes!("../assets/icons/clock.svg")),
+    (LINK, include_bytes!("../assets/icons/link.svg")),
+    (MARK_UNREAD, include_bytes!("../assets/icons/mark_unread.svg")),
     (CHEVRON_RIGHT, include_bytes!("../assets/icons/chevron_right.svg")),
     (USER_ADD, include_bytes!("../assets/icons/user_add.svg")),
     (PLUS, include_bytes!("../assets/icons/plus.svg")),

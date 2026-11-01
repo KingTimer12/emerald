@@ -129,6 +129,11 @@ impl Recent {
         self.channels.truncate(Self::KEEP);
     }
 
+    /// The recent channels, newest first.
+    pub fn channels(&self) -> &[Snowflake] {
+        &self.channels
+    }
+
     /// Where `channel` sits among the recent ones, `None` if it is not one.
     pub fn position(&self, channel: Snowflake) -> Option<usize> {
         self.channels.iter().position(|c| *c == channel)

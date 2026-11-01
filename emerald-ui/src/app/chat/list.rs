@@ -178,7 +178,7 @@ impl Emerald {
         // Pings get Discord's gold tint and a bar on the left edge.
         let row = div()
             .id(("message", ix))
-            .group(group)
+            .group(group.clone())
             .relative()
             .w_full()
             .when(mentioned, |row| {
@@ -270,13 +270,29 @@ impl Emerald {
                     && system_text(p.kind, "").is_none()
             })
         {
+            // Follow-up: the time sits in the avatar gutter, shown on hover.
             row.pl(zoomed(72.))
                 .pr_4()
                 .py(zoomed(2.))
+                .child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top(zoomed(4.))
+                        .w(zoomed(64.))
+                        .flex()
+                        .justify_end()
+                        .text_size(zoomed(11.))
+                        .text_color(theme::muted())
+                        .invisible()
+                        .group_hover(group, |s| s.visible())
+                        .child(msg.short_time.clone()),
+                )
                 .child(self.message_body(msg, ix, cx))
                 .children(toolbar)
                 .into_any_element()
         } else {
+            let (avatar_spot, name_spot) = (widgets::popover::Tracked::default(), widgets::popover::Tracked::default());
             // Group start: 17px gap above, outside the hover highlight. A day
             // separator already provides the gap.
             div()
@@ -293,8 +309,8 @@ impl Emerald {
                                 .flex()
                                 .gap_4()
                                 .child(
-                                    div()
-                                        .id(("author-avatar", ix))
+                                    avatar_spot
+                                        .track(div().id(("author-avatar", ix)))
                                         .mt(zoomed(2.))
                                         .cursor_pointer()
                                         .child(widgets::decorated(
@@ -302,9 +318,13 @@ impl Emerald {
                                             msg.decoration.as_ref().and_then(|d| self.decoration_image(d, 40., false)),
                                             40.,
                                         ))
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.open_profile(author_id, guild, window, cx)
-                                        }))
+                                        .on_click({
+                                            let spot = avatar_spot.clone();
+                                            cx.listener(move |this, _, window, cx| {
+                                                let anchor = widgets::popover::Anchor::right_of(spot.bounds());
+                                                this.open_popout(author_id, guild, anchor, window, cx)
+                                            })
+                                        })
                                         .on_mouse_down(MouseButton::Right, self.on_user_right_click(author_id, guild, dm_group, cx)),
                                 )
                                 .child(
@@ -316,17 +336,35 @@ impl Emerald {
                                         .child(
                                             div()
                                                 .flex()
-                                                .gap(zoomed(6.))
+                                                .gap_2()
                                                 .items_center()
                                                 .child(
-                                                    div()
-                                                        .text_color(rgb(author_color))
-                                                        .font_weight(FontWeight::MEDIUM)
-                                                        .child(author),
+                                                    name_spot
+                                                        .track(div().id(("author-name", ix)).cursor_pointer().hover(|s| s.underline()))
+                                                        .child(
+                                                            widgets::name::styled_name(
+                                                                author,
+                                                                self.name_style_of(msg.author_id, msg.name_style.as_ref()),
+                                                                author_color,
+                                                                guild.is_none(),
+                                                                theme::base_low(),
+                                                                cx,
+                                                            )
+                                                            .text_size(zoomed(16.)),
+                                                        )
+                                                        .on_click({
+                                                            let spot = name_spot.clone();
+                                                            cx.listener(move |this, _, window, cx| {
+                                                                let anchor = widgets::popover::Anchor::right_of(spot.bounds());
+                                                                this.open_popout(author_id, guild, anchor, window, cx)
+                                                            })
+                                                        })
+                                                        .on_mouse_down(MouseButton::Right, self.on_user_right_click(author_id, guild, dm_group, cx)),
                                                 )
+                                                .children(self.name_extras(msg.author_id, msg.tag.as_ref(), 20., ix, cx))
                                                 .child(
                                                     div()
-                                                        .text_xs()
+                                                        .text_size(zoomed(12.))
                                                         .text_color(theme::muted())
                                                         .child(msg.time.clone()),
                                                 ),

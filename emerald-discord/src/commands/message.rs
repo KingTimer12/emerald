@@ -3,7 +3,9 @@
 use super::captcha::with_captcha;
 use super::outcome::{or_expired, outcome};
 use crate::model::{Emoji, Gif, Snowflake};
-use crate::protocol::{Action, NetEvent, NewPoll, Page, ReactionSource, ReplyTo, Upload};
+use crate::protocol::{
+    Action, ForwardOf, ForwardStep, ForwardTo, NetEvent, NewPoll, Page, ReactionSource, ReplyTo, Upload, forward_steps,
+};
 use crate::rest::{self, Outgoing, Rest};
 
 pub async fn history(rest: &Rest, channel: Snowflake, page: Page) -> NetEvent {
@@ -132,6 +134,10 @@ pub async fn vote(rest: &Rest, channel: Snowflake, message: Snowflake, answers: 
     outcome(Action::Message, rest.vote_poll(channel, message, &answers).await)
 }
 
+pub async fn mark_unread(rest: &Rest, channel: Snowflake, before: Snowflake, mentions: u32) -> NetEvent {
+    outcome(Action::Message, rest.mark_unread(channel, before, mentions).await)
+}
+
 pub async fn pin(rest: &Rest, channel: Snowflake, message: Snowflake, pin: bool) -> NetEvent {
     outcome(Action::Message, rest.pin_message(channel, message, pin).await)
 }
@@ -173,4 +179,46 @@ pub async fn typing(rest: &Rest, channel: Snowflake) -> Option<NetEvent> {
         tracing::debug!("typing in {channel}: {e:#}");
     }
     None
+}
+
+/// Each destination gets the forward, then the optional text once the
+/// forward went out. A failed destination does not stop the others.
+pub async fn forward(rest: &Rest, from: ForwardOf, to: Vec<ForwardTo>, text: Option<String>) -> NetEvent {
+    let mut failed: Vec<Snowflake> = Vec::new();
+    let mut error = None;
+    for step in forward_steps(&to, text.as_deref()) {
+        let (channel, message) = match step {
+            ForwardStep::Forward(channel) => (
+                channel,
+                Outgoing {
+                    forward: Some(from),
+                    ..Outgoing::default()
+                },
+            ),
+            ForwardStep::Text(channel) if !failed.contains(&channel) => (
+                channel,
+                Outgoing {
+                    content: text.as_deref().unwrap_or_default(),
+                    ..Outgoing::default()
+                },
+            ),
+            ForwardStep::Text(_) => continue,
+        };
+        let nonce = crate::rest::nonce();
+        let message = Outgoing {
+            nonce: &nonce,
+            location: Some("forwarding"),
+            ..message
+        };
+        if let Err(e) = with_captcha!(|captcha| rest.send_message(channel, &message, captcha).await) {
+            if e.is::<crate::rest::Unauthorized>() {
+                return NetEvent::AuthExpired;
+            }
+            error.get_or_insert_with(|| crate::rest::describe(&e));
+            if !failed.contains(&channel) {
+                failed.push(channel);
+            }
+        }
+    }
+    NetEvent::Forwarded { failed, error }
 }

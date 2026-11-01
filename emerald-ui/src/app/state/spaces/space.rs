@@ -46,6 +46,12 @@ impl Space {
         let name = guild.display_name().to_owned();
         let upload_limit = guild.upload_limit();
         let header = GuildHeader::of(&guild);
+        let role_icons = guild.has_feature("ROLE_ICONS");
+        let features: Vec<String> = ["ACTIVITY_FEED_ENABLED_BY_USER", "ACTIVITY_FEED_DISABLED_BY_USER"]
+            .into_iter()
+            .filter(|f| guild.has_feature(f))
+            .map(str::to_owned)
+            .collect();
         let mut space = Self {
             id: guild.id,
             initials: initials(&name).into(),
@@ -60,6 +66,8 @@ impl Space {
                 requested: FxHashSet::default(),
                 permissions: FxHashMap::default(),
                 upload_limit,
+                role_icons,
+                feed_features: features,
                 header,
                 emojis: guild.emojis,
                 stickers: guild.stickers,

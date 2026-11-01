@@ -10,7 +10,7 @@ use gpui::SharedString;
 
 use super::super::super::time;
 use emerald_discord::model::{
-    AvatarDecoration,
+    AvatarDecoration, NameStyle, PrimaryGuild,
     Attachment, Channel, Embed, Emoji, Message, Poll, PollAnswerCount, PollResults, REFERENCE_FORWARD, Reaction,
     Snowflake, StickerItem, User, iso_secs, message_flags, message_kind,
 };
@@ -25,6 +25,10 @@ pub struct Msg {
     pub avatar_url: SharedString,
     /// The author's Nitro avatar decoration, if any.
     pub decoration: Option<AvatarDecoration>,
+    /// The author's server tag, when they show one.
+    pub tag: Option<PrimaryGuild>,
+    /// The author's display-name font and colors, the guild's over theirs.
+    pub name_style: Option<NameStyle>,
     pub secs: i64,
     pub time: SharedString,
     pub short_time: SharedString,
@@ -127,6 +131,8 @@ impl Msg {
             author: author.display_name().to_owned().into(),
             avatar_url: author.avatar_url().into(),
             decoration: author.avatar_decoration_data.clone(),
+            tag: author.primary_guild.clone().filter(PrimaryGuild::shown),
+            name_style: author.display_name_styles.clone(),
             secs,
             time: time::header(secs).into(),
             short_time: time::short(secs).into(),
@@ -240,7 +246,13 @@ impl From<Message> for Msg {
             thread: message.thread.map(|t| *t),
             reactions: message.reactions.into_iter().map(Into::into).collect(),
             nonce: message.nonce,
-            ..Self::blank(&message.author, message.id, message.id.unix_secs(), message.content)
+            ..Self {
+                name_style: message
+                    .member
+                    .and_then(|m| m.display_name_styles)
+                    .or_else(|| message.author.display_name_styles.clone()),
+                ..Self::blank(&message.author, message.id, message.id.unix_secs(), message.content)
+            }
         }
     }
 }

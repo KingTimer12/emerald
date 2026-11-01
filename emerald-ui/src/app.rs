@@ -22,6 +22,7 @@ mod deep_links;
 mod desktop;
 mod dialogs;
 mod events;
+mod forward;
 mod friends;
 mod group_members;
 mod group_picker;
@@ -30,14 +31,17 @@ mod invites;
 mod members;
 mod channel_settings;
 mod moderation;
+mod names;
 mod navigation;
 mod outbox;
 mod place_actions;
 mod place_menu;
 mod panels;
 mod profile;
+mod reminder_modal;
 mod render;
 mod requests;
+mod saved;
 mod settings;
 mod sidebar;
 mod slash;
@@ -45,6 +49,7 @@ mod state;
 mod suggestions;
 mod switcher;
 mod title_bar;
+mod toast;
 mod user_menu;
 mod user_panel;
 mod voice;
@@ -133,6 +138,10 @@ enum Overlay {
     GroupPicker(group_picker::GroupPicker),
     /// "Invite People".
     Invite(invites::InviteModal),
+    /// "Forward To".
+    Forward(Box<forward::ForwardModal>),
+    /// "Set Custom Reminder".
+    CustomReminder(Box<reminder_modal::CustomReminder>),
 }
 
 pub struct Emerald {
@@ -225,6 +234,26 @@ pub struct Emerald {
     own_popover: Option<profile::OwnPopover>,
     /// When a press outside it last closed it.
     own_popover_dismissed: Option<std::time::Instant>,
+    /// Someone's profile card, opened from their name or avatar.
+    popout: Option<profile::Popout>,
+    popout_dismissed: Option<std::time::Instant>,
+    /// A message typed in a card's box, waiting for its DM to open.
+    popout_pending: Option<(Snowflake, String, Instant)>,
+    /// Games the Boards show, by id, and those already asked for; bounded.
+    games: FxHashMap<Snowflake, emerald_discord::model::Game>,
+    games_asked: FxHashSet<Snowflake>,
+    /// What people did lately, for the member list's Activity section.
+    activity_feed: state::activity_feed::ActivityFeed,
+    /// The section lists every entry, not three.
+    activity_expanded: bool,
+    /// Bookmarks and reminders.
+    saved: state::Saved,
+    /// Retires the reminder clocks started before the latest one.
+    reminder_clock: u64,
+    /// Shift is held: hover bars show their longer form.
+    shift_held: bool,
+    /// The confirmation at the bottom of the window.
+    toast: Option<toast::Toast>,
     /// The search box in the channel header.
     search_input: Entity<TextInput>,
     /// The search box of the threads panel.
@@ -476,6 +505,17 @@ impl Emerald {
             user_panel: Default::default(),
             own_popover: None,
             own_popover_dismissed: None,
+            popout: None,
+            popout_dismissed: None,
+            popout_pending: None,
+            games: FxHashMap::default(),
+            games_asked: FxHashSet::default(),
+            activity_feed: Default::default(),
+            activity_expanded: false,
+            saved: Default::default(),
+            reminder_clock: 0,
+            shift_held: false,
+            toast: None,
             search_input,
             thread_query,
             forum_query,

@@ -99,6 +99,11 @@ fn event(kind: &str, data: &str, identity: &Identity, state: &mut State) -> Opti
         "MESSAGE_DELETE" => decode(kind, data, NetEvent::MessageDelete),
         "MESSAGE_DELETE_BULK" => decode(kind, data, NetEvent::MessageDeleteBulk),
         "MESSAGE_ACK" => decode(kind, data, NetEvent::MessageAck),
+        "CONTENT_INVENTORY_INBOX_STALE" => decode(kind, data, |s: crate::model::InboxStale| {
+            NetEvent::ContentInventoryStale { after_ms: s.refresh_after_ms }
+        }),
+        "SAVED_MESSAGE_CREATE" => decode(kind, data, |s| NetEvent::SavedMessageCreate(Box::new(s))),
+        "SAVED_MESSAGE_DELETE" => decode(kind, data, NetEvent::SavedMessageDelete),
         "GUILD_MEMBERS_CHUNK" => decode(kind, data, NetEvent::MembersChunk),
         "GUILD_MEMBER_LIST_UPDATE" => decode(kind, data, NetEvent::MemberList),
         "GUILD_MEMBER_UPDATE" => decode(kind, data, NetEvent::MemberUpdate),

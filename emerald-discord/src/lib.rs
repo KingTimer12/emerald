@@ -25,9 +25,9 @@ use std::sync::Arc;
 
 use model::Status;
 pub use protocol::{
-    Action, Command, IndexTarget, Link, MUTE_WINDOWS, NetEvent, NewPoll, OwnPresence, Page, Picture, PinPage, ProfileEdit,
+    Action, Command, ForwardOf, ForwardTo, IndexTarget, Link, MUTE_WINDOWS, NetEvent, NewPoll, OwnPresence, Page, Picture, PinPage, ProfileEdit,
     CallStatus, ChannelEdit, ReactionEvent, ReactionSource, ReplyTo, SearchPage, SearchQuery, SearchScope, SettingsChange, SettingsEdit,
-    Snapshot, TagEdit, ThreadPage, ThreadQuery, Upload, VoiceCall, VoiceControls, VoiceEvent,
+    ProfileKind, SaveSource, Snapshot, TagEdit, ThreadPage, ThreadQuery, Upload, VoiceCall, VoiceControls, VoiceEvent,
 };
 use tokio::sync::{mpsc, watch};
 

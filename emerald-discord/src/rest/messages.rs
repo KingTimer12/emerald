@@ -46,7 +46,11 @@ impl Rest {
         // The poll form sends with `location: poll_creation`, which the
         // web client's HTTP layer turns into this header; inferred from the
         // bundle, not seen on the wire.
-        let call = if outgoing.poll.is_some() { call.context(context::location("poll_creation")) } else { call };
+        let location = if outgoing.poll.is_some() { Some("poll_creation") } else { outgoing.location };
+        let call = match location {
+            Some(location) => call.context(context::location(location)),
+            None => call,
+        };
         self.api.fetch(call).await
     }
 
@@ -175,6 +179,17 @@ impl Rest {
             .json(message::ack()),
         )
         .await
+    }
+
+    /// Moves the read marker back to `before`, as "Mark Unread" does.
+    pub async fn mark_unread(&self, channel: Snowflake, before: Snowflake, mentions: u32) -> Result<()> {
+        self.api
+            .run(
+                Call::post("/channels/{id}/messages/{id}/ack", format!("/channels/{channel}/messages/{before}/ack"))
+                    .major(channel)
+                    .json(message::manual_ack(mentions)),
+            )
+            .await
     }
 
     /// Shows "… is typing" to the other side for about ten seconds.

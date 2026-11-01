@@ -292,7 +292,7 @@ impl Emerald {
                                 .min_w(zoomed(0.))
                                 .flex()
                                 .flex_col()
-                                .child(div().truncate().line_height(zoomed(18.)).child(name.clone()))
+                                .child(self.dm_name_line(name.clone(), user, ix))
                                 .child(
                                     div()
                                         .truncate()
@@ -301,7 +301,7 @@ impl Emerald {
                                         .text_color(rgb(theme::channels_default()))
                                         .child(activity),
                                 ),
-                            None => div().flex_1().min_w(zoomed(0.)).truncate().child(name.clone()),
+                            None => div().flex_1().min_w(zoomed(0.)).child(self.dm_name_line(name.clone(), user, ix)),
                         },
                     })
                     .when(mentions > 0 && !selected, |r| r.child(widgets::badge(mentions as usize)))

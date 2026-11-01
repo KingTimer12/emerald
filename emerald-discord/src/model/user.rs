@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{AvatarDecoration, Collectibles, Snowflake};
+use super::{AvatarDecoration, Collectibles, NameStyle, PrimaryGuild, Snowflake};
 use crate::urls::CDN;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -25,6 +25,11 @@ pub struct User {
     pub avatar_decoration_data: Option<AvatarDecoration>,
     #[serde(default)]
     pub collectibles: Option<Collectibles>,
+    /// The server tag worn after the name.
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub primary_guild: Option<PrimaryGuild>,
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub display_name_styles: Option<NameStyle>,
 }
 
 impl User {
@@ -83,6 +88,9 @@ pub struct Relationship {
     /// The message someone wrote with their friend request, shown on demand.
     #[serde(default)]
     pub note: Option<String>,
+    /// When the relationship began, ISO 8601: "Friends Since".
+    #[serde(default)]
+    pub since: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +187,8 @@ mod tests {
             premium_type: None,
             avatar_decoration_data: None,
             collectibles: None,
+            primary_guild: None,
+            display_name_styles: None,
         };
         assert_eq!(
             user("a_abc").animated_avatar_url().as_deref(),

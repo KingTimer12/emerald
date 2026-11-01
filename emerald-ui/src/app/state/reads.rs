@@ -14,6 +14,9 @@ pub struct ReadStates {
     mentions: FxHashMap<Snowflake, u32>,
     /// Channels with a receipt scheduled, so bursts send one.
     scheduled: FxHashSet<Snowflake>,
+    /// Channels marked unread by hand: no receipt goes out until they are
+    /// opened again, or the mark would undo itself on screen.
+    held: FxHashSet<Snowflake>,
 }
 
 impl ReadStates {
@@ -63,6 +66,7 @@ impl ReadStates {
 
     /// The channel is on screen.
     pub fn seen(&mut self, channel: Snowflake) {
+        self.held.remove(&channel);
         self.unread.remove(&channel);
         self.mentions.remove(&channel);
     }
@@ -80,6 +84,14 @@ impl ReadStates {
         }
     }
 
+    /// "Mark Unread": read up to `before`, with `mentions` left, and held
+    /// unread until the channel is opened again.
+    pub fn marked_unread(&mut self, channel: Snowflake, before: Snowflake, mentions: u32) {
+        self.acked(channel, before, mentions);
+        self.unread.insert(channel);
+        self.held.insert(channel);
+    }
+
     /// The last message read in `channel`, if Discord said.
     pub fn last_read(&self, channel: Snowflake) -> Option<Snowflake> {
         self.read.get(&channel).copied()
@@ -92,7 +104,7 @@ impl ReadStates {
     /// Opens the window that collects a burst into one receipt; false when
     /// one is already open for `channel` or `message` is already read.
     pub fn schedule(&mut self, channel: Snowflake, message: Snowflake) -> bool {
-        !self.has_read(channel, message) && self.scheduled.insert(channel)
+        !self.held.contains(&channel) && !self.has_read(channel, message) && self.scheduled.insert(channel)
     }
 
     /// Closes the window: the message to send a receipt for, if `newest`
@@ -153,6 +165,16 @@ mod tests {
         assert_eq!(reads.flush(C, Some(Snowflake(7))), Some(Snowflake(7)));
         assert!(!reads.schedule(C, Snowflake(7)));
         assert!(reads.schedule(C, Snowflake(8)));
+    }
+
+    #[test]
+    fn marked_unread_holds_receipts_until_opened() {
+        let mut reads = ReadStates::default();
+        reads.marked_unread(C, Snowflake(4), 0);
+        assert!(reads.is_unread(C));
+        assert!(!reads.schedule(C, Snowflake(9)));
+        reads.seen(C);
+        assert!(reads.schedule(C, Snowflake(9)));
         reads.acked(C, Snowflake(9), 0);
         assert_eq!(reads.flush(C, Some(Snowflake(8))), None);
     }

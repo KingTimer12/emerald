@@ -5,9 +5,13 @@ use crate::zoom::zoomed;
 
 mod modal;
 mod own;
+mod panel;
+mod popout;
 mod social;
+mod board;
 
 pub(super) use own::OwnPopover;
+pub(super) use popout::Popout;
 pub(super) use social::ProfileTab;
 
 use std::rc::Rc;
@@ -15,12 +19,15 @@ use std::rc::Rc;
 use gpui::{Context, Div, FontWeight, ImageSource, MouseButton, ObjectFit, SharedString, Window, div, img, prelude::*, rgb};
 
 use super::super::{theme, time};
+use super::state::profile_theme::{ProfileTheme, profile_theme};
 use super::widgets::{self, ButtonKind};
 use super::{Emerald, MAX_PROFILE_EFFECTS, Overlay};
 use emerald_discord::Command;
-use emerald_discord::model::{PROFILE_EFFECT, Profile, ProfileEffect, Snowflake, banner_url, guild_banner_url};
+use emerald_discord::model::{
+    NameStyle, PROFILE_EFFECT, PrimaryGuild, Profile, ProfileEffect, Snowflake, User, banner_url, guild_banner_url,
+};
 
-const PANEL_WIDTH: f32 = 340.;
+const PANEL_WIDTH: f32 = 320.;
 
 /// What both profile views show, resolved from the user and profile caches.
 struct Card {
@@ -41,6 +48,15 @@ struct Card {
     roles: Vec<(String, u32)>,
     /// When they joined the guild, in Unix seconds.
     joined: Option<i64>,
+    /// The card's colors when they set theme colors.
+    theme: Option<ProfileTheme>,
+    tag: Option<PrimaryGuild>,
+    name_style: Option<NameStyle>,
+    /// Friends in common, as asked for by the popout, and how many
+    /// friends and servers are shared when known.
+    mutual_friends: Vec<User>,
+    mutual_friend_count: Option<usize>,
+    mutual_server_count: Option<usize>,
 }
 
 impl Emerald {
@@ -85,8 +101,29 @@ impl Emerald {
             .and_then(profile_effect)
             .or_else(|| global_profile.and_then(profile_effect))
             .and_then(|sku| self.profile_effects.get(sku).cloned().flatten());
+        let theme_colors = local.and_then(|d| d.theme_colors).or_else(|| global.and_then(|d| d.theme_colors));
+        let asked = profile;
+        let mutual_friends = asked.and_then(|p| p.mutual_friends.clone()).unwrap_or_default();
+        let mutual_friend_count = asked
+            .and_then(|p| p.mutual_friends.as_ref().map(Vec::len).or(p.mutual_friends_count.map(|n| n as usize)));
+        let mutual_server_count = asked.and_then(|p| p.mutual_guilds.as_ref().map(Vec::len));
         let profile = global_profile.or(profile);
+        let profile_user = profile.and_then(|p| p.user.user());
+        let tag = known
+            .and_then(|u| u.primary_guild.clone())
+            .or_else(|| profile_user.as_ref().and_then(|u| u.primary_guild.clone()))
+            .filter(PrimaryGuild::shown);
+        let name_style = seen
+            .and_then(|m| m.display_name_styles.clone())
+            .or_else(|| known.and_then(|u| u.display_name_styles.clone()))
+            .or_else(|| profile_user.and_then(|u| u.display_name_styles));
         Card {
+            theme: theme_colors.map(|[primary, accent]| profile_theme(primary, accent)),
+            tag,
+            name_style,
+            mutual_friends,
+            mutual_friend_count,
+            mutual_server_count,
             effect,
             banner_url,
             name: nick
@@ -121,34 +158,6 @@ impl Emerald {
                     .collect()
             }),
         }
-    }
-
-    /// Username followed by the badge icons, each with its description on hover.
-    fn name_line(&self, card: &Card, text_size: f32, badge_size: f32) -> Div {
-        let mut line = div()
-            .flex()
-            .flex_wrap()
-            .items_center()
-            .gap_1()
-            .child(
-                div()
-                    .mr_1()
-                    .text_size(zoomed(text_size))
-                    .text_color(rgb(theme::text_default()))
-                    .child(card.username.clone()),
-            );
-        for (ix, (description, url)) in card.badges.iter().enumerate() {
-            let badge = div()
-                .id(("badge", ix))
-                .flex_none()
-                .size(zoomed(badge_size))
-                .tooltip(widgets::tooltip(description.clone()));
-            line = line.child(match self.avatar_image(url) {
-                Some(image) => badge.child(img(image).size_full()),
-                None => badge,
-            });
-        }
-        line
     }
 
     /// The banner image when there is one and it has arrived, else its color.
@@ -243,99 +252,6 @@ impl Emerald {
         Some(layer.children(shown))
     }
 
-    pub(super) fn render_profile_panel(&self, user: Snowflake, cx: &mut Context<Self>) -> impl IntoElement {
-        let card = self.card(user, None);
-        const BANNER: f32 = 120.;
-        // `self.card` names people by their own name; the panel sits by
-        // the DM, where a friend goes by the nickname given.
-        let card = Card {
-            name: self.people.nickname(user).map_or(card.name.clone(), |n| n.to_owned().into()),
-            ..card
-        };
-        const AVATAR: f32 = 80.;
-        const RING: f32 = 6.;
-
-        div()
-            .w(zoomed(PANEL_WIDTH))
-            .flex_none()
-            .h_full()
-            .p_2()
-            .border_l_1()
-            .border_color(theme::border())
-            .child(
-                div()
-                    .relative()
-                    .size_full()
-                    .flex()
-                    .flex_col()
-                    .rounded(theme::radius::control())
-                    .overflow_hidden()
-                    .border_1()
-                    .border_color(theme::border())
-                    .bg(rgb(theme::base_lowest()))
-                    .child(self.banner(&card, BANNER))
-                    .child(
-                        // Avatar straddling the banner's bottom edge.
-                        div()
-                            .absolute()
-                            .top(zoomed(BANNER - AVATAR / 2. - RING))
-                            .left_4()
-                            .child(self.avatar_ring(user, &card, AVATAR, RING)),
-                    )
-                    .child(
-                        div()
-                            .id("profile-body")
-                            .w_full()
-                            .flex_1()
-                            .min_h(zoomed(0.))
-                            .overflow_y_scroll()
-                            .flex()
-                            .flex_col()
-                            .gap_3()
-                            .px_4()
-                            .pt(zoomed(AVATAR / 2. + RING + 12.))
-                            .pb_4()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        div()
-                                            .text_size(zoomed(20.))
-                                            .line_height(zoomed(24.))
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(rgb(theme::text_strong()))
-                                            .child(card.name.clone()),
-                                    )
-                                    .child(self.name_line(&card, 14., 20.)),
-                            )
-                            .children(card.pronouns.clone().map(|p| {
-                                div()
-                                    .text_size(zoomed(14.))
-                                    .text_color(rgb(theme::text_muted()))
-                                    .child(p)
-                            }))
-                            .children(self.activities(user))
-                            .children(card.bio.clone().map(|bio| section(t!("profile.about"), text(bio))))
-                            .child(section(
-                                t!("profile.member_since"),
-                                text(time::short_date(user.unix_secs())),
-                            )),
-                    )
-                    .child(
-                        div().w_full().flex_none().p_3().child(
-                            widgets::button("full-profile", t!("profile.view_full"), ButtonKind::Secondary)
-                                .w_full()
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_profile(user, None, window, cx)
-                                }))
-                                .on_mouse_down(MouseButton::Right, self.on_user_right_click(user, None, None, cx)),
-                        ),
-                    )
-                    .children(self.effect(&card, PANEL_WIDTH)),
-            )
-    }
-
     /// Asks once for the still of the profile effect `profile` shows, as
     /// the web client fetches its product right after the profile.
     pub(super) fn ask_profile_effect(&mut self, profile: &Profile) {
@@ -357,15 +273,19 @@ impl Emerald {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.profile(user, guild, true);
+        self.profile(user, guild, emerald_discord::ProfileKind::Modal);
         // Badges and connected accounts only come with the global profile.
         if guild.is_some() {
-            self.profile(user, None, false);
+            self.profile(user, None, emerald_discord::ProfileKind::Panel);
         }
         self.profile_tab = ProfileTab::About;
         self.profile_opened = std::time::Instant::now();
         if !self.people.is_me(user) {
             self.load_note(user, cx);
+            // Without a Board the modal opens on Mutual Friends.
+            if !self.mutual_friends.contains_key(&user) {
+                self.net.post(Command::MutualFriends { user });
+            }
         }
         self.overlay = Some(Overlay::Profile { user, guild });
         window.focus(&self.focus_handle);

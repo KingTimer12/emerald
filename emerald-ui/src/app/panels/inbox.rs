@@ -2,6 +2,7 @@
 //! the channels with unread messages, each a card with those messages, and
 //! recent mentions.
 
+mod saved;
 mod unreads;
 
 use std::time::Instant;
@@ -26,6 +27,8 @@ const UNREADS_PAGE: usize = 5;
 pub(in super::super) enum InboxTab {
     Unreads,
     Mentions,
+    Bookmarks,
+    Reminders,
 }
 
 pub(in super::super) struct Inbox {
@@ -41,6 +44,8 @@ pub(in super::super) struct Inbox {
     collapsed: FxHashSet<Snowflake>,
     /// Mentions were asked for, which happens on the first visit to the tab.
     mentions_asked: bool,
+    /// The reminder whose due times are shown, to edit or snooze it.
+    editing: Option<Snowflake>,
 }
 
 impl Emerald {
@@ -57,6 +62,7 @@ impl Emerald {
                 shown: UNREADS_PAGE,
                 collapsed: FxHashSet::default(),
                 mentions_asked: false,
+                editing: None,
             });
             self.load_unreads();
         }
@@ -74,6 +80,9 @@ impl Emerald {
         inbox.tab = tab;
         if tab == InboxTab::Mentions && !std::mem::replace(&mut inbox.mentions_asked, true) {
             self.net.post(Command::Mentions { before: None });
+        }
+        if tab == InboxTab::Bookmarks && self.saved.bookmarks().is_empty() {
+            self.more_bookmarks();
         }
         cx.notify();
     }
@@ -111,7 +120,7 @@ impl Emerald {
     pub(in super::super) fn render_inbox(&self, window_height: gpui::Pixels, cx: &mut Context<Self>) -> Option<AnyElement> {
         let inbox = self.inbox.as_ref()?;
         let tab = inbox.tab;
-        let tab_button = |id: &'static str, label: &'static str, this_tab: InboxTab, cx: &mut Context<Self>| {
+        let tab_button = |id: &'static str, label: SharedString, this_tab: InboxTab, cx: &mut Context<Self>| {
             let on = tab == this_tab;
             div()
                 .id(id)
@@ -135,6 +144,14 @@ impl Emerald {
             InboxTab::Mentions => {
                 self.render_results("mentions", &inbox.mentions, t!("inbox.no_mentions"), true, Self::more_mentions, cx)
             }
+            InboxTab::Bookmarks => self.render_saved(inbox, false, cx),
+            InboxTab::Reminders => self.render_saved(inbox, true, cx),
+        };
+        let overdue = self.saved.overdue(crate::time::now_secs());
+        let reminders_label: SharedString = if overdue > 0 {
+            t!("saved.reminders_count", count = overdue).into()
+        } else {
+            t!("saved.reminders").into()
         };
         let header = div()
             .flex_none()
@@ -189,8 +206,10 @@ impl Emerald {
                     .flex()
                     .border_b_1()
                     .border_color(theme::border_normal())
-                    .child(tab_button("inbox-unreads", t!("inbox.unreads"), InboxTab::Unreads, cx))
-                    .child(tab_button("inbox-mentions", t!("inbox.mentions"), InboxTab::Mentions, cx)),
+                    .child(tab_button("inbox-unreads", t!("inbox.unreads").into(), InboxTab::Unreads, cx))
+                    .child(tab_button("inbox-mentions", t!("inbox.mentions").into(), InboxTab::Mentions, cx))
+                    .child(tab_button("inbox-bookmarks", t!("saved.bookmarks").into(), InboxTab::Bookmarks, cx))
+                    .child(tab_button("inbox-reminders", reminders_label, InboxTab::Reminders, cx)),
             )
             .child(body);
         Some(popover::at(inbox.anchor, panel))

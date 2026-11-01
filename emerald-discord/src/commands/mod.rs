@@ -12,6 +12,7 @@ mod media;
 mod message;
 mod moderation;
 mod outcome;
+mod saved;
 mod search;
 mod settings;
 mod thread;
@@ -69,6 +70,25 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::Search { scope, query, offset } => Some(search::messages(rest, scope, query, offset).await),
         Command::Mentions { before } => Some(search::mentions(rest, before).await),
         Command::Unread { channel, after } => Some(search::unread(rest, channel, after).await),
+        Command::Forward { from, to, text } => Some(message::forward(rest, from, to, text).await),
+        Command::MarkUnread {
+            channel,
+            before,
+            mentions,
+        } => Some(message::mark_unread(rest, channel, before, mentions).await),
+        Command::SavedMessages => Some(saved::list(rest).await),
+        Command::Bookmarks { before } => Some(saved::bookmarks(rest, before).await),
+        Command::SaveMessage {
+            channel,
+            message,
+            due_secs,
+            source,
+        } => Some(saved::save(rest, channel, message, due_secs, source, &events).await),
+        Command::UnsaveMessage {
+            channel,
+            message,
+            reminder,
+        } => Some(saved::unsave(rest, channel, message, reminder, &events).await),
         Command::GuildSettings { guild, change } => Some(settings::guild(rest, guild, change).await),
         Command::AckBulk { channels } => settings::ack_bulk(rest, channels).await,
         Command::CreateThread {
@@ -128,7 +148,9 @@ pub(super) async fn handle(rest: Arc<Rest>, command: Command, events: Events) {
         Command::AnswerRequest { channel, accept } => Some(channel::answer_request(rest, channel, accept).await),
         Command::OpenDm { user, select } => user::open_dm(rest, user, select).await,
         Command::SetGlobalName { name } => Some(user::set_global_name(rest, name, &events).await),
-        Command::FetchProfile { user, guild, full } => user::profile(rest, user, guild, full).await,
+        Command::FetchProfile { user, guild, kind } => user::profile(rest, user, guild, kind).await,
+        Command::ContentInventory { refresh } => Some(user::content_inventory(rest, refresh).await),
+        Command::Games { ids } => Some(user::games(rest, ids).await),
         Command::FetchProfileEffect { sku } => Some(user::profile_effect(rest, sku).await),
         Command::EditSettings { current, edit } => Some(account::edit_settings(rest, current, edit, &events).await),
         Command::EditProfile { guild, edit } => Some(account::edit_profile(rest, guild, edit, &events).await),

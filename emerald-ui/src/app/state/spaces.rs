@@ -249,6 +249,8 @@ mod tests {
             position: 0,
             permissions: permissions::VIEW_CHANNEL,
             mentionable: false,
+            icon: None,
+            unicode_emoji: None,
         };
         let guild = serde_json::from_value::<Guild>(serde_json::json!({ "id": "100", "name": "Rust Brasil" }))
             .map(|mut g| {
@@ -330,6 +332,8 @@ mod tests {
             position: 1,
             permissions,
             mentionable: false,
+            icon: None,
+            unicode_emoji: None,
         };
         space.upsert_role(role(100, 0));
         assert_eq!(space.permissions(Snowflake(1)), 0);
@@ -340,6 +344,7 @@ mod tests {
             user: None,
             nick: Some("eu".into()),
             roles,
+            display_name_styles: None,
         };
         space.update_member(Snowflake(1), member(vec![Snowflake(7)]));
         assert_ne!(space.permissions(Snowflake(1)) & permissions::VIEW_CHANNEL, 0);

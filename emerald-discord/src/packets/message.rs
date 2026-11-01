@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::upload::Uploaded;
 use crate::model::Snowflake;
-use crate::protocol::{NewPoll, ReplyTo};
+use crate::protocol::{ForwardOf, NewPoll, ReplyTo};
 
 /// A message to send: its text, what it carries, and what it answers.
 /// `nonce` is left out of a forum post's first message, as the web client
@@ -18,6 +18,10 @@ pub struct Outgoing<'a> {
     pub files: &'a [Uploaded],
     pub poll: Option<&'a NewPoll>,
     pub stickers: &'a [Snowflake],
+    /// A forward: empty content and a reference of type 1.
+    pub forward: Option<ForwardOf>,
+    /// The UI surface sent as `X-Context-Properties`, when there is one.
+    pub location: Option<&'static str>,
 }
 
 /// `POST /channels/{id}/messages`.
@@ -29,6 +33,8 @@ pub fn send(channel: Snowflake, message: &Outgoing<'_>) -> Value {
         files,
         stickers,
         poll,
+        forward,
+        location: _,
     } = *message;
     let mut body = json!({
         "mobile_network_type": "unknown",
@@ -46,6 +52,17 @@ pub fn send(channel: Snowflake, message: &Outgoing<'_>) -> Value {
     }
     if let Some(poll) = poll {
         body["poll"] = self::poll(poll);
+    }
+    if let Some(of) = forward {
+        // Field order as the web client builds it; no guild for a DM.
+        let mut reference = serde_json::Map::new();
+        if let Some(guild) = of.guild {
+            reference.insert("guild_id".into(), guild.to_string().into());
+        }
+        reference.insert("channel_id".into(), of.channel.to_string().into());
+        reference.insert("message_id".into(), of.message.to_string().into());
+        reference.insert("type".into(), 1.into());
+        body["message_reference"] = reference.into();
     }
     if let Some(reply) = reply {
         body["message_reference"] = json!({
@@ -111,6 +128,12 @@ pub fn ack() -> Value {
     json!({ "token": null })
 }
 
+/// "Mark Unread": a receipt for the message before, set by hand, with the
+/// mentions left after it.
+pub fn manual_ack(mentions: u32) -> Value {
+    json!({ "manual": true, "mention_count": mentions })
+}
+
 /// Replaces our vote on a poll, as the web client sends it: the answer ids
 /// as strings, an empty list taking the vote back.
 pub fn vote(answers: &[u32]) -> Value {
@@ -164,5 +187,27 @@ mod tests {
         assert_eq!(body["poll"]["answers"][1]["poll_media"]["text"], "Sushi");
         assert_eq!(body["poll"]["duration"], 24);
         assert!(body.get("message_reference").is_none());
+    }
+
+    #[test]
+    fn forwards_are_empty_with_a_type_1_reference() {
+        let of = ForwardOf {
+            guild: None,
+            channel: Snowflake(2),
+            message: Snowflake(3),
+        };
+        let body = send(Snowflake(9), &Outgoing { nonce: "1", forward: Some(of), ..Outgoing::default() });
+        assert_eq!(body["content"], "");
+        assert_eq!(body["message_reference"].to_string(), r#"{"channel_id":"2","message_id":"3","type":1}"#);
+        let body = send(
+            Snowflake(9),
+            &Outgoing { forward: Some(ForwardOf { guild: Some(Snowflake(4)), ..of }), ..Outgoing::default() },
+        );
+        assert_eq!(body["message_reference"]["guild_id"], "4");
+    }
+
+    #[test]
+    fn mark_unread_is_a_manual_receipt() {
+        assert_eq!(manual_ack(2).to_string(), r#"{"manual":true,"mention_count":2}"#);
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::zoom::zoomed;
 
+mod activity;
 mod row;
 
 
@@ -148,6 +149,7 @@ impl Emerald {
             .pb_4()
             .into_any_element()
         };
+        let activity = (!searching).then(|| self.render_activity(cx)).flatten();
         div()
             .w(zoomed(WIDTH))
             .flex_none()
@@ -174,6 +176,7 @@ impl Emerald {
                         .child(crate::icons::icon(crate::icons::SEARCH, 16., theme::interactive())),
                 ),
             )
+            .children(activity)
             .child(div().w_full().flex_1().min_h(zoomed(0.)).child(body))
     }
 

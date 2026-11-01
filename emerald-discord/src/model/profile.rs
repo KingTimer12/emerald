@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::{AvatarDecoration, Collectibles, ProfileCollectible, Snowflake, User};
+use super::{AvatarDecoration, Collectibles, ProfileCollectible, Snowflake, User, Widget};
 use crate::urls::CDN;
 
 /// The profile's own fields, global (`user_profile`) or for one server
@@ -19,6 +19,9 @@ pub struct UserProfileDetails {
     /// The profile effect and frame shown, by SKU.
     #[serde(default)]
     pub collectibles: Vec<ProfileCollectible>,
+    /// The card's two colors, primary then accent, as RGB.
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub theme_colors: Option<[u32; 2]>,
 }
 
 /// `GET /users/{id}/profile`, as the DM profile panel uses it.
@@ -42,6 +45,12 @@ pub struct Profile {
     pub mutual_guilds: Option<Vec<MutualGuild>>,
     #[serde(default)]
     pub mutual_friends_count: Option<u32>,
+    /// Friends both share, sorted by username; only when asked for.
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub mutual_friends: Option<Vec<User>>,
+    /// The Board; kinds Emerald does not draw are skipped there.
+    #[serde(default, deserialize_with = "super::lenient_list")]
+    pub widgets: Vec<Widget>,
 }
 
 /// A server the user shares with someone, with their nickname there.
@@ -112,6 +121,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn new_profile_fields_parse_and_bad_ones_are_dropped() {
+        let profile: Profile = serde_json::from_str(
+            r#"{"user":{"id":"1","username":"a","primary_guild":{"identity_guild_id":"9","identity_enabled":true,"tag":"T","badge":"b"},
+            "display_name_styles":{"font_id":4,"effect_id":1,"colors":[255]}},
+            "user_profile":{"theme_colors":[2105376,15790320]},
+            "mutual_friends":[{"id":"2","username":"b"}],
+            "widgets":[{"id":"w","data":{"type":"some_future_widget","x":1}},{"data":{"type":"played_games","games":[]}},7]}"#,
+        )
+        .unwrap();
+        assert_eq!(profile.user_profile.theme_colors, Some([0x202020, 0xf0f0f0]));
+        assert!(profile.user.user().unwrap().primary_guild.unwrap().shown());
+        assert_eq!(profile.mutual_friends.unwrap().len(), 1);
+        assert_eq!(profile.widgets.len(), 2);
+        assert_eq!(profile.widgets[0].kind(), "some_future_widget");
+        // A malformed field leaves only itself empty.
+        let profile: Profile =
+            serde_json::from_str(r#"{"user":{"id":"1","display_name_styles":"oops"},"user_profile":{"theme_colors":[1]}}"#).unwrap();
+        assert!(profile.user.display_name_styles.is_none());
+        assert!(profile.user_profile.theme_colors.is_none());
+    }
+
+    #[test]
+    fn roles_and_relationships_carry_icons_and_since() {
+        let role: super::super::Role =
+            serde_json::from_str(r#"{"id":"3","name":"Mod","icon":"abc","unicode_emoji":null}"#).unwrap();
+        assert_eq!(role.icon.as_deref(), Some("abc"));
+        assert_eq!(
+            super::super::role_icon_url(role.id, "abc", 20),
+            "https://cdn.discordapp.com/role-icons/3/abc.webp?size=20&quality=lossless"
+        );
+        let friend: super::super::Relationship =
+            serde_json::from_str(r#"{"id":"4","type":1,"since":"2020-05-01T10:00:00.000000+00:00"}"#).unwrap();
+        assert_eq!(friend.since.as_deref(), Some("2020-05-01T10:00:00.000000+00:00"));
+    }
+
+    #[test]
     fn parses_discord_timestamps() {
         assert_eq!(iso_secs("1970-01-01T00:00:00+00:00"), Some(0));
         assert_eq!(iso_secs("2021-05-01T12:30:15.123000+00:00"), Some(1_619_872_215));
@@ -176,6 +221,10 @@ pub struct ProfileUser {
     pub banner_color: Option<String>,
     #[serde(default)]
     pub accent_color: Option<u32>,
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub primary_guild: Option<super::PrimaryGuild>,
+    #[serde(default, deserialize_with = "super::lenient")]
+    pub display_name_styles: Option<super::NameStyle>,
 }
 
 impl ProfileUser {
@@ -192,6 +241,8 @@ impl ProfileUser {
             premium_type: None,
             avatar_decoration_data: self.avatar_decoration_data.clone(),
             collectibles: self.collectibles.clone(),
+            primary_guild: self.primary_guild.clone(),
+            display_name_styles: self.display_name_styles.clone(),
         })
     }
 }

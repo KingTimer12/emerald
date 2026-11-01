@@ -206,7 +206,8 @@ impl Emerald {
     }
 }
 
-fn checkbox(on: bool) -> gpui::Div {
+/// A tick box, filled when `on`.
+pub(super) fn checkbox(on: bool) -> gpui::Div {
     div()
         .size(zoomed(22.))
         .flex_none()

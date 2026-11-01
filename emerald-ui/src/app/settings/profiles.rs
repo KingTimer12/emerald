@@ -93,7 +93,7 @@ impl Emerald {
             }
         }
         let me = self.people.my_id();
-        self.profile(me, guild, false);
+        self.profile(me, guild, emerald_discord::ProfileKind::Panel);
         self.fill_profile_form(cx);
     }
 

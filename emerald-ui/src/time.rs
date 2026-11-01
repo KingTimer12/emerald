@@ -83,15 +83,15 @@ pub fn iso_utc(secs: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}+00:00")
 }
 
-/// "Today at 14:05", "Yesterday at 14:05" or "02/01/2025 14:05", in the
-/// interface language.
+/// "14:05" for today, as Discord 2026 writes it, "Yesterday at 14:05" or
+/// "02/01/2025 14:05", in the interface language.
 pub fn header(secs: i64) -> String {
     let Some(at) = local(secs) else { return String::new() };
     let same_day = |other: Option<Local>| other.is_some_and(|o| (o.year, o.yday) == (at.year, at.yday));
     let now = now_secs();
     let time = clock(at);
     if same_day(local(now)) {
-        t!("time.today", time = time)
+        time
     } else if same_day(local(now - 86_400)) {
         t!("time.yesterday", time = time)
     } else {
@@ -105,7 +105,7 @@ pub fn header(secs: i64) -> String {
     }
 }
 
-/// "14:05", for compact mode.
+/// "14:05": compact mode and the hover time beside follow-up messages.
 pub fn short(secs: i64) -> String {
     local(secs).map_or_else(String::new, clock)
 }
@@ -160,6 +160,54 @@ pub fn end_of_day(secs: i64) -> i64 {
     local(secs).map_or(secs + 86_400, |at| {
         secs + 86_400 - i64::from(at.hour * 3600 + at.minute * 60 + at.second)
     })
+}
+
+/// Where `secs` falls in the local day and week, for reminder times.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DayTime {
+    /// Seconds since local midnight.
+    pub since_midnight: i64,
+    /// 0 for Sunday.
+    pub weekday: i32,
+}
+
+pub fn day_time(secs: i64) -> Option<DayTime> {
+    let at = local(secs)?;
+    Some(DayTime {
+        since_midnight: i64::from(at.hour * 3600 + at.minute * 60 + at.second),
+        weekday: at.weekday,
+    })
+}
+
+/// The Unix seconds of a local date and time; `None` for one that does
+/// not exist.
+pub fn local_to_secs(year: i32, month: i32, day: i32, hour: i32, minute: i32) -> Option<i64> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || !(0..24).contains(&hour) || !(0..60).contains(&minute) {
+        return None;
+    }
+    let wall = days_from_civil(year, month, day) * 86_400 + i64::from(hour * 3600 + minute * 60);
+    // The zone's offset where the wall clock lands, found from a first guess.
+    let offset = |secs: i64| {
+        let at = local(secs)?;
+        let wall = days_from_civil(at.year, at.month, at.day) * 86_400 + i64::from(at.hour * 3600 + at.minute * 60 + at.second);
+        Some(wall - secs)
+    };
+    let guess = wall - offset(wall)?;
+    let secs = wall - offset(guess)?;
+    // A day past the month's end (31/02) comes back as another day.
+    local(secs).filter(|at| (at.year, at.month, at.day) == (year, month, day))?;
+    Some(secs)
+}
+
+/// Days since 1970-01-01, after Howard Hinnant's algorithm.
+fn days_from_civil(year: i32, month: i32, day: i32) -> i64 {
+    let (year, month, day) = (i64::from(year), i64::from(month), i64::from(day));
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let yoe = year - era * 400;
+    let doy = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
 }
 
 /// Identifies the local calendar day, for day separators.
@@ -287,5 +335,30 @@ mod tests {
         assert_eq!(relative(-3_600), "1 hour ago");
         assert_eq!(relative(2 * 86_400 + 10), "in 2 days");
         assert_eq!(relative(-400 * 86_400), "1 year ago");
+    }
+
+    #[test]
+    fn local_dates_round_trip() {
+        let secs = local_to_secs(2026, 10, 30, 15, 45).unwrap();
+        let at = local(secs).unwrap();
+        assert_eq!((at.year, at.month, at.day, at.hour, at.minute), (2026, 10, 30, 15, 45));
+        assert_eq!(local_to_secs(2026, 2, 31, 9, 0), None);
+        assert_eq!(local_to_secs(2026, 13, 1, 9, 0), None);
+    }
+
+    #[test]
+    fn header_today_is_only_the_clock() {
+        let at = now_secs() - 60;
+        // Right after midnight a minute ago is yesterday; nothing to check then.
+        if local(at).map(|l| l.yday) == local(now_secs()).map(|l| l.yday) {
+            assert_eq!(header(at), short(at));
+        }
+    }
+
+    #[test]
+    fn header_yesterday_keeps_the_word() {
+        let at = now_secs() - 86_400;
+        assert!(header(at).contains(&short(at)));
+        assert_ne!(header(at), short(at));
     }
 }

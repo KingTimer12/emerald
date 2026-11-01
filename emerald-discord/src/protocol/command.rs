@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::{
-    ChannelEdit, OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery, VoiceCall, VoiceControls,
+    ProfileKind, ForwardOf, ForwardTo, SaveSource, ChannelEdit, OwnPresence, ProfileEdit, SearchQuery, SearchScope, SettingsChange, SettingsEdit, ThreadQuery, VoiceCall, VoiceControls,
 };
 use crate::model::{ChannelKind, Emoji, Gif, Snowflake, UserSettings};
 
@@ -47,6 +47,39 @@ pub enum Command {
     Unread {
         channel: Snowflake,
         after: Option<Snowflake>,
+    },
+    /// Forwards a message to up to five channels, each followed by `text`
+    /// where the destination takes it.
+    Forward {
+        from: ForwardOf,
+        to: Vec<ForwardTo>,
+        text: Option<String>,
+    },
+    /// "Mark Unread": reads `channel` only up to `before`, leaving
+    /// `mentions` unread.
+    MarkUnread {
+        channel: Snowflake,
+        before: Snowflake,
+        mentions: u32,
+    },
+    /// Every reminder and the bookmarked ids; sent once after READY.
+    SavedMessages,
+    /// 25 bookmarks saved before `before` (a `saved_at`), or the newest.
+    Bookmarks {
+        before: Option<String>,
+    },
+    /// Bookmarks a message, or sets its reminder for `due_secs`.
+    SaveMessage {
+        channel: Snowflake,
+        message: Snowflake,
+        due_secs: Option<i64>,
+        source: SaveSource,
+    },
+    /// Removes a bookmark or a reminder. `reminder` only picks the toast.
+    UnsaveMessage {
+        channel: Snowflake,
+        message: Snowflake,
+        reminder: bool,
     },
     /// Changes the notification settings of a server, or of the DMs.
     GuildSettings {
@@ -373,7 +406,15 @@ pub enum Command {
     FetchProfile {
         user: Snowflake,
         guild: Option<Snowflake>,
-        full: bool,
+        kind: ProfileKind,
+    },
+    /// The content inventory feed behind the member list's Activity.
+    ContentInventory {
+        refresh: Option<String>,
+    },
+    /// Games for profile Boards, asked for in batches.
+    Games {
+        ids: Vec<Snowflake>,
     },
     /// The profile effect sold as `sku`: its layers and still.
     FetchProfileEffect {

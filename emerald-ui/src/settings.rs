@@ -169,6 +169,9 @@ pub struct Settings {
     pub voice: VoiceSettings,
     /// The Inbox's Unreads tip was put away with "Got it!".
     pub inbox_tip_dismissed: bool,
+    /// Reminders due by then (Unix seconds) already notified.
+    #[serde(default)]
+    pub reminders_seen_until: Option<i64>,
 }
 
 impl Default for Settings {
@@ -191,6 +194,7 @@ impl Default for Settings {
             last_channel: None,
             voice: VoiceSettings::default(),
             inbox_tip_dismissed: false,
+            reminders_seen_until: None,
         }
     }
 }

@@ -47,7 +47,7 @@ impl Emerald {
         let closed = self.own_popover_dismissed.take();
         if self.own_popover.take().is_none() && !popover::just_closed(closed, Instant::now()) {
             let me = self.people.my_id();
-            self.profile(me, None, false);
+            self.profile(me, None, emerald_discord::ProfileKind::Panel);
             self.profile_opened = Instant::now();
             self.own_popover = Some(OwnPopover {
                 anchor,

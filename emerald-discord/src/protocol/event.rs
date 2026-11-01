@@ -2,6 +2,8 @@
 
 use super::{Action, IndexTarget, Page, SearchQuery, SearchScope, ThreadQuery, Upload, VoiceEvent};
 use crate::model::{
+    Feed, Game,
+    BookmarkPage, SavedList, SavedMessage, SavedMessageRemoved,
     ProfileEffect,
     AuthSession, FriendPresence, UserProfileDetails, UserSettings,
     Channel, CommandIndex, Emoji, Gif, Guild, GuildFolder, GuildSettings, GuildEmojisUpdate, GuildStickersUpdate, Member, MemberListUpdate,
@@ -215,6 +217,27 @@ pub enum NetEvent {
         channel: Snowflake,
         messages: Result<Vec<Message>, String>,
     },
+    /// Answer to `Command::Forward`: the destinations it did not reach.
+    Forwarded {
+        failed: Vec<Snowflake>,
+        error: Option<String>,
+    },
+    /// Answer to `Command::ContentInventory`.
+    ContentInventory(Result<Feed, String>),
+    /// CONTENT_INVENTORY_INBOX_STALE: ask again after this long.
+    ContentInventoryStale { after_ms: u64 },
+    /// Answer to `Command::Games`; games that failed to load are left out.
+    Games(Vec<Game>),
+    /// Answer to `Command::SavedMessages`.
+    SavedMessages(Result<SavedList, String>),
+    /// Answer to `Command::Bookmarks`.
+    Bookmarks {
+        before: Option<String>,
+        page: Result<BookmarkPage, String>,
+    },
+    /// A message saved here or on another device, or its reminder moved.
+    SavedMessageCreate(Box<SavedMessage>),
+    SavedMessageDelete(SavedMessageRemoved),
     /// A server's notification settings, or the DMs', changed here or on
     /// another device.
     GuildSettings(GuildSettings),

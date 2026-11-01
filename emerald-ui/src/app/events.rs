@@ -73,6 +73,7 @@ impl Emerald {
             NetEvent::DmOpened { mut channel, select } => {
                 self.people.adopt_dm(&mut channel);
                 let id = channel.id;
+                self.send_popout_pending(id, channel.recipient());
                 self.spaces.dms_mut().upsert_channel(channel);
                 self.label_dms();
                 if select {
@@ -185,6 +186,20 @@ impl Emerald {
             } => self.on_search_results(scope, query, offset, page),
             NetEvent::Mentions { before, messages } => self.on_mentions(before, messages),
             NetEvent::Unread { channel, messages } => self.on_unread(channel, messages),
+            NetEvent::Forwarded { failed, error } => self.on_forwarded(failed, error, cx),
+            NetEvent::Games(games) => self.on_games(games),
+            NetEvent::ContentInventory(feed) => self.on_activity_feed(feed),
+            NetEvent::ContentInventoryStale { after_ms } => {
+                self.activity_feed.stale(after_ms, super::account::now_ms());
+                self.fetch_activity();
+            }
+            NetEvent::SavedMessages(list) => self.on_saved_messages(list, cx),
+            NetEvent::Bookmarks { before, page } => self.on_bookmarks(before, page),
+            NetEvent::SavedMessageCreate(saved) => {
+                self.saved.upsert(*saved);
+                self.arm_reminders(cx);
+            }
+            NetEvent::SavedMessageDelete(removed) => self.saved.remove(removed.channel_id, removed.message_id),
             NetEvent::GuildSettings(settings) => self.notify.update(settings),
             NetEvent::Folders(folders) => {
                 self.server_list.set(Some(folders));
@@ -272,7 +287,13 @@ impl Emerald {
                     profile.mutual_guilds = old.mutual_guilds.clone();
                     profile.mutual_friends_count = old.mutual_friends_count;
                 }
+                if profile.mutual_friends.is_none()
+                    && let Some(old) = self.profiles.get(&key)
+                {
+                    profile.mutual_friends = old.mutual_friends.clone();
+                }
                 self.ask_profile_effect(&profile);
+                self.ask_games(&profile);
                 self.profiles.fill(key, *profile, Instant::now());
                 if self.people.is_me(key.0) {
                     self.fill_profile_form(cx);

@@ -21,6 +21,10 @@ pub struct GuildInfo {
     pub(super) stickers: Vec<StickerItem>,
     /// Upload size the guild's boosts unlock.
     pub(super) upload_limit: Option<u64>,
+    /// Boosts unlocked icons after members' names.
+    pub(super) role_icons: bool,
+    /// The server's choice about the member list's Activity, if it made one.
+    pub(super) feed_features: Vec<String>,
     /// Banner and boost goal, drawn atop the channel list.
     pub(super) header: GuildHeader,
 }
@@ -61,6 +65,30 @@ impl GuildInfo {
     pub fn member_style(&self, user: Snowflake) -> (Option<&str>, Option<u32>) {
         let Some(member) = self.members.get(&user) else { return (None, None) };
         (member.nick.as_deref(), self.role_color(&member.roles))
+    }
+
+    /// Whether the member list shows Activity, for a list of `member_count`.
+    pub fn shows_activity(&self, member_count: u64) -> bool {
+        super::super::activity_feed::shown_in(&self.feed_features, member_count)
+    }
+
+    pub fn has_role_icons(&self) -> bool {
+        self.role_icons
+    }
+
+    /// The role whose icon shows after `user`'s name: their highest role
+    /// with an icon or emoji, when the guild has role icons.
+    pub fn icon_role(&self, user: Snowflake) -> Option<&Role> {
+        if !self.role_icons {
+            return None;
+        }
+        let member = self.members.get(&user)?;
+        member
+            .roles
+            .iter()
+            .filter_map(|id| self.role(*id))
+            .filter(|role| role.icon.is_some() || role.unicode_emoji.is_some())
+            .max_by_key(|role| role.position)
     }
 
     /// Color of the highest colored role among `roles`.

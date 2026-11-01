@@ -58,7 +58,7 @@ fn overrides(channel: Snowflake, settings: Value) -> Value {
 }
 
 /// `secs` as JavaScript's `toISOString` writes it: "2025-01-02T14:05:00.000Z".
-fn iso_millis(secs: i64) -> String {
+pub(crate) fn iso_millis(secs: i64) -> String {
     // Days to civil date, after Howard Hinnant's algorithm.
     let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     let z = days + 719_468;

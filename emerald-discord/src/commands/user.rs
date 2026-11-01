@@ -5,7 +5,7 @@ use super::Events;
 use super::captcha::with_captcha;
 use super::outcome::{failure, outcome};
 use crate::model::Snowflake;
-use crate::protocol::{Action, NetEvent};
+use crate::protocol::{Action, NetEvent, ProfileKind};
 use crate::rest::{Rest, Unauthorized};
 
 pub async fn friend_request(rest: &Rest, username: String) -> NetEvent {
@@ -89,14 +89,35 @@ pub async fn set_global_name(rest: &Rest, name: Option<String>, events: &Events)
     }
 }
 
-pub async fn profile(rest: &Rest, user: Snowflake, guild: Option<Snowflake>, full: bool) -> Option<NetEvent> {
-    match rest.profile(user, guild, full).await {
+pub async fn profile(rest: &Rest, user: Snowflake, guild: Option<Snowflake>, kind: ProfileKind) -> Option<NetEvent> {
+    match rest.profile(user, guild, kind).await {
         Ok(profile) => Some(NetEvent::Profile { guild, profile: Box::new(profile) }),
         Err(e) => {
             tracing::warn!("profile of {user}: {e:#}");
             None
         }
     }
+}
+
+pub async fn content_inventory(rest: &Rest, refresh: Option<String>) -> NetEvent {
+    match rest.content_inventory(refresh.as_deref()).await {
+        Ok(feed) => NetEvent::ContentInventory(Ok(feed)),
+        Err(e) if e.is::<Unauthorized>() => NetEvent::AuthExpired,
+        Err(e) => NetEvent::ContentInventory(Err(crate::rest::describe(&e))),
+    }
+}
+
+/// Games in batches of 20, as the web client asks; a failed batch only
+/// leaves its covers blank.
+pub async fn games(rest: &Rest, ids: Vec<Snowflake>) -> NetEvent {
+    let mut games = Vec::new();
+    for batch in crate::model::game_batches(&ids) {
+        match rest.games(batch).await {
+            Ok(found) => games.extend(found),
+            Err(e) => tracing::warn!("games: {e:#}"),
+        }
+    }
+    NetEvent::Games(games)
 }
 
 pub async fn profile_effect(rest: &Rest, sku: String) -> NetEvent {

@@ -36,4 +36,8 @@ pub enum Action {
     AccountSettings,
     /// Logging other devices out.
     Sessions,
+    /// Bookmarking a message, or removing its bookmark.
+    Bookmark { added: bool },
+    /// Setting, moving or removing a reminder.
+    Reminder { added: bool },
 }

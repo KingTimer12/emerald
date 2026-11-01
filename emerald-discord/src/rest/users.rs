@@ -4,28 +4,36 @@
 use anyhow::Result;
 
 use super::{DiscordCall, PROFILE_CACHE, Rest};
-use crate::model::{Channel, CollectiblesProduct, NoteUpdate, Profile, Snowflake, User};
+use crate::model::{Channel, CollectiblesProduct, Feed, Game, NoteUpdate, Profile, Snowflake, User};
 use crate::packets::{context, user};
+use crate::protocol::ProfileKind;
 use emerald_http::{Call, Refused, Solution};
 
 impl Rest {
-    /// The profile behind the DM side panel, with the same query the web
-    /// client sends for a DM; `full` asks as the full profile modal does,
-    /// for the servers in common and how many friends are.
-    pub async fn profile(&self, user: Snowflake, guild: Option<Snowflake>, full: bool) -> Result<Profile> {
-        let mut path = if full {
-            format!(
-                "/users/{user}/profile?type=modal&with_mutual_guilds=true&with_mutual_friends=false&with_mutual_friends_count=true"
-            )
-        } else {
-            format!(
-                "/users/{user}/profile?with_mutual_guilds=false&with_mutual_friends=false&with_mutual_friends_count=false"
-            )
-        };
-        if let Some(guild) = guild {
-            path.push_str(&format!("&guild_id={guild}"));
-        }
+    /// A profile, with the query the web client sends for `kind`.
+    pub async fn profile(&self, user: Snowflake, guild: Option<Snowflake>, kind: ProfileKind) -> Result<Profile> {
+        let path = format!("/users/{user}/profile?{}", user::profile_query(kind, guild));
         self.api.fetch(Call::get("/users/{id}/profile", path).cached(PROFILE_CACHE)).await
+    }
+
+    /// Games by id, for the Board; at most 20 at once.
+    pub async fn games(&self, ids: &[Snowflake]) -> Result<Vec<Game>> {
+        let ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
+        let path = format!("/games?game_ids={}", ids.join(","));
+        self.api.fetch(Call::get("/games", path).cached(PROFILE_CACHE)).await
+    }
+
+    /// The content inventory feed, as the web client's global feed asks
+    /// for it; `refresh` is the token of the last answer.
+    pub async fn content_inventory(&self, refresh: Option<&str>) -> Result<Feed> {
+        let mut path = "/content-inventory/users/@me?".to_owned();
+        if let Some(token) = refresh {
+            path.push_str("refresh_token=");
+            path.push_str(&super::encoding::encode_component(token));
+            path.push('&');
+        }
+        path.push_str("for_game_profile=false&feature=inbox");
+        self.api.fetch(Call::get("/content-inventory/users/@me", path)).await
     }
 
     /// A shop product by SKU, as the web client asks for the profile

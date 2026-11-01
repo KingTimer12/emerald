@@ -75,6 +75,16 @@ impl Anchor {
     fn left_of_at(button: Bounds<Pixels>, gap: Pixels) -> Self {
         Self { corner: Corner::TopRight, position: button.origin - point(gap, Pixels::ZERO) }
     }
+
+    /// Right of `button`, their tops lined up, as a profile opens beside
+    /// the name or avatar clicked.
+    pub fn right_of(button: Bounds<Pixels>) -> Self {
+        Self::right_of_at(button, zoomed(GAP))
+    }
+
+    fn right_of_at(button: Bounds<Pixels>, gap: Pixels) -> Self {
+        Self { corner: Corner::TopLeft, position: button.top_right() + point(gap, Pixels::ZERO) }
+    }
 }
 
 /// A press outside a popover closes it before the click that follows
@@ -192,6 +202,10 @@ mod tests {
         assert_eq!(
             Anchor::left_of_at(button(), gap),
             Anchor { corner: Corner::TopRight, position: point(px(92.), px(200.)) }
+        );
+        assert_eq!(
+            Anchor::right_of_at(button(), gap),
+            Anchor { corner: Corner::TopLeft, position: point(px(140.), px(200.)) }
         );
     }
 }

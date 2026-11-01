@@ -34,6 +34,8 @@ impl Emerald {
                     .text_size(zoomed(13.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(rgb(theme::channels_default()))
+                    .gap_1()
+                    .children(self.group_role_icon(&group.id, ix))
                     .child(
                         div()
                             .truncate()
@@ -88,7 +90,8 @@ impl Emerald {
         let plate_image = nameplate.and_then(|plate| self.nameplate_image(plate, moving));
         let plate_color = nameplate.and_then(|plate| plate.color(!theme::is_light()));
 
-        div()
+        let spot = widgets::popover::Tracked::default();
+        spot.track(div())
             .id(id)
             .relative()
             .size_full()
@@ -144,13 +147,16 @@ impl Emerald {
                             .items_center()
                             .gap_1()
                             .child(
-                                div()
-                                    .truncate()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(color))
-                                    .child(name),
+                                // In a guild the name keeps its role color;
+                                // only the font of a name style shows.
+                                widgets::name::styled_name(name, self.name_style_of(user, who.display_name_styles.as_ref()), color, false, theme::base_low(), cx)
+                                    .truncate(),
                             )
-                            .when(who.bot, |line| line.child(app_tag())),
+                            .when(who.bot, |line| line.child(app_tag()))
+                            .children(who.primary_guild.as_ref().filter(|t| t.shown()).map(|tag| {
+                                let badge = tag.badge_url(28).and_then(|url| self.avatar_image(&url));
+                                widgets::name::tag_chip((id.0, id.1 + 1_000_000), tag.tag.as_deref().unwrap_or_default(), badge, 14.)
+                            })),
                     )
                     .children(activity.map(|text| {
                         div()
@@ -164,13 +170,29 @@ impl Emerald {
                 // The list keeps its own copy of the people in it; the
                 // profile looks them up among the known ones.
                 let who = who.clone();
+                let spot = spot.clone();
                 cx.listener(move |this, _, window, cx| {
                     this.people.remember_new(&who);
-                    this.open_profile(user, Some(guild), window, cx)
+                    let anchor = widgets::popover::Anchor::left_of(spot.bounds());
+                    this.open_popout(user, Some(guild), anchor, window, cx)
                 })
             })
             .on_mouse_down(gpui::MouseButton::Right, self.on_user_right_click(user, Some(guild), None, cx))
             .into_any_element()
+    }
+
+    /// The icon of a hoisted role's group, 16px, where the guild has them.
+    fn group_role_icon(&self, id: &str, ix: usize) -> Option<AnyElement> {
+        let guild = self.spaces.current().info()?;
+        let role = guild.role(Snowflake(id.parse().ok()?)).filter(|_| guild.has_role_icons())?;
+        if role.icon.is_none() && role.unicode_emoji.is_none() {
+            return None;
+        }
+        let image = role
+            .icon
+            .as_deref()
+            .and_then(|hash| self.avatar_image(&emerald_discord::model::role_icon_url(role.id, hash, 32)));
+        Some(widgets::name::role_icon(("group-role-icon", ix), image, role.unicode_emoji.as_deref(), &role.name, 16.).into_any_element())
     }
 
     /// "Online", "Offline", or the hoisted role's name.

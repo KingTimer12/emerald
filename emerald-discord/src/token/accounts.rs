@@ -224,6 +224,8 @@ mod tests {
             premium_type: None,
             avatar_decoration_data: None,
             collectibles: None,
+            primary_guild: None,
+            display_name_styles: None,
         }
     }
 

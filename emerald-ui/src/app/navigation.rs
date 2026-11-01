@@ -94,7 +94,7 @@ impl Emerald {
             self.edit = None;
         }
         if let Some(user) = user {
-            self.profile(user, None, false);
+            self.profile(user, None, emerald_discord::ProfileKind::Panel);
         }
         self.composer.open(id, placeholder, cx);
         self.autocomplete.close();
@@ -353,16 +353,19 @@ impl Emerald {
 
     /// Requests the profile of `user` unless a recent copy is cached, like
     /// the web client; a stale copy stays on screen until the answer. The
-    /// `full` one, with the servers in common, is asked for again when the
-    /// copy came from the DM panel without them.
-    pub(super) fn profile(&mut self, user: Snowflake, guild: Option<Snowflake>, full: bool) {
-        let partial = full
-            && self
-                .profiles
-                .get(&(user, guild))
-                .is_some_and(|p| p.mutual_guilds.is_none() && !self.people.is_me(user));
+    /// modal's and popout's, with what is shared, are asked for again when
+    /// the copy came from the DM panel without it.
+    pub(super) fn profile(&mut self, user: Snowflake, guild: Option<Snowflake>, kind: emerald_discord::ProfileKind) {
+        use emerald_discord::ProfileKind;
+        let known = self.profiles.get(&(user, guild));
+        let partial = !self.people.is_me(user)
+            && match kind {
+                ProfileKind::Panel => false,
+                ProfileKind::Modal => known.is_some_and(|p| p.mutual_guilds.is_none()),
+                ProfileKind::Popout => known.is_some_and(|p| p.mutual_guilds.is_none() || p.mutual_friends.is_none()),
+            };
         if self.profiles.request((user, guild), Instant::now()) || partial {
-            self.net.post(Command::FetchProfile { user, guild, full });
+            self.net.post(Command::FetchProfile { user, guild, kind });
         }
     }
 }
